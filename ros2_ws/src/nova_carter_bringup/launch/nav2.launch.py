@@ -5,11 +5,25 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, TimerAction
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from nav2_common.launch import RewrittenYaml
 
 
 def generate_launch_description() -> LaunchDescription:
     share = Path(get_package_share_directory("nova_carter_bringup"))
-    params = LaunchConfiguration("params_file")
+    params = RewrittenYaml(
+        source_file=LaunchConfiguration("params_file"),
+        param_rewrites={
+            "nvblox_map_slice_topic": LaunchConfiguration(
+                "nvblox_map_slice_topic"
+            ),
+            "odom_topic": LaunchConfiguration("odom_topic"),
+            "movement_time_allowance": LaunchConfiguration(
+                "movement_time_allowance"
+            ),
+            "source_timeout": LaunchConfiguration("source_timeout"),
+        },
+        convert_types=True,
+    )
     map_yaml = LaunchConfiguration("map")
     common = {"output": "screen", "parameters": [params]}
     navigation_nodes = [
@@ -28,6 +42,15 @@ def generate_launch_description() -> LaunchDescription:
             DeclareLaunchArgument(
                 "params_file", default_value=str(share / "config/nav2.yaml")
             ),
+            DeclareLaunchArgument(
+                "nvblox_map_slice_topic",
+                default_value="/nvblox_node/static_map_slice",
+            ),
+            DeclareLaunchArgument(
+                "odom_topic", default_value="/visual_slam/tracking/odometry"
+            ),
+            DeclareLaunchArgument("movement_time_allowance", default_value="25.0"),
+            DeclareLaunchArgument("source_timeout", default_value="0.40"),
             Node(
                 package="nav2_map_server",
                 executable="map_server",
@@ -106,7 +129,7 @@ def generate_launch_description() -> LaunchDescription:
                 # This launch is included with a scoped launch context.  Use a
                 # literal wall-clock delay so the value remains valid after
                 # the include action returns.
-                period=4.0,
+                period=8.0,
                 actions=[
                     Node(
                         package="nav2_lifecycle_manager",

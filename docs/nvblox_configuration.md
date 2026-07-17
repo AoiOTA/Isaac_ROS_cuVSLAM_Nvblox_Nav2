@@ -914,3 +914,44 @@ df -h
 - [ ] 修改voxel、mapping type或高度带后重新建图。
 
 完成这些检查后，才进入阶段7的自动地图集合和阶段8的Nav2代价地图接入。
+
+## 17. 阶段9 dynamic mapper配置
+
+阶段9使用`config/nvblox_dynamic.yaml`和`nvblox_dynamic.launch.py`，输入仍只有前向左目对齐的32FC1真值深度、CameraInfo和颜色。关键差异为：
+
+```yaml
+nvblox_node:
+  ros__parameters:
+    mapping_type: dynamic
+    integrate_depth_rate_hz: 10.0
+    integrate_color_rate_hz: 2.0
+    decay_dynamic_occupancy_rate_hz: 10.0
+    publish_layer_rate_hz: 5.0
+    dynamic_mapper:
+      projective_integrator_max_integration_distance_m: 5.0
+      occupied_region_half_width_m: 0.15
+      esdf_slice_min_height: 0.09
+      esdf_slice_max_height: 0.65
+      free_region_decay_probability: 0.55
+      occupied_region_decay_probability: 0.30
+```
+
+阶段9必须观测到以下非空输出：
+
+```text
+/nvblox_node/dynamic_map_slice
+/nvblox_node/combined_map_slice
+/nvblox_node/dynamic_esdf_pointcloud
+/nvblox_node/combined_esdf_pointcloud
+/nvblox_node/dynamic_points
+```
+
+Nav2局部NvbloxCostmapLayer改接`combined_map_slice`，而不是阶段6/8的`static_map_slice`。`global_frame`、局部costmap和插件frame仍全部为`odom`。不要为了看到动态点云而把dynamic occupancy decay关闭；移动障碍离开后必须自动清除，否则局部地图会形成永久幽灵障碍。
+
+完整验证入口为：
+
+```bash
+./scripts/run_phase9.sh --map warehouse_v2_front --headless --rviz
+```
+
+报告必须同时记录dynamic slice、dynamic ESDF、combined slice和combined ESDF的非零元素，并验证Robot与动态物体PhysX接触数为0。完整结果见[阶段9验证记录](phase9_validation.md)。

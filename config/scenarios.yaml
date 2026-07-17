@@ -18,3 +18,40 @@ profiles:
   bright:
     lighting_scale: 1.5
     color_temperature_k: 6500
+
+dynamic_profiles:
+  warehouse_crossing:
+    # The official scene forklift remains an official referenced prim; only
+    # session-layer physics/xform overrides are authored at runtime.
+    obstacles:
+      - name: official_forklift
+        kind: existing_forklift
+        prim_path: /World/Forklift
+        waypoints_m:
+          - [3.6404345, -1.9916162, 0.0]
+          - [3.6404345, -0.7416162, 0.0]
+        period_s: 18.0
+        phase: 0.0
+        yaw_deg: -58.0
+      - name: crossing_box
+        kind: box
+        size_m: [0.26, 0.30, 0.55]
+        color_rgb: [0.95, 0.22, 0.08]
+        waypoints_relative_spawn_m:
+          # Keep the body inside both routes' dynamic-inflation envelope, but
+          # outside the physical swept footprint. A kinematic actor must not
+          # be allowed to ram a correctly stopped robot from the side.
+          - [1.40, 1.05, 0.275]
+          - [1.40, 1.25, 0.275]
+        period_s: 10.0
+        phase: 0.15
+      - name: crossing_capsule
+        kind: capsule
+        radius_m: 0.16
+        height_m: 0.60
+        color_rgb: [0.10, 0.45, 0.95]
+        waypoints_relative_spawn_m:
+          - [2.30, -0.55, 0.46]
+          - [2.30, -1.30, 0.46]
+        period_s: 12.0
+        phase: 0.55

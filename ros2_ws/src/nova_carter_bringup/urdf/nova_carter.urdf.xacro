@@ -39,6 +39,56 @@
     <origin xyz="0 -0.0197 0.0061" rpy="0 1.57079632679 0"/>
   </joint>
 
+  <!-- Stage 9 surround Hawk baselines.  The midpoint poses and rotations are
+       extracted from the local Isaac Sim 6.0.1 nova_carter.usd. -->
+  <link name="left_stereo_camera_link"/>
+  <link name="left_stereo_camera_left_optical"/>
+  <link name="left_stereo_camera_right_optical"/>
+  <joint name="left_stereo_mount" type="fixed">
+    <parent link="base_link"/><child link="left_stereo_camera_link"/>
+    <origin xyz="-0.35543 0.15 0.3459" rpy="0 0 1.57079632679"/>
+  </joint>
+  <joint name="left_stereo_left_optical_joint" type="fixed">
+    <parent link="left_stereo_camera_link"/><child link="left_stereo_camera_left_optical"/>
+    <origin xyz="0 0.075 0" rpy="-1.57079632679 0 -1.57079632679"/>
+  </joint>
+  <joint name="left_stereo_right_optical_joint" type="fixed">
+    <parent link="left_stereo_camera_link"/><child link="left_stereo_camera_right_optical"/>
+    <origin xyz="0 -0.075 0" rpy="-1.57079632679 0 -1.57079632679"/>
+  </joint>
+
+  <link name="right_stereo_camera_link"/>
+  <link name="right_stereo_camera_left_optical"/>
+  <link name="right_stereo_camera_right_optical"/>
+  <joint name="right_stereo_mount" type="fixed">
+    <parent link="base_link"/><child link="right_stereo_camera_link"/>
+    <origin xyz="-0.35544 -0.15 0.3459" rpy="0 0 -1.57079632679"/>
+  </joint>
+  <joint name="right_stereo_left_optical_joint" type="fixed">
+    <parent link="right_stereo_camera_link"/><child link="right_stereo_camera_left_optical"/>
+    <origin xyz="0 0.075 0" rpy="-1.57079632679 0 -1.57079632679"/>
+  </joint>
+  <joint name="right_stereo_right_optical_joint" type="fixed">
+    <parent link="right_stereo_camera_link"/><child link="right_stereo_camera_right_optical"/>
+    <origin xyz="0 -0.075 0" rpy="-1.57079632679 0 -1.57079632679"/>
+  </joint>
+
+  <link name="back_stereo_camera_link"/>
+  <link name="back_stereo_camera_left_optical"/>
+  <link name="back_stereo_camera_right_optical"/>
+  <joint name="back_stereo_mount" type="fixed">
+    <parent link="base_link"/><child link="back_stereo_camera_link"/>
+    <origin xyz="-0.5637 0.000002 0.3459" rpy="0 0 3.14159265359"/>
+  </joint>
+  <joint name="back_stereo_left_optical_joint" type="fixed">
+    <parent link="back_stereo_camera_link"/><child link="back_stereo_camera_left_optical"/>
+    <origin xyz="0 0.075 0" rpy="-1.57079632679 0 -1.57079632679"/>
+  </joint>
+  <joint name="back_stereo_right_optical_joint" type="fixed">
+    <parent link="back_stereo_camera_link"/><child link="back_stereo_camera_right_optical"/>
+    <origin xyz="0 -0.075 0" rpy="-1.57079632679 0 -1.57079632679"/>
+  </joint>
+
   <link name="wheel_left">
     <visual><geometry><cylinder radius="0.14" length="0.06"/></geometry><material name="wheel_black"/></visual>
   </link>

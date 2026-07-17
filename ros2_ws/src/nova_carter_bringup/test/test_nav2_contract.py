@@ -143,7 +143,7 @@ def test_phase8_launch_enables_health_gate_and_runtime_components() -> None:
 def test_nav2_activation_is_staggered_after_map_server() -> None:
     launch = (BRINGUP / "launch/nav2.launch.py").read_text()
     assert "TimerAction" in launch
-    assert "period=4.0" in launch
+    assert "period=8.0" in launch
     assert '"bond_timeout": 15.0' in launch
 
 

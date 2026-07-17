@@ -96,6 +96,38 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--sensor-config", type=Path, default=PROJECT_ROOT / "config/sensors.yaml"
     )
+    parser.add_argument(
+        "--front-image-width",
+        type=int,
+        default=None,
+        help="optional front RGB width override used by four-way offline mapping",
+    )
+    parser.add_argument(
+        "--front-image-height",
+        type=int,
+        default=None,
+        help="optional front RGB height override used by four-way offline mapping",
+    )
+    parser.add_argument(
+        "--front-image-rate-hz",
+        type=float,
+        default=None,
+        help="optional front camera rate override for deterministic map capture",
+    )
+    parser.add_argument(
+        "--surround-image-rate-hz",
+        type=float,
+        default=None,
+        help="optional side/back camera rate override for deterministic map capture",
+    )
+    parser.add_argument(
+        "--reliable-sensor-qos",
+        action="store_true",
+        help="use reliable sensor writers while recording calibration maps",
+    )
+    parser.add_argument(
+        "--scenario-config", type=Path, default=PROJECT_ROOT / "config/scenarios.yaml"
+    )
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--headless", action="store_true")
     mode.add_argument("--gui", action="store_true")
@@ -143,6 +175,16 @@ def parse_args() -> argparse.Namespace:
         help="run without the Phase 4 front stereo, depth, and IMU graphs",
     )
     parser.add_argument(
+        "--enable-surround-cameras",
+        action="store_true",
+        help="author the Stage 9 left/right/back on-demand stereo graphs",
+    )
+    parser.add_argument(
+        "--dynamic-profile",
+        default="",
+        help="name under scenarios.yaml dynamic_profiles; empty disables obstacles",
+    )
+    parser.add_argument(
         "--disable-follow-camera",
         action="store_true",
         help="keep the default GUI viewport camera instead of the smooth robot follower",
@@ -187,8 +229,47 @@ def parse_args() -> argparse.Namespace:
         for key in ("front_stereo", "topics", "frames", "extrinsics"):
             if not isinstance(args.sensor.get(key), dict):
                 raise ValueError(f"sensor config entry {key!r} must be a mapping")
+        if (args.front_image_width is None) != (args.front_image_height is None):
+            raise ValueError(
+                "--front-image-width and --front-image-height must be supplied together"
+            )
+        if args.front_image_width is not None:
+            if min(args.front_image_width, args.front_image_height) <= 0:
+                raise ValueError("front image dimensions must be positive")
+            args.sensor["front_stereo"]["image_width"] = args.front_image_width
+            args.sensor["front_stereo"]["image_height"] = args.front_image_height
+        if args.front_image_rate_hz is not None:
+            if args.front_image_rate_hz <= 0.0:
+                raise ValueError("front image rate must be positive")
+            args.sensor["front_stereo"]["image_rate_hz"] = args.front_image_rate_hz
+        if args.surround_image_rate_hz is not None:
+            if args.surround_image_rate_hz <= 0.0:
+                raise ValueError("surround image rate must be positive")
+            args.sensor["surround_stereo"]["image_rate_hz"] = (
+                args.surround_image_rate_hz
+            )
+        args.sensor["qos_reliability"] = (
+            "reliable" if args.reliable_sensor_qos else "bestEffort"
+        )
     except (OSError, ValueError, yaml.YAMLError) as exc:
         parser.error(str(exc))
+    if args.dynamic_profile:
+        if not args.scenario_config.is_file():
+            parser.error(f"scenario config does not exist: {args.scenario_config}")
+        try:
+            scenarios = load_mapping(args.scenario_config, "scenario config")
+            profiles = scenarios.get("dynamic_profiles", {})
+            if not isinstance(profiles, dict) or args.dynamic_profile not in profiles:
+                raise ValueError(
+                    f"dynamic profile {args.dynamic_profile!r} is not configured"
+                )
+            args.dynamic_scenario = profiles[args.dynamic_profile]
+            if not isinstance(args.dynamic_scenario, dict):
+                raise ValueError("selected dynamic profile must be a mapping")
+        except (OSError, ValueError, yaml.YAMLError) as exc:
+            parser.error(str(exc))
+    else:
+        args.dynamic_scenario = None
     return args
 
 
@@ -219,6 +300,7 @@ def run(args: argparse.Namespace) -> int:
 
     from nova_carter_sim.graphs import create_control_graphs
     from nova_carter_sim.follow_camera import FollowCamera, activate_viewport_camera
+    from nova_carter_sim.dynamic_obstacles import DynamicObstacleManager
     from nova_carter_sim.sensors import create_sensor_graphs
     from nova_carter_sim.runtime import (
         stage_identity,
@@ -234,6 +316,7 @@ def run(args: argparse.Namespace) -> int:
 
     timeline = None
     follow_camera = None
+    dynamic_obstacles = None
     report: dict[str, object] = {
         "status": "failed",
         "mode": "headless" if args.headless else "gui",
@@ -294,7 +377,12 @@ def run(args: argparse.Namespace) -> int:
         if args.disable_sensors:
             report["sensor_graphs"] = {"enabled": False}
         else:
-            sensor_summary = create_sensor_graphs(stage, args.sensor)
+            sensor_summary = create_sensor_graphs(
+                stage,
+                args.sensor,
+                include_surround=args.enable_surround_cameras,
+                update_app=app.update,
+            )
             app.update()
             report["sensor_graphs"] = {
                 "enabled": True,
@@ -303,6 +391,18 @@ def run(args: argparse.Namespace) -> int:
             }
             if stage_identity() != active_stage_identity:
                 raise RuntimeError("active stage changed while creating Phase 4 graphs")
+
+        if args.dynamic_scenario is not None:
+            dynamic_obstacles = DynamicObstacleManager(
+                stage,
+                args.dynamic_profile,
+                args.dynamic_scenario,
+                (spawn.x, spawn.y, spawn.z),
+            )
+            app.update()
+            report["dynamic_obstacles"] = dynamic_obstacles.summary()
+        else:
+            report["dynamic_obstacles"] = {"enabled": False}
 
         if args.gui and not args.disable_follow_camera:
             follow_camera = FollowCamera(stage, f"{ROBOT_PRIM_PATH}/chassis_link")
@@ -352,6 +452,8 @@ def run(args: argparse.Namespace) -> int:
         while app.is_running() and not STOP_REQUESTED:
             frame_started = time.monotonic()
             app.update()
+            if dynamic_obstacles is not None:
+                dynamic_obstacles.update(float(timeline.get_current_time()))
             if follow_camera is not None:
                 follow_camera.update(1.0 / args.update_hz)
             frames += 1
@@ -436,6 +538,9 @@ def run(args: argparse.Namespace) -> int:
         print(report["traceback"], file=sys.stderr, flush=True)
         return 1
     finally:
+        if dynamic_obstacles is not None:
+            report["dynamic_obstacles"] = dynamic_obstacles.summary()
+            dynamic_obstacles.close()
         if timeline is not None:
             timeline.stop()
             app.update()

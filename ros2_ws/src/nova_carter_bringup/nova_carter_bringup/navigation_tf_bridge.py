@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import math
 
-from geometry_msgs.msg import Quaternion, TransformStamped
+from geometry_msgs.msg import PoseWithCovarianceStamped, Quaternion, TransformStamped
 from nav_msgs.msg import Odometry, Path
 import rclpy
 from rclpy.executors import ExternalShutdownException
+from rclpy.impl.implementation_singleton import rclpy_implementation as _rclpy
 from rclpy.node import Node
-from rclpy.qos import QoSProfile, ReliabilityPolicy
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
+from std_msgs.msg import Bool
 from tf2_ros import TransformBroadcaster
 
 
@@ -66,23 +68,63 @@ class NavigationTfBridge(Node):
         self.declare_parameter("max_source_age_s", 1.0)
         self.declare_parameter("map_frame", "map")
         self.declare_parameter("odom_frame", "odom")
+        self.declare_parameter("anchor_pose_topic", "")
+        self.declare_parameter("anchor_ready_topic", "")
+        self.declare_parameter(
+            "odometry_topic", "/visual_slam/tracking/odometry"
+        )
         rate = float(self.get_parameter("publish_rate_hz").value)
         self.max_age_ns = int(
             float(self.get_parameter("max_source_age_s").value) * 1_000_000_000
         )
         self.map_frame = str(self.get_parameter("map_frame").value)
         self.odom_frame = str(self.get_parameter("odom_frame").value)
+        self.anchor_pose_topic = str(
+            self.get_parameter("anchor_pose_topic").value
+        )
+        self.anchor_ready_topic = str(
+            self.get_parameter("anchor_ready_topic").value
+        )
+        self.odometry_topic = str(self.get_parameter("odometry_topic").value)
+        self.anchor_mode = bool(self.anchor_pose_topic)
+        self.anchor_ready = not bool(self.anchor_ready_topic)
         if rate <= 0.0 or self.max_age_ns <= 0:
             raise ValueError("publish_rate_hz and max_source_age_s must be positive")
         self.map_pose = None
         self.map_stamp_ns = -1
         self.odom_pose = None
         self.odom_stamp_ns = -1
+        self.anchor_pending = False
+        self.anchor_refresh_armed = not bool(self.anchor_ready_topic)
+        self.anchor_translation = None
+        self.anchor_rotation = None
         self.broadcaster = TransformBroadcaster(self)
         qos = QoSProfile(depth=10, reliability=ReliabilityPolicy.RELIABLE)
-        self.create_subscription(Path, "/visual_slam/tracking/slam_path", self.on_path, qos)
+        latched = QoSProfile(
+            depth=1,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+        )
+        if self.anchor_mode:
+            self.create_subscription(
+                PoseWithCovarianceStamped,
+                self.anchor_pose_topic,
+                self.on_anchor_pose,
+                qos,
+            )
+            if self.anchor_ready_topic:
+                self.create_subscription(
+                    Bool,
+                    self.anchor_ready_topic,
+                    self.on_anchor_ready,
+                    latched,
+                )
+        else:
+            self.create_subscription(
+                Path, "/visual_slam/tracking/slam_path", self.on_path, qos
+            )
         self.create_subscription(
-            Odometry, "/visual_slam/tracking/odometry", self.on_odometry, qos
+            Odometry, self.odometry_topic, self.on_odometry, qos
         )
         self.create_timer(1.0 / rate, self.publish_transform)
 
@@ -98,19 +140,64 @@ class NavigationTfBridge(Node):
             if self.map_stamp_ns == 0:
                 self.map_stamp_ns = self.stamp_ns(message.header.stamp)
 
+    def on_anchor_pose(self, message: PoseWithCovarianceStamped) -> None:
+        if message.header.frame_id != self.map_frame:
+            return
+        self.map_pose = message.pose.pose
+        self.map_stamp_ns = self.stamp_ns(message.header.stamp)
+        self.anchor_pending = True
+        if not self.anchor_ready_topic:
+            self.refresh_anchor()
+
+    def on_anchor_ready(self, message: Bool) -> None:
+        was_ready = self.anchor_ready
+        self.anchor_ready = message.data
+        if not self.anchor_ready:
+            self.anchor_refresh_armed = False
+        elif not was_ready:
+            # Treat readiness as an edge: the status is published repeatedly,
+            # while the anchor must be recomputed exactly once after cuVSLAM
+            # has finished rebasing its odometry frame.
+            self.anchor_refresh_armed = True
+        if self.anchor_refresh_armed and self.anchor_pending:
+            self.refresh_anchor()
+
     def on_odometry(self, message: Odometry) -> None:
         if message.header.frame_id == self.odom_frame:
             self.odom_pose = message.pose.pose
             self.odom_stamp_ns = self.stamp_ns(message.header.stamp)
+            if self.anchor_pending and self.anchor_refresh_armed:
+                self.refresh_anchor()
 
-    def publish_transform(self) -> None:
+    def refresh_anchor(self) -> None:
         if self.map_pose is None or self.odom_pose is None:
             return
+        self.anchor_translation, self.anchor_rotation = map_to_odom_transform(
+            self.map_pose, self.odom_pose
+        )
+        self.anchor_pending = False
+        self.anchor_refresh_armed = False
+        self.get_logger().info(
+            "Accepted VGL-anchored map->odom transform "
+            f"translation=({self.anchor_translation[0]:.3f}, "
+            f"{self.anchor_translation[1]:.3f})"
+        )
+
+    def publish_transform(self) -> None:
         now = self.get_clock().now()
-        now_ns = now.nanoseconds
-        if now_ns - min(self.map_stamp_ns, self.odom_stamp_ns) > self.max_age_ns:
-            return
-        translation, rotation = map_to_odom_transform(self.map_pose, self.odom_pose)
+        if self.anchor_mode:
+            if self.anchor_translation is None or self.anchor_rotation is None:
+                return
+            translation, rotation = self.anchor_translation, self.anchor_rotation
+        else:
+            if self.map_pose is None or self.odom_pose is None:
+                return
+            now_ns = now.nanoseconds
+            if now_ns - min(self.map_stamp_ns, self.odom_stamp_ns) > self.max_age_ns:
+                return
+            translation, rotation = map_to_odom_transform(
+                self.map_pose, self.odom_pose
+            )
         transform = TransformStamped()
         transform.header.stamp = now.to_msg()
         transform.header.frame_id = self.map_frame
@@ -127,7 +214,7 @@ def main(args: list[str] | None = None) -> None:
     node = NavigationTfBridge()
     try:
         rclpy.spin(node)
-    except (KeyboardInterrupt, ExternalShutdownException):
+    except (KeyboardInterrupt, ExternalShutdownException, _rclpy.RCLError):
         pass
     finally:
         node.destroy_node()

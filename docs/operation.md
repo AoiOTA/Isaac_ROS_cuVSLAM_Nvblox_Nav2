@@ -1,6 +1,6 @@
 # Operation
 
-Available through Phase 8:
+Available through Phase 9:
 
 ```bash
 ./scripts/build.sh
@@ -24,6 +24,10 @@ python3 tools/check_stage1.py
 ./scripts/run_navigation.sh --map warehouse_v1 --rviz
 ./scripts/run_all.sh --map warehouse_v1 --headless --rviz
 ./scripts/run_phase8_tests.sh warehouse_v1
+./scripts/run_phase9_mapping.sh --map warehouse_v2_front
+./scripts/run_phase9_navigation.sh --map warehouse_v2_front --rviz
+./scripts/run_phase9.sh --map warehouse_v2_front --headless --rviz
+./scripts/run_phase9_tests.sh warehouse_v2_front
 ```
 
 `smoke_ros_bridge.sh` starts only its own Isaac Sim process group, receives real `/clock`, image, and CameraInfo messages, and then terminates that process group. It never uses `killall` or `pkill`.
@@ -86,7 +90,7 @@ Use the automated suite for acceptance instead of judging motion by eye:
 
 The suite starts the simulator and ROS nodes in process groups it owns, uses ROS domain 43 by default for test isolation, records JSON and logs, and shuts down through a simulator stop sentinel. Override only the temporary test domain with `PHASE3_TEST_ROS_DOMAIN_ID`; the public project domain remains 42.
 
-Mapping, relocalization, and static-map navigation now have verified public entries in Stages 7 and 8. Dynamic obstacle expansion and statistical final acceptance remain reserved for Stages 9 through 11.
+Mapping, relocalization, static navigation, and front-stereo dynamic navigation now have verified public entries through Stage 9. Lighting/color experiments and statistical final acceptance remain reserved for Stages 10 and 11.
 
 ## Phase 4 visual sensor data flow
 
@@ -220,3 +224,44 @@ PHASE8_GOAL_POSES='[1.0, 0.0, 0.0]' ./scripts/run_all.sh --map warehouse_v1 --he
 ```
 
 The default simulator update cap is 120 Hz and the physics rate remains 120 Hz. `PHASE8_GOAL_POSES` is intended for bounded tuning runs; the persisted Stage 8 checker requires the default three-goal report. Full interfaces and measured results are in [`docs/phase8_validation.md`](phase8_validation.md).
+
+## Stage 9 front-stereo dynamic navigation
+
+The default one-command run is:
+
+```bash
+cd /home/lyb/Workspace/Isaac_ROS_cuVSLAM_Nvblox_Nav2
+./scripts/run_phase9.sh --map warehouse_v2_front --headless --rviz
+```
+
+It owns a loopback-only Fast DDS discovery server, simulator, ROS launch and
+test runner. The simulator creates only `FrontStereo`, `FrontDepth` and
+`FrontImu` sensor graphs, publishes the front pair at 10 Hz and IMU at 120 Hz,
+and drives the `warehouse_crossing` dynamic profile. The ROS stack starts
+front-only cuVSLAM/cuVGL, wheel-local EKF, dynamic nvblox, recovery manager,
+resilient Nav2 action, complete Nav2, and optional RViz.
+
+To run only the ROS half against this repository's already running simulator:
+
+```bash
+./scripts/run_phase9_navigation.sh --map warehouse_v2_front --rviz
+```
+
+To regenerate a front-only map using the same map pipeline as Stage 7:
+
+```bash
+./scripts/run_phase9_mapping.sh --map warehouse_v2_front
+```
+
+For reproducible regression, use:
+
+```bash
+PHASE9_TRIALS=3 ./scripts/run_phase9_tests.sh warehouse_v2_front
+```
+
+The first trial includes RViz and later trials omit it. Each trial injects one
+forced relocalization during an active goal and requires a safe stop plus
+automatic goal resume. Runtime reports are under `data/reports/phase9`; logs
+are under `data/logs/stage9`. These directories are intentionally ignored by
+Git. Full pass criteria and measured data are in
+[`docs/phase9_validation.md`](phase9_validation.md).

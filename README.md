@@ -2,7 +2,7 @@
 
 本仓库用于在 Ubuntu 24.04、ROS 2 Jazzy、Isaac Sim 6.0.1 和 RTX 4090 上构建 Nova Carter 视觉导航系统。目标组件包括 Isaac Sim Standalone Python、Isaac ROS cuVSLAM、nvblox、Visual Global Localization 和 Nav2。
 
-当前状态：**阶段0至阶段8已完成并在本机实测通过。** 已安装CUDA Toolkit 13.0.3、TensorRT 10.13.3.9和Isaac ROS 4.5.0；Standalone程序直接打开官方Warehouse，在匿名session layer中引用Nova Carter主USD，并在运行时自建控制、前向双目、深度和IMU OmniGraph。前向双目+IMU已接入cuVSLAM，Isaac Sim原生深度已接入nvblox，cuVGL地图与TensorRT引擎可自动生成和加载。Nav2现已使用SmacPlanner2D、MPPI DiffDrive、nvblox局部代价地图、视觉深度障碍层、Velocity Smoother、Collision Monitor和最终Command Guard完成自动重定位及三目标闭环；完整RViz与Isaac Sim第三人称跟随相机也已实机验证。
+当前状态：**阶段0至阶段9已完成并在本机实测通过。** 已安装CUDA Toolkit 13.0.3、TensorRT 10.13.3.9和Isaac ROS 4.5.0；Standalone程序直接打开官方Warehouse，在匿名session layer中引用Nova Carter主USD，并在运行时自建控制、前向双目、深度和IMU OmniGraph。阶段9按当前项目决策只使用前向Hawk双目，不启动侧向或后向相机；cuVSLAM连续跟踪、前向cuVGL全局重定位、dynamic nvblox、Nav2 MPPI DiffDrive、Velocity Smoother、Collision Monitor、Command Guard和自动暂停/恢复导航已组成完整动态导航闭环。
 
 ## 固定资产
 
@@ -163,6 +163,23 @@ cd /home/lyb/Workspace/Isaac_ROS_cuVSLAM_Nvblox_Nav2
 
 本机最终带RViz回归的三个目标全部成功，位置误差为0.195、0.240和0.193 m，航向误差为8.62°、3.07°和2.97°；真值轨迹4.64 m，四级速度链约20 Hz，局部MPPI路径约20 Hz，TF约46 Hz，深度时间戳无回退。详细架构、接口、调参依据与实测证据见[Phase 8 Validation](docs/phase8_validation.md)。
 
+## 阶段9 前向双目动态导航与自动恢复
+
+阶段9默认地图和完整启动入口为：
+
+```bash
+./scripts/run_phase9_mapping.sh --map warehouse_v2_front
+./scripts/run_phase9_navigation.sh --map warehouse_v2_front --rviz
+./scripts/run_phase9.sh --map warehouse_v2_front --headless --rviz
+./scripts/run_phase9_tests.sh warehouse_v2_front
+```
+
+`run_phase9.sh`自动启动项目独占的本地Fast DDS发现服务器、Standalone仿真、前向双目cuVSLAM、前向双目cuVGL、dynamic nvblox、Nav2和可选RViz，并执行三目标路线。仿真在匿名session layer中驱动官方叉车以及项目创建的箱体和胶囊体；官方Warehouse和Nova Carter USD不会被保存或修改。
+
+定位恢复链路会先撤销`/localization/ready`使最终Command Guard归零，再触发前向cuVGL。通过位姿创新门限并连续恢复cuVSLAM tracking后，`resilient_navigation`自动重发同一个Nav2目标；最多三次仍失败则保持安全停车。局部地图由dynamic nvblox输出的`combined_map_slice`提供，并由原生深度LaserScan和PointCloud2承担低延迟安全响应。完整设计、接口、命令、测试矩阵和实测结果见[Phase 9 Validation](docs/phase9_validation.md)。
+
+本机最终执行3次独立完整重启回归（首轮带RViz），共9/9个目标成功、3/3次强制重定位后自动续航，三轮动态障碍接触均为0；38项包级契约测试全部通过。
+
 ## 阶段1完整环境配置
 
 另一台电脑需要重新配置环境时，以[阶段1裸机环境完整配置手册](docs/installation.md)为准。该文档把操作拆分为独立步骤，包含每条命令的目的、预期结果、安全门和失败恢复，不要求先运行本仓库的安装脚本。
@@ -189,7 +206,7 @@ python3 tools/check_stage1.py
 ```
 
 安装脚本不修改 `~/.bashrc`，不卸载系统OpenCV，并在APT模拟出现任何待删除包时自动停止。
-动态避障扩展、光照/颜色实验和最终统计验收将在阶段9至阶段11实现；当前公开的阶段0至阶段8命令均为实际可执行入口。
+光照/颜色实验、统计调参和最终正式验收将在阶段10至阶段11实现；当前公开的阶段0至阶段9命令均为实际可执行入口。
 
 本机阶段1验收已确认：
 

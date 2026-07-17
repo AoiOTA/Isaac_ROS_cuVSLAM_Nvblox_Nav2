@@ -357,3 +357,34 @@ Successfully localized at {...}
 ```
 
 本机五次独立仿真重启全部成功，均接收cuVGL位姿、恢复cuVSLAM tracking，失败hint为0。完整证据见[阶段7验证记录](phase7_validation.md)。
+
+## 14. 阶段9前向双目动态导航补充
+
+阶段9继续使用两台前向相机，不启用四向模式：
+
+```yaml
+visual_global_localization_node:
+  ros__parameters:
+    num_cameras: 2
+    stereo_localizer_cam_ids: "0,1"
+    camera_optical_frames:
+      - front_stereo_camera_left_optical
+      - front_stereo_camera_right_optical
+    enable_continuous_localization: false
+    publish_map_to_base_tf: false
+    publish_map_to_odom_tf: false
+    image_sync_match_threshold_ms: 3.0
+    localization_precision_level: 2
+```
+
+地图必须使用与cuVSLAM同一份离线轨迹生成的`warehouse_v2_front`。运行入口先把地图冻结的pb.txt复制到`data/runs/phase9_runtime/<map>/vgl_config`，只在副本中把同步窗设为3000 µs，不修改地图或`/opt/ros`文件。
+
+`vgl_pose_relay`在转发前执行平移和yaw创新检查。接受的位姿同时发布到`/visual_slam/initial_pose`和`/vgl_pose_relay/pose`；后者只供`navigation_tf_bridge`锁定全局锚点，不由VGL直接发布TF。每次`/localization/ready`从false变为true时重新计算一次锚点，正常导航期间保持固定，避免连续定位噪声进入局部控制。
+
+失锁恢复时先等待前向遮挡清除，再调用：
+
+```bash
+ros2 service call /visual_localization/trigger_localization std_srvs/srv/Trigger '{}'
+```
+
+最多三次，接受位姿后还必须取得20个连续健康cuVSLAM状态才恢复Nav2。手动迁移到另一台电脑时，除本手册原有检查外，还要验证`/vgl_pose_relay/accepted`、`/localization/recovery_state`、`/localization/ready`和`/navigation/resilient_status`四个接口。

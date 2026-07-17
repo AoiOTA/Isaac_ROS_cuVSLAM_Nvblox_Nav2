@@ -34,3 +34,16 @@ Isaac Sim原生32FC1米制深度是nvblox输入；基线不运行FoundationStere
 ```
 
 完整cuVGL跨机器过程见[cuVGL配置手册](cuvgl_configuration.md)，nvblox持久化见[nvblox配置手册](nvblox_configuration.md)，实际结果见[阶段7验证](phase7_validation.md)。
+
+## 阶段9前向双目地图
+
+阶段9默认地图名为`warehouse_v2_front`，仍由同一份离线数据同时生成cuVSLAM与cuVGL地图，禁止把在线cuVSLAM数据库覆盖到离线对齐目录。当前本机地图含366个cuVGL关键帧，运行时输入顺序固定为前左、前右；侧向和后向相机不属于这张地图的rig identity。
+
+```bash
+./scripts/run_phase9_mapping.sh --map warehouse_v2_front
+python3 tools/check_phase7_maps.py data/maps/warehouse_v2_front
+```
+
+阶段9导航把前向图像固定为1280×800、10 Hz，与该地图的采集节奏一致。`create_vgl_map.sh`先以显式同步窗生成EDEx，再从同一离线轨迹执行pose、feature和BoW步骤。`manifest.json`必须记录两台相机、一个双目对和实际生成命令。
+
+若以后实验四向相机，必须使用新的地图名、重新录制八路同步数据并同时重建cuVSLAM和cuVGL；不能把四向配置套在`warehouse_v2_front`上，也不能只修改`num_cameras`后复用现有数据库。

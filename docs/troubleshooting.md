@@ -90,3 +90,42 @@ ROS 2 Jazzy Nav2 1.3.12 `SmacPlanner2D` constructs its 2D collision checker with
 ## RViz reports occasional base_link message-filter queue drops
 
 The tested RViz configuration loads successfully and renders the occupancy map, both costmaps, paths, robot, TF, images, depth, nvblox outputs, scan, and collision polygons. Under simultaneous RTX rendering, cuVSLAM, nvblox, VGL, and RViz, an occasional old `base_link` visualization message can be dropped because the display queue is full. Navigation uses the synchronized odom pointcloud and is unaffected. Persistent drops together with missing current displays indicate TF or GPU starvation and should fail a fresh `run_phase8_tests.sh` run.
+
+## Stage 9 front-stereo VGL repeatedly rejects poses
+
+Inspect `/localization/recovery_state`, `/vgl_pose_relay/accepted`, and the
+`vgl_pose_relay` log together. Confirm that `warehouse_v2_front/cuvslam` and
+`warehouse_v2_front/cuvgl` came from the same offline bag and pose solution.
+Do not loosen the innovation gate first: wait for a moving foreground object to
+clear, verify the 3 ms stereo synchronization window, then improve map coverage.
+The recovery manager retries at most three times and intentionally leaves the
+robot stopped in `failed_safe` after exhaustion.
+
+## Stage 9 map pose is stable but local odometry jumps near movers
+
+Large moving foregrounds can contaminate front-only visual odometry even while
+cuVSLAM reports tracking. The Stage 9 launch deliberately disables cuVSLAM's
+direct TF output, publishes `odom→base_link` from `visual_wheel_ekf`, and uses
+cuVGL to anchor `map→odom`. Confirm exactly one publisher for each edge and
+that the EKF input is `/wheel/odometry`; ground truth must never appear as an
+input. cuVSLAM status remains a hard Command Guard prerequisite, so do not
+remove the visual-health gate merely because wheel-local prediction is smooth.
+
+## Stage 9 dynamic obstacle collides with a stopped robot
+
+Read `dynamic_obstacles.robot_contact_pairs` in the simulator JSON. Kinematic
+actors do not yield when Collision Monitor stops the robot, so their physical
+swept volume must stay outside the robot footprint while their nvblox/inflation
+envelope can still intersect the route. For generated USD shapes, author the
+translate op before scale; reversing them scales the waypoint and silently
+moves the obstacle into the robot. Never disable the PhysX contact assertion to
+make a run pass.
+
+## Stage 9 guard alternates active and timeout under full RViz load
+
+First distinguish the final 250 ms command watchdog from navigation-health
+freshness. Phase 9 keeps the hard command watchdog unchanged, but allows 2 s
+for front depth, cuVSLAM status and combined map slice because GPU rendering,
+dynamic nvblox and RViz share one RTX 4090. Persistent gaps longer than this
+mean the 10 Hz front stream or DDS discovery is unhealthy; verify the local
+Fast DDS server, topic rates and GPU load instead of increasing timeouts again.

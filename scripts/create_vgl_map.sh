@@ -6,21 +6,52 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 load_ros
 
-BAG="${1:?usage: create_vgl_map.sh BAG [MAP_DIR]}"
-MAP_DIR="${2:-${PROJECT_ROOT}/data/maps/warehouse_v1}"
+BAG="${1:?usage: create_vgl_map.sh BAG [MAP_DIR] [--topic-config FILE]}"
+shift
+MAP_DIR="${PROJECT_ROOT}/data/maps/warehouse_v1"
+if (($#)) && [[ "$1" != --* ]]; then
+  MAP_DIR="$1"
+  shift
+fi
 [[ -d "${BAG}" ]] || die "MCAP rosbag directory not found: ${BAG}"
 TOPIC_CONFIG="${PROJECT_ROOT}/ros2_ws/install/nova_carter_bringup/share/nova_carter_bringup/config/mapping_topics.yaml"
+MAX_SYNC_US=100
+while (($#)); do
+  case "$1" in
+    --topic-config) TOPIC_CONFIG="${2:?missing topic config}"; shift 2 ;;
+    --max-sync-us) MAX_SYNC_US="${2:?missing synchronization window}"; shift 2 ;;
+    -h|--help)
+      echo "Usage: ./scripts/create_vgl_map.sh BAG [MAP_DIR] [--topic-config FILE] [--max-sync-us N]"
+      exit 0 ;;
+    *) die "unknown argument: $1" ;;
+  esac
+done
+require_file "${TOPIC_CONFIG}"
+[[ "${MAX_SYNC_US}" =~ ^[1-9][0-9]*$ ]] || die "--max-sync-us must be a positive integer"
 WORK="${MAP_DIR}/offline"
 MODEL_DIR="${PROJECT_ROOT}/data/models/vgl"
 rm -rf "${WORK}"
 mkdir -p "${WORK}" "${MAP_DIR}/config"
 export ISAAC_ROS_WS="${PROJECT_ROOT}/ros2_ws"
 
-info "Creating aligned cuVSLAM and cuVGL maps from ${BAG}"
+info "Creating aligned cuVSLAM and cuVGL maps from ${BAG} using ${TOPIC_CONFIG}"
+mkdir -p "${WORK}/edex"
+ros2 run isaac_mapping_ros rosbag_to_mapping_data \
+  --output_folder_path="${WORK}/edex" \
+  --sensor_data_bag_file="${BAG}" \
+  --min_inter_frame_distance=0.0 \
+  --min_inter_frame_rotation_degrees=0.0 \
+  --sample_sync_threshold_microseconds="${MAX_SYNC_US}" \
+  --generate_edex=True \
+  --image_extension=.jpg \
+  --base_link_name=base_link \
+  --camera_topic_config="${TOPIC_CONFIG}" \
+  --rectify_images=False
+
 ros2 run isaac_mapping_ros create_map_offline.py \
   --sensor_data_bag="${BAG}" \
   --map_dir="${WORK}" \
-  --steps_to_run edex compute_poses \
+  --steps_to_run compute_poses \
   --camera_topic_config="${TOPIC_CONFIG}" \
   --base_link_name=base_link \
   --use_raw_image=True \

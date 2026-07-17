@@ -46,9 +46,9 @@ controller_server:
       stateful: true
     FollowPath:
       plugin: nav2_mppi_controller::MPPIController
-      time_steps: 56
+      time_steps: 48
       model_dt: 0.05
-      batch_size: 1000
+      batch_size: 800
       iteration_count: 1
       ax_max: 1.2
       ax_min: -1.2
@@ -190,7 +190,11 @@ global_costmap:
       resolution: 0.05
       footprint: "[[0.14, 0.25], [0.14, -0.25], [-0.607, -0.25], [-0.607, 0.25]]"
       footprint_padding: 0.03
-      track_unknown_space: true
+      # The visual mapping route leaves small unobserved islands around the
+      # robot spawn.  Treat those as globally traversable; the rolling local
+      # costmap, combined nvblox ESDF and raw-depth Collision Monitor still
+      # provide conservative online obstacle enforcement.
+      track_unknown_space: false
       always_send_full_costmap: true
       plugins: [static_layer, inflation_layer]
       static_layer:

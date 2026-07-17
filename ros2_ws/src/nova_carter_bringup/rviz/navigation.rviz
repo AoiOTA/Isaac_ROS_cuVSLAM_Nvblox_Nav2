@@ -194,6 +194,50 @@ Visualization Manager:
             Durability Policy: Volatile
             History Policy: Keep Last
             Depth: 5
+        - Class: rviz_default_plugins/PointCloud2
+          Name: Dynamic ESDF
+          Enabled: true
+          Style: Flat Squares
+          Size (Pixels): 4
+          Size (m): 0.04
+          Color Transformer: FlatColor
+          Color: 255; 60; 40
+          Position Transformer: XYZ
+          Topic:
+            Value: /nvblox_node/dynamic_esdf_pointcloud
+            Reliability Policy: Reliable
+            Durability Policy: Volatile
+            History Policy: Keep Last
+            Depth: 5
+        - Class: rviz_default_plugins/PointCloud2
+          Name: Combined ESDF
+          Enabled: false
+          Style: Flat Squares
+          Size (Pixels): 3
+          Size (m): 0.03
+          Color Transformer: Intensity
+          Position Transformer: XYZ
+          Topic:
+            Value: /nvblox_node/combined_esdf_pointcloud
+            Reliability Policy: Reliable
+            Durability Policy: Volatile
+            History Policy: Keep Last
+            Depth: 5
+        - Class: rviz_default_plugins/PointCloud2
+          Name: Dynamic depth points
+          Enabled: true
+          Style: Spheres
+          Size (Pixels): 5
+          Size (m): 0.06
+          Color Transformer: FlatColor
+          Color: 255; 0; 0
+          Position Transformer: XYZ
+          Topic:
+            Value: /nvblox_node/dynamic_points
+            Reliability Policy: Reliable
+            Durability Policy: Volatile
+            History Policy: Keep Last
+            Depth: 5
     - Class: rviz_common/Group
       Name: Visual sensors and safety
       Enabled: true
@@ -216,6 +260,36 @@ Visualization Manager:
           Max Value: 6
           Topic:
             Value: /front_stereo_camera/depth/image_raw
+            Reliability Policy: Best Effort
+            Durability Policy: Volatile
+            History Policy: Keep Last
+            Depth: 5
+        - Class: rviz_default_plugins/Image
+          Name: Left Hawk on demand
+          Enabled: false
+          Normalize Range: true
+          Topic:
+            Value: /left_stereo_camera/left/image_raw
+            Reliability Policy: Best Effort
+            Durability Policy: Volatile
+            History Policy: Keep Last
+            Depth: 5
+        - Class: rviz_default_plugins/Image
+          Name: Right Hawk on demand
+          Enabled: false
+          Normalize Range: true
+          Topic:
+            Value: /right_stereo_camera/left/image_raw
+            Reliability Policy: Best Effort
+            Durability Policy: Volatile
+            History Policy: Keep Last
+            Depth: 5
+        - Class: rviz_default_plugins/Image
+          Name: Back Hawk on demand
+          Enabled: false
+          Normalize Range: true
+          Topic:
+            Value: /back_stereo_camera/left/image_raw
             Reliability Policy: Best Effort
             Durability Policy: Volatile
             History Policy: Keep Last

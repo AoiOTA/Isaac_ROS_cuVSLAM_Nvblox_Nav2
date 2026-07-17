@@ -12,6 +12,12 @@ def generate_launch_description() -> LaunchDescription:
     return LaunchDescription(
         [
             DeclareLaunchArgument("require_navigation_health", default_value="false"),
+            DeclareLaunchArgument(
+                "map_slice_topic", default_value="/nvblox_node/static_map_slice"
+            ),
+            DeclareLaunchArgument("visual_slam_timeout", default_value="1.0"),
+            DeclareLaunchArgument("depth_timeout", default_value="0.5"),
+            DeclareLaunchArgument("map_slice_timeout", default_value="1.0"),
             Node(
                 package="nova_carter_control",
                 executable="command_guard",
@@ -22,7 +28,15 @@ def generate_launch_description() -> LaunchDescription:
                     {
                         "require_navigation_health": LaunchConfiguration(
                             "require_navigation_health"
-                        )
+                        ),
+                        "map_slice_topic": LaunchConfiguration("map_slice_topic"),
+                        "visual_slam_timeout": LaunchConfiguration(
+                            "visual_slam_timeout"
+                        ),
+                        "depth_timeout": LaunchConfiguration("depth_timeout"),
+                        "map_slice_timeout": LaunchConfiguration(
+                            "map_slice_timeout"
+                        ),
                     },
                 ],
             ),

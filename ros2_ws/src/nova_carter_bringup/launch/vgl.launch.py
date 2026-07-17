@@ -18,7 +18,7 @@ def generate_launch_description() -> LaunchDescription:
         ),
         name="visual_global_localization_node",
         parameters=[
-            str(share / "config/vgl.yaml"),
+            LaunchConfiguration("vgl_params"),
             {
                 "map_dir": LaunchConfiguration("vgl_map_dir"),
                 "config_dir": LaunchConfiguration("vgl_config_dir"),
@@ -36,12 +36,45 @@ def generate_launch_description() -> LaunchDescription:
                 "visual_localization/camera_info_1",
                 "/front_stereo_camera/right/camera_info",
             ),
+            ("visual_localization/image_2", "/left_stereo_camera/left/image_raw"),
+            (
+                "visual_localization/camera_info_2",
+                "/left_stereo_camera/left/camera_info",
+            ),
+            ("visual_localization/image_3", "/left_stereo_camera/right/image_raw"),
+            (
+                "visual_localization/camera_info_3",
+                "/left_stereo_camera/right/camera_info",
+            ),
+            ("visual_localization/image_4", "/right_stereo_camera/left/image_raw"),
+            (
+                "visual_localization/camera_info_4",
+                "/right_stereo_camera/left/camera_info",
+            ),
+            ("visual_localization/image_5", "/right_stereo_camera/right/image_raw"),
+            (
+                "visual_localization/camera_info_5",
+                "/right_stereo_camera/right/camera_info",
+            ),
+            ("visual_localization/image_6", "/back_stereo_camera/left/image_raw"),
+            (
+                "visual_localization/camera_info_6",
+                "/back_stereo_camera/left/camera_info",
+            ),
+            ("visual_localization/image_7", "/back_stereo_camera/right/image_raw"),
+            (
+                "visual_localization/camera_info_7",
+                "/back_stereo_camera/right/camera_info",
+            ),
         ],
         extra_arguments=[{"use_intra_process_comms": True}],
     )
     return LaunchDescription(
         [
             DeclareLaunchArgument("vgl_map_dir"),
+            DeclareLaunchArgument(
+                "vgl_params", default_value=str(share / "config/vgl.yaml")
+            ),
             DeclareLaunchArgument(
                 "vgl_config_dir",
                 default_value=(
@@ -50,6 +83,9 @@ def generate_launch_description() -> LaunchDescription:
             ),
             DeclareLaunchArgument("vgl_model_dir"),
             DeclareLaunchArgument("cuvslam_map_dir"),
+            DeclareLaunchArgument(
+                "odometry_topic", default_value="/visual_slam/tracking/odometry"
+            ),
             ComposableNodeContainer(
                 name="vgl_container",
                 namespace="",
@@ -66,6 +102,7 @@ def generate_launch_description() -> LaunchDescription:
                 parameters=[
                     {"use_sim_time": True},
                     {"cuvslam_map_dir": LaunchConfiguration("cuvslam_map_dir")},
+                    {"odometry_topic": LaunchConfiguration("odometry_topic")},
                 ],
             ),
         ]

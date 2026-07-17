@@ -13,6 +13,31 @@ front_stereo:
   # in the anonymous session layer so rectified_images=true is truthful.
   navigation_projection: pinhole
 
+# The three non-front Hawk pairs are authored only by the Stage 9 simulator
+# entry point.  Their render products and ROS writers are controlled by a
+# transient-local Bool so they consume GPU/DDS bandwidth only while mapping or
+# relocalizing.  All paths below were read from the local Isaac Sim 6.0.1 USD.
+surround_stereo:
+  # cuVSLAM 15 rejects a saved multicamera rig when camera resolutions differ.
+  # Use the Phase 5 validated navigation resolution for all eight inputs; the
+  # six non-front streams stay gated and therefore cost nothing while normal
+  # front-stereo VIO and navigation are running.
+  image_width: 1280
+  image_height: 800
+  image_rate_hz: 10.0
+  navigation_projection: pinhole
+  enable_topic: /vgl/cameras_enabled
+  cameras:
+    left:
+      left_camera_prim: /World/NovaCarter/chassis_link/sensors/left_hawk/left/camera_left
+      right_camera_prim: /World/NovaCarter/chassis_link/sensors/left_hawk/right/camera_right
+    right:
+      left_camera_prim: /World/NovaCarter/chassis_link/sensors/right_hawk/left/camera_left
+      right_camera_prim: /World/NovaCarter/chassis_link/sensors/right_hawk/right/camera_right
+    back:
+      left_camera_prim: /World/NovaCarter/chassis_link/sensors/back_hawk/left/camera_left
+      right_camera_prim: /World/NovaCarter/chassis_link/sensors/back_hawk/right/camera_right
+
 topics:
   left_rgb_raw: /front_stereo_camera/left/image_raw_rgb
   right_rgb_raw: /front_stereo_camera/right/image_raw_rgb
@@ -23,6 +48,24 @@ topics:
   depth: /front_stereo_camera/depth/image_raw
   depth_camera_info: /front_stereo_camera/depth/camera_info
   imu: /front_stereo_imu/imu
+  left_left_rgb_raw: /left_stereo_camera/left/image_raw_rgb
+  left_right_rgb_raw: /left_stereo_camera/right/image_raw_rgb
+  left_left_mono: /left_stereo_camera/left/image_raw
+  left_right_mono: /left_stereo_camera/right/image_raw
+  left_left_camera_info: /left_stereo_camera/left/camera_info
+  left_right_camera_info: /left_stereo_camera/right/camera_info
+  right_left_rgb_raw: /right_stereo_camera/left/image_raw_rgb
+  right_right_rgb_raw: /right_stereo_camera/right/image_raw_rgb
+  right_left_mono: /right_stereo_camera/left/image_raw
+  right_right_mono: /right_stereo_camera/right/image_raw
+  right_left_camera_info: /right_stereo_camera/left/camera_info
+  right_right_camera_info: /right_stereo_camera/right/camera_info
+  back_left_rgb_raw: /back_stereo_camera/left/image_raw_rgb
+  back_right_rgb_raw: /back_stereo_camera/right/image_raw_rgb
+  back_left_mono: /back_stereo_camera/left/image_raw
+  back_right_mono: /back_stereo_camera/right/image_raw
+  back_left_camera_info: /back_stereo_camera/left/camera_info
+  back_right_camera_info: /back_stereo_camera/right/camera_info
 
 frames:
   base: base_link
@@ -30,6 +73,15 @@ frames:
   left_optical: front_stereo_camera_left_optical
   right_optical: front_stereo_camera_right_optical
   imu: front_stereo_camera_imu
+  left_camera_link: left_stereo_camera_link
+  left_left_optical: left_stereo_camera_left_optical
+  left_right_optical: left_stereo_camera_right_optical
+  right_camera_link: right_stereo_camera_link
+  right_left_optical: right_stereo_camera_left_optical
+  right_right_optical: right_stereo_camera_right_optical
+  back_camera_link: back_stereo_camera_link
+  back_left_optical: back_stereo_camera_left_optical
+  back_right_optical: back_stereo_camera_right_optical
 
 extrinsics:
   camera_link_xyz_m: [0.1003, -0.000002, 0.3459]
@@ -39,3 +91,11 @@ extrinsics:
   imu_from_camera_link_xyz_m: [0.0, -0.0197, 0.0061]
   imu_from_camera_link_rpy_rad: [0.0, 1.5707963267948966, 0.0]
   stereo_baseline_m: 0.15
+  # Midpoints and yaw angles of the side/back Hawk baselines relative to
+  # chassis_link.  Side-specific optical joints reuse optical_rpy_rad.
+  left_camera_link_xyz_m: [-0.35543, 0.15, 0.3459]
+  left_camera_link_yaw_rad: 1.5707963267948966
+  right_camera_link_xyz_m: [-0.35544, -0.15, 0.3459]
+  right_camera_link_yaw_rad: -1.5707963267948966
+  back_camera_link_xyz_m: [-0.5637, 0.000002, 0.3459]
+  back_camera_link_yaw_rad: 3.141592653589793

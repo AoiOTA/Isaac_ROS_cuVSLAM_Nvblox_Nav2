@@ -25,11 +25,33 @@ class NvbloxTestRunner(Node):
         self.declare_parameter("result_path", "data/reports/phase6/latest.json")
         self.declare_parameter("output_dir", "data/maps/phase6_validation/nvblox")
         self.declare_parameter("mapping_duration_sim_seconds", 60.0)
+        self.declare_parameter("expected_camera_info_rate_hz", 20.0)
+        self.declare_parameter("min_depth_callback_rate_hz", 15.0)
+        self.declare_parameter("min_depth_integration_rate_hz", 12.0)
+        self.declare_parameter("min_color_integration_rate_hz", 3.0)
+        self.declare_parameter("min_esdf_update_rate_hz", 7.0)
         self.result_path = Path(str(self.get_parameter("result_path").value)).resolve()
         self.output_dir = Path(str(self.get_parameter("output_dir").value)).resolve()
         self.mapping_duration = float(
             self.get_parameter("mapping_duration_sim_seconds").value
         )
+        self.expected_camera_info_rate = float(
+            self.get_parameter("expected_camera_info_rate_hz").value
+        )
+        self.processing_rate_minima = {
+            "ros/depth_image_callback": float(
+                self.get_parameter("min_depth_callback_rate_hz").value
+            ),
+            "ros/depth": float(
+                self.get_parameter("min_depth_integration_rate_hz").value
+            ),
+            "ros/color": float(
+                self.get_parameter("min_color_integration_rate_hz").value
+            ),
+            "ros/update_esdf": float(
+                self.get_parameter("min_esdf_update_rate_hz").value
+            ),
+        }
 
         self.clock_time = 0.0
         self.last_clock = -math.inf
@@ -337,16 +359,17 @@ class NvbloxTestRunner(Node):
         checks = {
             "clock_monotonic": self.clock_regressions == 0,
             "camera_info_streams_sustained": self.depth_info_count >= int(
-                20 * self.mapping_duration
+                self.expected_camera_info_rate * self.mapping_duration
             )
-            and self.color_info_count >= int(20 * self.mapping_duration),
+            and self.color_info_count
+            >= int(self.expected_camera_info_rate * self.mapping_duration),
             # Configured rates are maxima. Under joint rendering, VSLAM, DDS
             # observation and map serialization, these lower bounds verify a
             # sustained production pipeline rather than a burst of messages.
-            "nvblox_processing_rates": rates.get("ros/depth_image_callback", 0.0) >= 15.0
-            and rates.get("ros/depth", 0.0) >= 12.0
-            and rates.get("ros/color", 0.0) >= 3.0
-            and rates.get("ros/update_esdf", 0.0) >= 7.0,
+            "nvblox_processing_rates": all(
+                rates.get(name, 0.0) >= minimum
+                for name, minimum in self.processing_rate_minima.items()
+            ),
             "cuvslam_tracking_healthy": len(tracked) >= int(4 * self.mapping_duration)
             and all(state == 1 for _, state in tracked),
             "mapping_motion_completed": self.path_length(self.ground_truth) >= 8.0
@@ -383,6 +406,10 @@ class NvbloxTestRunner(Node):
                 "depth_camera_info_count": self.depth_info_count,
                 "color_camera_info_count": self.color_info_count,
                 "nvblox_reported_rates_hz": rates,
+                "acceptance_rate_minima_hz": {
+                    "camera_info": self.expected_camera_info_rate,
+                    **self.processing_rate_minima,
+                },
             },
             "tracking": {
                 "status_count": len(tracked),

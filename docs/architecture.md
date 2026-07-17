@@ -23,7 +23,9 @@ Isaac Sim Standalone
 map -> odom -> base_link -> sensors and wheel frames
 ```
 
-- cuVSLAM owns `map -> odom` and `odom -> base_link`.
+- Phases 5–8 use cuVSLAM-derived main TF edges as described below.
+- Phase 9 navigation makes `navigation_tf_bridge` the sole `map -> odom`
+  publisher and `visual_wheel_ekf` the sole `odom -> base_link` publisher.
 - robot_state_publisher owns the tree below `base_link`.
 - VGL, wheel odometry, and ground truth do not publish competing TF edges.
 
@@ -108,3 +110,46 @@ Phase 8 disables cuVSLAM's direct `map→odom` TF output and makes `navigation_t
 The raw scan stays in `base_link` and feeds Collision Monitor without waiting for localization. `scan_timestamp_relay` separately releases a scan only when a matching cuVSLAM transform exists and publishes `/front_depth/points_odom`; this prevents future-dated depth from poisoning the rolling costmap while preserving a low-latency emergency stop path.
 
 Nav2 uses a map-frame global costmap with Static and Inflation layers, and an odom-frame rolling local costmap with Nvblox, visual PointCloud2 Obstacle, and Inflation layers. SmacPlanner2D supplies the global path. MPPI runs a DiffDrive motion model at 20 Hz and publishes the controller-local transformed path. The final guard checks localization readiness, cuVSLAM tracking freshness, depth freshness, nvblox slice freshness, finite commands, planar motion, bounds, acceleration/jerk, and a 250 ms command watchdog.
+
+## Implemented Phase 9 front-stereo dynamic-navigation boundary
+
+Phase 9 deliberately keeps the validated front Hawk stereo pair as the only
+runtime visual-localization rig. Side and rear cameras are not created by the
+default simulator entry and are not required by mapping, recovery, RViz, or
+acceptance.
+
+```text
+front stereo + IMU -> cuVSLAM status/tracking health ───────────────┐
+front stereo -> triggered cuVGL -> innovation-gated map pose ──────┤
+wheel odometry twist -> robot_localization EKF -> odom->base_link ─┤
+VGL anchor + filtered odom -> navigation_tf_bridge -> map->odom ───┘
+
+native front depth -> nvblox dynamic mapper
+  -> dynamic ESDF/map slice + combined ESDF/map slice
+  -> local NvbloxCostmapLayer
+
+/navigate_to_pose_resilient
+  -> stock /navigate_to_pose
+  -> SmacPlanner2D + MPPI(DiffDrive)
+  -> Velocity Smoother -> Collision Monitor -> Command Guard
+```
+
+Moving foreground features in a front-only warehouse view can momentarily
+perturb raw visual odometry. Phase 9 therefore separates global visual
+observability from smooth local prediction: VGL anchors `map`; cuVSLAM health
+remains a hard permission for motion; the EKF integrates only the two-wheel
+odometry twist between visual global corrections. Ground truth is never an
+input. A lost or stale cuVSLAM status immediately withdraws localization
+readiness, so wheel prediction can never authorize blind navigation.
+
+The recovery manager waits for a potentially occluding foreground object to
+clear, triggers front-stereo VGL, rejects excessive translation/yaw innovation,
+injects an accepted pose into cuVSLAM, and requires 20 consecutive healthy
+tracking samples. It retries at most three times and otherwise remains in
+`failed_safe`. The resilient action proxy cancels the active Nav2 goal while
+unready and submits the same goal after recovery.
+
+The simulator moves an official scene forklift plus project-owned box and
+capsule shapes using session-layer kinematic transforms. PhysX contact reports
+are part of acceptance: moving actors must enter the local cost envelope but
+their physical swept volumes must not ram a correctly stopped robot.
