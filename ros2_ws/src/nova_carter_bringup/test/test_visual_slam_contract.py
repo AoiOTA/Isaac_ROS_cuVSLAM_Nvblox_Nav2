@@ -19,6 +19,18 @@ def test_visual_slam_owns_the_main_tf_chain() -> None:
     assert config["odom_frame"] == "odom"
     assert config["publish_map_to_odom_tf"] is True
     assert config["publish_odom_to_base_tf"] is True
+    assert config["override_publishing_stamp"] is False
+
+
+def test_live_nav2_overrides_cuvslam_output_stamp_only_in_phase8() -> None:
+    visual_slam_launch = (
+        ROOT / "ros2_ws/src/nova_carter_bringup/launch/visual_slam.launch.py"
+    ).read_text(encoding="utf-8")
+    phase8_launch = (
+        ROOT / "ros2_ws/src/nova_carter_bringup/launch/phase8.launch.py"
+    ).read_text(encoding="utf-8")
+    assert '"override_publishing_stamp",\n                default_value="false"' in visual_slam_launch
+    assert '"override_publishing_stamp": "true"' in phase8_launch
 
 
 def test_visual_slam_uses_front_stereo_and_imu() -> None:

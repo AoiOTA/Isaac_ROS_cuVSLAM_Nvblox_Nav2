@@ -65,3 +65,28 @@ The final command must be refreshed faster than 0.25 seconds in simulation time.
 ## Wheel odometry diverges during aggressive tests
 
 Inspect the segment-level errors in `data/reports/phase3/latest.json`. Large error during only one maneuver can indicate wheel slip or a collision rather than a wrong differential formula. The accepted suite automatically returns arc and S-curve tests toward the collision-free test center before continuous sharp turns; do not concatenate arbitrary open-loop paths through warehouse geometry when evaluating pure kinematics.
+
+## Stage 8 waits for Nav2 action or lifecycle activation
+
+Inspect the newest `data/logs/stage8/*/navigation.log`. Phase 8 deliberately starts nvblox three seconds after localization and Nav2 twelve seconds after localization, then waits another four seconds before activating the navigation lifecycle manager. This avoids concurrent TensorRT, cuVSLAM, nvblox, and Nav2 allocation spikes. Do not remove the delays merely because all processes have appeared in `ps`; an action server can exist before every managed node is active.
+
+If another project is automatically relaunching Isaac Sim, stop it through that project's own supervisor. This repository never uses `killall` or cross-project `pkill` and only cleans process groups that it created.
+
+## Robot creeps or does not move during Stage 8
+
+Read the five-second `Goal progress` lines in `test-runner.log`. They show map pose, ground truth, Guard state, Collision Monitor action, and all four command stages. Interpret them in order:
+
+- A nonzero `/cmd_vel_nav_raw` that becomes zero at `/cmd_vel_safe` indicates Collision Monitor intervention or stale raw depth.
+- A nonzero `/cmd_vel_safe` that becomes zero at `/cmd_vel_sim` identifies the exact blocked health state in `guard=`.
+- A low `/cmd_vel_nav_raw` with all later stages matching is an MPPI critic/trajectory issue, not a differential-controller issue.
+- A moving ground truth pose with a frozen map pose is a localization/TF problem and must stop navigation.
+
+The accepted tuning uses a 0.15 temperature, 0.30 linear sampling deviation, stronger Goal/PathFollow critics, an 0.08 m/s/rad/s deadband critic, and bounded acceleration/jerk downstream. Keep footprint collision checking and Collision Monitor enabled when changing these weights.
+
+## SmacPlanner2D prints an inflation error while planning succeeds
+
+ROS 2 Jazzy Nav2 1.3.12 `SmacPlanner2D` constructs its 2D collision checker with `radius=true` and `possible_collision_cost=0`. In this release, `GridCollisionChecker::setFootprint()` logs the generic non-circular inflation error before it evaluates the radius fast path. The project global costmap does contain a 1.0 m InflationLayer, and both real three-goal runs completed. Treat the single configure-time message as an upstream 2D false positive; do not hide real repeated planning, collision, or costmap errors.
+
+## RViz reports occasional base_link message-filter queue drops
+
+The tested RViz configuration loads successfully and renders the occupancy map, both costmaps, paths, robot, TF, images, depth, nvblox outputs, scan, and collision polygons. Under simultaneous RTX rendering, cuVSLAM, nvblox, VGL, and RViz, an occasional old `base_link` visualization message can be dropped because the display queue is full. Navigation uses the synchronized odom pointcloud and is unaffected. Persistent drops together with missing current displays indicate TF or GPU starvation and should fail a fresh `run_phase8_tests.sh` run.

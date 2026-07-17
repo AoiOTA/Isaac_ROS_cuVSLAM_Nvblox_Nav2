@@ -44,6 +44,12 @@ def generate_launch_description() -> LaunchDescription:
             {
                 "load_map_folder_path": LaunchConfiguration("load_map_folder_path"),
                 "localize_on_startup": LaunchConfiguration("localize_on_startup"),
+                "override_publishing_stamp": LaunchConfiguration(
+                    "override_publishing_stamp"
+                ),
+                "publish_map_to_odom_tf": LaunchConfiguration(
+                    "publish_map_to_odom_tf"
+                ),
             },
         ],
         remappings=[
@@ -59,6 +65,12 @@ def generate_launch_description() -> LaunchDescription:
         [
             DeclareLaunchArgument("load_map_folder_path", default_value=""),
             DeclareLaunchArgument("localize_on_startup", default_value="false"),
+            DeclareLaunchArgument(
+                "override_publishing_stamp",
+                default_value="false",
+                description="Stamp cuVSLAM output at current ROS time for live Nav2",
+            ),
+            DeclareLaunchArgument("publish_map_to_odom_tf", default_value="true"),
             Node(
                 package="robot_state_publisher",
                 executable="robot_state_publisher",

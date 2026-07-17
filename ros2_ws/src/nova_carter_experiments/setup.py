@@ -30,6 +30,8 @@ setup(
             "occupancy_saver = nova_carter_experiments.occupancy_saver:main",
             "vgl_pose_relay = nova_carter_experiments.vgl_pose_relay:main",
             "vgl_test_runner = nova_carter_experiments.vgl_test_runner:main",
+            "localization_bootstrap = nova_carter_experiments.localization_bootstrap:main",
+            "navigation_test_runner = nova_carter_experiments.navigation_test_runner:main",
         ]
     },
 )

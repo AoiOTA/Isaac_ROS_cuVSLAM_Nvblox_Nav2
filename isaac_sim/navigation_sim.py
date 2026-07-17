@@ -143,6 +143,11 @@ def parse_args() -> argparse.Namespace:
         help="run without the Phase 4 front stereo, depth, and IMU graphs",
     )
     parser.add_argument(
+        "--disable-follow-camera",
+        action="store_true",
+        help="keep the default GUI viewport camera instead of the smooth robot follower",
+    )
+    parser.add_argument(
         "--lock-file", type=Path, default=lock_path
     )
     args = parser.parse_args()
@@ -213,6 +218,7 @@ def run(args: argparse.Namespace) -> int:
     from isaacsim.core.utils.extensions import enable_extension
 
     from nova_carter_sim.graphs import create_control_graphs
+    from nova_carter_sim.follow_camera import FollowCamera, activate_viewport_camera
     from nova_carter_sim.sensors import create_sensor_graphs
     from nova_carter_sim.runtime import (
         stage_identity,
@@ -227,6 +233,7 @@ def run(args: argparse.Namespace) -> int:
     )
 
     timeline = None
+    follow_camera = None
     report: dict[str, object] = {
         "status": "failed",
         "mode": "headless" if args.headless else "gui",
@@ -297,6 +304,24 @@ def run(args: argparse.Namespace) -> int:
             if stage_identity() != active_stage_identity:
                 raise RuntimeError("active stage changed while creating Phase 4 graphs")
 
+        if args.gui and not args.disable_follow_camera:
+            follow_camera = FollowCamera(stage, f"{ROBOT_PRIM_PATH}/chassis_link")
+            app.update()
+            activate_viewport_camera()
+            report["follow_camera"] = {
+                "enabled": True,
+                "prim": "/World/FollowCameraRig",
+                "viewport_active": True,
+                "distance_m": 3.0,
+                "height_m": 1.8,
+            }
+        else:
+            report["follow_camera"] = {
+                "enabled": False,
+                "headless": args.headless,
+                "viewport_dependency_created": False,
+            }
+
         timeline = omni.timeline.get_timeline_interface()
         timeline.set_time_codes_per_second(float(args.physics_hz))
         timeline.play()
@@ -327,6 +352,8 @@ def run(args: argparse.Namespace) -> int:
         while app.is_running() and not STOP_REQUESTED:
             frame_started = time.monotonic()
             app.update()
+            if follow_camera is not None:
+                follow_camera.update(1.0 / args.update_hz)
             frames += 1
             current_simulation_time = float(timeline.get_current_time())
             if current_simulation_time + 1.0e-9 < last_simulation_time:

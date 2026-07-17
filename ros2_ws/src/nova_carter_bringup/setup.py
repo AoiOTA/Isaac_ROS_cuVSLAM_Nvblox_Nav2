@@ -14,6 +14,7 @@ setup(
         (f"share/{package_name}/config", glob("config/*.yaml")),
         (f"share/{package_name}/launch", glob("launch/*.launch.py")),
         (f"share/{package_name}/urdf", glob("urdf/*.xacro")),
+        (f"share/{package_name}/rviz", glob("rviz/*.rviz")),
     ],
     install_requires=["setuptools"],
     tests_require=["pytest"],
@@ -22,5 +23,10 @@ setup(
     maintainer_email="lyb@example.com",
     description="Nova Carter visual sensor, TF, and cuVSLAM bringup",
     license="Apache-2.0",
-    entry_points={"console_scripts": []},
+    entry_points={
+        "console_scripts": [
+            "scan_timestamp_relay = nova_carter_bringup.scan_timestamp_relay:main",
+            "navigation_tf_bridge = nova_carter_bringup.navigation_tf_bridge:main",
+        ]
+    },
 )

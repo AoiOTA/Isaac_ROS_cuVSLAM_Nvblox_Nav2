@@ -1,6 +1,6 @@
 # Operation
 
-Available through Phase 6:
+Available through Phase 8:
 
 ```bash
 ./scripts/build.sh
@@ -21,6 +21,9 @@ python3 tools/check_stage1.py
 ./scripts/run_phase6_tests.sh
 ./scripts/run_mapping.sh --map warehouse_v1
 ./scripts/run_phase7_tests.sh warehouse_v1
+./scripts/run_navigation.sh --map warehouse_v1 --rviz
+./scripts/run_all.sh --map warehouse_v1 --headless --rviz
+./scripts/run_phase8_tests.sh warehouse_v1
 ```
 
 `smoke_ros_bridge.sh` starts only its own Isaac Sim process group, receives real `/clock`, image, and CameraInfo messages, and then terminates that process group. It never uses `killall` or `pkill`.
@@ -83,7 +86,7 @@ Use the automated suite for acceptance instead of judging motion by eye:
 
 The suite starts the simulator and ROS nodes in process groups it owns, uses ROS domain 43 by default for test isolation, records JSON and logs, and shuts down through a simulator stop sentinel. Override only the temporary test domain with `PHASE3_TEST_ROS_DOMAIN_ID`; the public project domain remains 42.
 
-Mapping, navigation, and final acceptance entry points will be added only when their corresponding phases are implemented and verified.
+Mapping, relocalization, and static-map navigation now have verified public entries in Stages 7 and 8. Dynamic obstacle expansion and statistical final acceptance remain reserved for Stages 9 through 11.
 
 ## Phase 4 visual sensor data flow
 
@@ -182,3 +185,38 @@ The mapping entry owns only its own process groups, records MCAP, persists the o
 The mapper is intentionally in 2D ESDF mode. Do not call `get_esdf_and_gradient` in this mode on nvblox 4.5; it is a 3D-only service and terminates the node. Use `static_esdf_pointcloud` and `static_map_slice` for 2D validation.
 
 For installation on another computer, input/TF contracts, complete copyable YAML and launch files, persistence, parameter tuning, dynamic-mode migration, Nav2 integration, and troubleshooting, follow [`docs/nvblox_configuration.md`](nvblox_configuration.md).
+
+## Stage 8 navigation
+
+The clean-terminal end-to-end entry is:
+
+```bash
+cd /home/lyb/Workspace/Isaac_ROS_cuVSLAM_Nvblox_Nav2
+./scripts/run_all.sh --map warehouse_v1 --headless --rviz
+```
+
+It starts the simulator and ROS launch in process groups owned by this repository, waits for sensor readiness, triggers cuVGL, relays the pose to cuVSLAM, waits for all nine Nav2 lifecycle nodes, executes three `NavigateToPose` goals, validates the data flow, writes a JSON report, and shuts down without signaling processes from other projects. `--no-rviz` tests the same core pipeline without the visualization process.
+
+To run the ROS side against an already running project simulator:
+
+```bash
+./scripts/run_navigation.sh --map warehouse_v1 --rviz
+```
+
+The full regression is:
+
+```bash
+./scripts/run_phase8_tests.sh warehouse_v1
+```
+
+It additionally runs all package tests and a real GUI follow-camera smoke. Runtime products are stored in ignored directories under `data/logs/stage8`, `data/reports/phase8`, and `data/logs/stage4`.
+
+Useful controlled overrides are:
+
+```bash
+PHASE8_SIM_UPDATE_HZ=120 ./scripts/run_all.sh --map warehouse_v1 --headless --no-rviz
+PHASE8_GOAL_TIMEOUT_S=240 ./scripts/run_all.sh --map warehouse_v1 --headless --rviz
+PHASE8_GOAL_POSES='[1.0, 0.0, 0.0]' ./scripts/run_all.sh --map warehouse_v1 --headless --no-rviz
+```
+
+The default simulator update cap is 120 Hz and the physics rate remains 120 Hz. `PHASE8_GOAL_POSES` is intended for bounded tuning runs; the persisted Stage 8 checker requires the default three-goal report. Full interfaces and measured results are in [`docs/phase8_validation.md`](phase8_validation.md).

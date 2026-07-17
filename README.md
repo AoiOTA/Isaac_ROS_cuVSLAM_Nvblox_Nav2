@@ -2,7 +2,7 @@
 
 本仓库用于在 Ubuntu 24.04、ROS 2 Jazzy、Isaac Sim 6.0.1 和 RTX 4090 上构建 Nova Carter 视觉导航系统。目标组件包括 Isaac Sim Standalone Python、Isaac ROS cuVSLAM、nvblox、Visual Global Localization 和 Nav2。
 
-当前状态：**阶段0至阶段7已完成并在本机实测通过。** 已安装CUDA Toolkit 13.0.3、TensorRT 10.13.3.9和Isaac ROS 4.5.0；Standalone程序直接打开官方Warehouse，在匿名session layer中引用Nova Carter主USD，并在运行时自建控制、前向双目、深度和IMU OmniGraph。前向双目+IMU已接入cuVSLAM，主TF链、连续定位及地图保存/加载均已通过自动验收；Isaac Sim原生深度已接入nvblox；MCAP、cuVSLAM、cuVGL、nvblox、Mesh和occupancy地图已能自动生成，五次独立重启的cuVGL全局定位与cuVSLAM恢复全部通过。
+当前状态：**阶段0至阶段8已完成并在本机实测通过。** 已安装CUDA Toolkit 13.0.3、TensorRT 10.13.3.9和Isaac ROS 4.5.0；Standalone程序直接打开官方Warehouse，在匿名session layer中引用Nova Carter主USD，并在运行时自建控制、前向双目、深度和IMU OmniGraph。前向双目+IMU已接入cuVSLAM，Isaac Sim原生深度已接入nvblox，cuVGL地图与TensorRT引擎可自动生成和加载。Nav2现已使用SmacPlanner2D、MPPI DiffDrive、nvblox局部代价地图、视觉深度障碍层、Velocity Smoother、Collision Monitor和最终Command Guard完成自动重定位及三目标闭环；完整RViz与Isaac Sim第三人称跟随相机也已实机验证。
 
 ## 固定资产
 
@@ -140,6 +140,29 @@ python3 tools/check_phase7_maps.py data/maps/warehouse_v1
 
 本机最终回归地图包含142个cuVGL关键帧，五个不同初始yaw均得到cuVGL位姿并通过`/visual_slam/initial_pose`恢复cuVSLAM。单独启动已有地图的cuVGL使用`./scripts/run_vgl.sh warehouse_v1`。详细结果见[Phase 7 Validation](docs/phase7_validation.md)；另一台电脑的完整安装、建图、launch、接口和调参过程见[cuVGL完整配置、迁移与调参手册](docs/cuvgl_configuration.md)。
 
+## 阶段8 Nav2视觉导航与RViz
+
+从干净终端启动已有地图的完整系统并自动执行默认三目标路线：
+
+```bash
+cd /home/lyb/Workspace/Isaac_ROS_cuVSLAM_Nvblox_Nav2
+./scripts/run_all.sh --map warehouse_v1 --headless --rviz
+```
+
+只启动ROS侧定位、重建、Nav2和RViz（要求另一个终端已运行本项目仿真）：
+
+```bash
+./scripts/run_navigation.sh --map warehouse_v1 --rviz
+```
+
+完整阶段8回归入口会重新构建、运行25项静态测试、执行带RViz的真实三目标导航，并启动GUI验证第三人称相机：
+
+```bash
+./scripts/run_phase8_tests.sh warehouse_v1
+```
+
+本机最终带RViz回归的三个目标全部成功，位置误差为0.195、0.240和0.193 m，航向误差为8.62°、3.07°和2.97°；真值轨迹4.64 m，四级速度链约20 Hz，局部MPPI路径约20 Hz，TF约46 Hz，深度时间戳无回退。详细架构、接口、调参依据与实测证据见[Phase 8 Validation](docs/phase8_validation.md)。
+
 ## 阶段1完整环境配置
 
 另一台电脑需要重新配置环境时，以[阶段1裸机环境完整配置手册](docs/installation.md)为准。该文档把操作拆分为独立步骤，包含每条命令的目的、预期结果、安全门和失败恢复，不要求先运行本仓库的安装脚本。
@@ -166,7 +189,7 @@ python3 tools/check_stage1.py
 ```
 
 安装脚本不修改 `~/.bashrc`，不卸载系统OpenCV，并在APT模拟出现任何待删除包时自动停止。
-自动地图集合、导航和最终验收入口会在对应阶段实现，在实现前不会用空壳脚本冒充可用功能。
+动态避障扩展、光照/颜色实验和最终统计验收将在阶段9至阶段11实现；当前公开的阶段0至阶段8命令均为实际可执行入口。
 
 本机阶段1验收已确认：
 

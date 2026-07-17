@@ -14,6 +14,9 @@ command_guard:
     max_angular_jerk: 12.0
     command_timeout: 0.25
     update_rate: 100.0
+    visual_slam_timeout: 1.0
+    depth_timeout: 0.50
+    map_slice_timeout: 1.0
 
 wheel_odometry:
   ros__parameters:

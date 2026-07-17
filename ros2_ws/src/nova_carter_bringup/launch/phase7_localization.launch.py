@@ -22,13 +22,32 @@ def generate_launch_description() -> LaunchDescription:
             DeclareLaunchArgument("vgl_config_dir"),
             DeclareLaunchArgument("vgl_model_dir"),
             DeclareLaunchArgument("cuvslam_map_dir"),
-            include("nova_carter_control", "control.launch.py"),
+            DeclareLaunchArgument("require_navigation_health", default_value="false"),
+            DeclareLaunchArgument(
+                "override_publishing_stamp", default_value="false"
+            ),
+            DeclareLaunchArgument("publish_map_to_odom_tf", default_value="true"),
+            include(
+                "nova_carter_control",
+                "control.launch.py",
+                {
+                    "require_navigation_health": LaunchConfiguration(
+                        "require_navigation_health"
+                    )
+                },
+            ),
             include(
                 "nova_carter_bringup",
                 "visual_slam.launch.py",
                 {
                     "load_map_folder_path": LaunchConfiguration("cuvslam_map_dir"),
                     "localize_on_startup": "false",
+                    "override_publishing_stamp": LaunchConfiguration(
+                        "override_publishing_stamp"
+                    ),
+                    "publish_map_to_odom_tf": LaunchConfiguration(
+                        "publish_map_to_odom_tf"
+                    ),
                 },
             ),
             include(

@@ -1,7 +1,22 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="nova_carter">
   <!-- Values were extracted from the composed Isaac Sim 6.0 Nova Carter USD. -->
-  <link name="base_link"/>
+  <material name="nova_dark"><color rgba="0.12 0.15 0.18 1"/></material>
+  <material name="nova_green"><color rgba="0.20 0.75 0.35 1"/></material>
+  <material name="wheel_black"><color rgba="0.025 0.025 0.025 1"/></material>
+
+  <link name="base_link">
+    <visual>
+      <origin xyz="-0.2335 0 0.34" rpy="0 0 0"/>
+      <geometry><box size="0.747 0.50 0.40"/></geometry>
+      <material name="nova_dark"/>
+    </visual>
+    <visual>
+      <origin xyz="0.02 0 0.58" rpy="0 0 0"/>
+      <geometry><box size="0.20 0.32 0.10"/></geometry>
+      <material name="nova_green"/>
+    </visual>
+  </link>
   <link name="front_stereo_camera_link"/>
   <link name="front_stereo_camera_left_optical"/>
   <link name="front_stereo_camera_right_optical"/>
@@ -24,7 +39,12 @@
     <origin xyz="0 -0.0197 0.0061" rpy="0 1.57079632679 0"/>
   </joint>
 
-  <link name="wheel_left"/><link name="wheel_right"/>
+  <link name="wheel_left">
+    <visual><geometry><cylinder radius="0.14" length="0.06"/></geometry><material name="wheel_black"/></visual>
+  </link>
+  <link name="wheel_right">
+    <visual><geometry><cylinder radius="0.14" length="0.06"/></geometry><material name="wheel_black"/></visual>
+  </link>
   <joint name="joint_wheel_left" type="continuous">
     <parent link="base_link"/><child link="wheel_left"/>
     <origin xyz="0 0.2066 0.14" rpy="-1.57079632679 0 0"/><axis xyz="0 0 1"/>

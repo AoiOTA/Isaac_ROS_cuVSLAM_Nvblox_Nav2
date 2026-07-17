@@ -85,3 +85,26 @@ cuVSLAM/robot-state-publisher TF ──────┘     ├→ TSDF/color lay
 `nvblox.launch.py` creates a project-owned multithreaded component container and loads `nvblox::NvbloxNode`. It uses one camera, 5 cm voxels, no lidar, native simulated depth, 30 Hz configured depth integration, 5 Hz color integration, 10 Hz ESDF update and 1 Hz mesh/layer output. `global_frame=odom` matches the future Nav2 local rolling costmap and avoids loop-closure discontinuities inside the reconstruction frame.
 
 The 2D ESDF spans 0.09–0.65 m and is published as both a pointcloud and `DistanceMapSlice`. In nvblox 4.5 the dense `get_esdf_and_gradient` service is 3D-only, so it is deliberately not called in this configuration. Map, PLY, rates and timings are saved through actual nvblox services.
+
+## Implemented Phase 8 navigation boundary
+
+```text
+cuVGL pose -> /visual_slam/initial_pose -> cuVSLAM map localization
+cuVSLAM slam_path + tracking odometry -> current-time map->odom adapter
+native depth -> raw LaserScan -> Collision Monitor
+native depth -> TF-synchronized odom PointCloud2 -> local ObstacleLayer
+nvblox static_map_slice -> local NvbloxCostmapLayer
+occupancy map -> global StaticLayer
+
+SmacPlanner2D -> MPPI(DiffDrive) -> /cmd_vel_nav_raw
+  -> Velocity Smoother -> /cmd_vel_smoothed
+  -> Collision Monitor -> /cmd_vel_safe
+  -> navigation-health Command Guard -> /cmd_vel_sim
+  -> runtime two-wheel differential OmniGraph
+```
+
+Phase 8 disables cuVSLAM's direct `map→odom` TF output and makes `navigation_tf_bridge` the sole publisher of that edge. The adapter computes it only from cuVSLAM's map-frame SLAM path and odom-frame tracking odometry, then republishes at current simulation time. Ground truth and wheel odometry are never inputs. cuVSLAM remains the sole `odom→base_link` source, while robot_state_publisher owns all robot-fixed edges.
+
+The raw scan stays in `base_link` and feeds Collision Monitor without waiting for localization. `scan_timestamp_relay` separately releases a scan only when a matching cuVSLAM transform exists and publishes `/front_depth/points_odom`; this prevents future-dated depth from poisoning the rolling costmap while preserving a low-latency emergency stop path.
+
+Nav2 uses a map-frame global costmap with Static and Inflation layers, and an odom-frame rolling local costmap with Nvblox, visual PointCloud2 Obstacle, and Inflation layers. SmacPlanner2D supplies the global path. MPPI runs a DiffDrive motion model at 20 Hz and publishes the controller-local transformed path. The final guard checks localization readiness, cuVSLAM tracking freshness, depth freshness, nvblox slice freshness, finite commands, planar motion, bounds, acceleration/jerk, and a 250 ms command watchdog.
