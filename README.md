@@ -2,7 +2,7 @@
 
 本仓库用于在 Ubuntu 24.04、ROS 2 Jazzy、Isaac Sim 6.0.1 和 RTX 4090 上构建 Nova Carter 视觉导航系统。目标组件包括 Isaac Sim Standalone Python、Isaac ROS cuVSLAM、nvblox、Visual Global Localization 和 Nav2。
 
-当前状态：**阶段0至阶段4已完成并在本机实测通过。** 已安装CUDA Toolkit 13.0.3、TensorRT 10.13.3.9和Isaac ROS 4.5.0；Standalone程序直接打开官方Warehouse，在匿名session layer中引用Nova Carter主USD，并在运行时自建控制、前向双目、深度和IMU OmniGraph。
+当前状态：**阶段0至阶段5已完成并在本机实测通过。** 已安装CUDA Toolkit 13.0.3、TensorRT 10.13.3.9和Isaac ROS 4.5.0；Standalone程序直接打开官方Warehouse，在匿名session layer中引用Nova Carter主USD，并在运行时自建控制、前向双目、深度和IMU OmniGraph。前向双目+IMU已接入cuVSLAM，主TF链、连续定位及地图保存/加载均已通过自动验收。
 
 ## 固定资产
 
@@ -34,7 +34,7 @@ cd /home/lyb/Workspace/Isaac_ROS_cuVSLAM_Nvblox_Nav2
 
 该命令不会安装依赖、启动Isaac Sim GUI、修改官方USD或终止其他进程。
 
-## 阶段4仿真、控制与传感器入口
+## 阶段2至阶段5仿真、控制与视觉定位入口
 
 Headless模式：
 
@@ -83,6 +83,20 @@ GUI模式：
 ```
 
 该测试抽检完整RGB/深度载荷，并持续验证30 Hz双目/深度、120 Hz Clock/IMU、mono8、CameraInfo、时间戳、TF和JointState；同时执行静止、左右圆弧、原地旋转和停车阶段。详细结果见[Phase 4 Validation](docs/phase4_validation.md)。
+
+单独启动ROS侧前向双目灰度转换、robot_state_publisher和cuVSLAM：
+
+```bash
+./scripts/run_visual_slam.sh
+```
+
+完整阶段5启动使用`ros2 launch nova_carter_bringup phase5.launch.py`，它同时包含阶段3安全控制。自动验收入口为：
+
+```bash
+./scripts/run_phase5_tests.sh
+```
+
+该测试在隔离的ROS domain中自动执行122秒双向S形轨迹，验证cuVSLAM从未失锁、`map→odom→base_link`唯一且连续、视觉轨迹方向和尺度与只读ground truth一致，并实际调用地图保存、全部优化位姿读取和地图加载服务。最终实测连续成功跟踪123.10秒、地图包含1216个优化位姿。详细结果见[Phase 5 Validation](docs/phase5_validation.md)。
 
 ## 阶段1完整环境配置
 

@@ -1,0 +1,55 @@
+visual_slam_node:
+  ros__parameters:
+    use_sim_time: true
+
+    # Front Hawk stereo plus its hardware-synchronized IMU.
+    tracking_mode: 1
+    num_cameras: 2
+    min_num_images: 2
+    camera_optical_frames:
+      - front_stereo_camera_left_optical
+      - front_stereo_camera_right_optical
+    imu_frame: front_stereo_camera_imu
+    base_frame: base_link
+    map_frame: map
+    odom_frame: odom
+
+    rectified_images: true
+    enable_image_denoising: false
+    enable_localization_n_mapping: true
+    multicam_mode: 1
+    sync_matching_threshold_ms: 5.0
+    image_jitter_threshold_ms: 34.0
+    imu_jitter_threshold_ms: 10.0
+    image_buffer_size: 30
+    imu_buffer_size: 400
+    image_qos: SENSOR_DATA
+    imu_qos: SENSOR_DATA
+
+    # Initial simulated-Hawk noise model. These remain explicit so later
+    # calibration does not silently inherit package-version defaults.
+    gyro_noise_density: 0.000244
+    gyro_random_walk: 0.000019393
+    accel_noise_density: 0.001862
+    accel_random_walk: 0.003
+    calibration_frequency: 120.0
+
+    publish_map_to_odom_tf: true
+    publish_odom_to_base_tf: true
+    invert_map_to_odom_tf: false
+    invert_odom_to_base_tf: false
+    override_publishing_stamp: false
+
+    enable_ground_constraint_in_odometry: false
+    enable_ground_constraint_in_slam: false
+    slam_max_map_size: 1000
+    slam_throttling_time_ms: 500
+    save_map_folder_path: ""
+    load_map_folder_path: ""
+    localize_on_startup: false
+
+    enable_slam_visualization: false
+    enable_observations_view: false
+    enable_landmarks_view: false
+    path_max_size: 10000
+    verbosity: 1

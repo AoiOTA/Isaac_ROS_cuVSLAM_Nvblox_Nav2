@@ -2,12 +2,13 @@
 <package format="3">
   <name>nova_carter_bringup</name>
   <version>0.1.0</version>
-  <description>Phase 4 Nova Carter sensor and TF bringup.</description>
+  <description>Nova Carter sensor, TF, and cuVSLAM bringup.</description>
   <maintainer email="lyb@example.com">lyb</maintainer>
   <license>Apache-2.0</license>
   <buildtool_depend>ament_python</buildtool_depend>
   <exec_depend>ament_index_python</exec_depend>
   <exec_depend>isaac_ros_image_proc</exec_depend>
+  <exec_depend>isaac_ros_visual_slam</exec_depend>
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
   <exec_depend>nova_carter_control</exec_depend>

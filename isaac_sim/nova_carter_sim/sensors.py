@@ -53,6 +53,14 @@ def _configure_sensor_rates(stage: object, sensor: dict[str, object]) -> None:
             if not attribute.IsValid():
                 raise RuntimeError(f"camera lacks omni:sensor:tickRate: {prim.GetPath()}")
             attribute.Set(float(front["image_rate_hz"]))
+            projection = prim.GetAttribute("cameraProjectionType")
+            if not projection.IsValid():
+                raise RuntimeError(f"camera lacks projection type: {prim.GetPath()}")
+            projection.Set(str(front["navigation_projection"]))
+            distortion = prim.GetAttribute("physicalDistortionCoefficients")
+            if distortion.IsValid():
+                coefficients = distortion.Get()
+                distortion.Set([0.0] * len(coefficients))
         imu = stage.GetPrimAtPath(str(front["imu_prim"]))
         period = imu.GetAttribute("sensorPeriod")
         if not period.IsValid():

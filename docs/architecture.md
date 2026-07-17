@@ -57,3 +57,15 @@ front Hawk IMU -> runtime FrontImu (physics step @ 120 Hz)
 ```
 
 `Clock` and `FrontImu` use on-demand physics-step graphs; camera and depth graphs use render products at the camera's authored 30 Hz tick rate. All sensor publishers use Best-Effort SensorData QoS. The simplified Xacro contains the USD-extracted 0.15 m stereo baseline, optical-frame rotations, IMU mount, active wheels, and passive caster chain. Only robot_state_publisher owns TF below `base_link`.
+
+## Implemented Phase 5 localization boundary
+
+```text
+front stereo RGB -> ImageFormatConverterNode x2 -> mono8
+mono8 + stereo CameraInfo + front IMU -> cuVSLAM VIO
+cuVSLAM -> map→odom→base_link + tracking odometry/status + map services
+```
+
+The official Hawk assets use the legacy `fisheyePolynomial` projection. Isaac Sim 6.0.1 renders that distortion but its stereo CameraInfo helper reports zero distortion, which is not a valid `rectified_images=true` input. The simulator therefore overrides only the two front navigation cameras to zero-distortion pinhole in the anonymous session layer before creating render products. The source USD remains unchanged. The 0.15 m stereo baseline remains encoded by the right CameraInfo projection matrix and the robot_state_publisher transform.
+
+`visual_slam.launch.py` composes both GPU converters and cuVSLAM in a single multithreaded container with intra-process communication for normalized images. cuVSLAM uses the front stereo pair and IMU, publishes both main TF edges, enables mapping, and exposes save/load/get-all-poses services. Wheel odometry and simulator ground truth remain observation-only and never enter the main TF tree.

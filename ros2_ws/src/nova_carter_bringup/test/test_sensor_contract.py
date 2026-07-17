@@ -14,6 +14,7 @@ def test_sensor_topics_frames_and_rates_are_fixed() -> None:
     assert (front["depth_width"], front["depth_height"]) == (640, 400)
     assert front["image_rate_hz"] == 30.0
     assert front["imu_rate_hz"] == 120.0
+    assert front["navigation_projection"] == "pinhole"
     assert len(set(config["topics"].values())) == len(config["topics"])
     assert config["frames"]["base"] == "base_link"
     assert config["extrinsics"]["stereo_baseline_m"] == 0.15

@@ -8,6 +8,10 @@ front_stereo:
   depth_height: 400
   image_rate_hz: 30.0
   imu_rate_hz: 120.0
+  # Isaac Sim 6.0.1 publishes zero distortion in CameraInfo for the legacy
+  # fisheyePolynomial Hawk projection. Render the navigation pair as pinhole
+  # in the anonymous session layer so rectified_images=true is truthful.
+  navigation_projection: pinhole
 
 topics:
   left_rgb_raw: /front_stereo_camera/left/image_raw_rgb

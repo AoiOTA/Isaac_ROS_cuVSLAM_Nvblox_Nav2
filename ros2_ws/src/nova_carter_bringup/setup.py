@@ -11,6 +11,7 @@ setup(
     data_files=[
         ("share/ament_index/resource_index/packages", [f"resource/{package_name}"]),
         (f"share/{package_name}", ["package.xml"]),
+        (f"share/{package_name}/config", glob("config/*.yaml")),
         (f"share/{package_name}/launch", glob("launch/*.launch.py")),
         (f"share/{package_name}/urdf", glob("urdf/*.xacro")),
     ],
@@ -19,7 +20,7 @@ setup(
     zip_safe=True,
     maintainer="lyb",
     maintainer_email="lyb@example.com",
-    description="Nova Carter front visual sensor and TF bringup",
+    description="Nova Carter visual sensor, TF, and cuVSLAM bringup",
     license="Apache-2.0",
     entry_points={"console_scripts": []},
 )

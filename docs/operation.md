@@ -1,6 +1,6 @@
 # Operation
 
-Available through Phase 4:
+Available through Phase 5:
 
 ```bash
 ./scripts/build.sh
@@ -13,6 +13,8 @@ python3 tools/check_stage1.py
 ./scripts/run_phase3_tests.sh
 ./scripts/run_sensors.sh
 ./scripts/run_phase4_tests.sh
+./scripts/run_visual_slam.sh
+./scripts/run_phase5_tests.sh
 ```
 
 `smoke_ros_bridge.sh` starts only its own Isaac Sim process group, receives real `/clock`, image, and CameraInfo messages, and then terminates that process group. It never uses `killall` or `pkill`.
@@ -92,3 +94,42 @@ The complete Phase 4 bringup used by automation is `ros2 launch nova_carter_brin
 ```
 
 It uses isolated domain 44 by default. Override only for test isolation with `PHASE4_TEST_ROS_DOMAIN_ID`; normal project commands remain on domain 42. Reports are placed under `data/reports/phase4` and logs under `data/logs/stage4`.
+
+## Phase 5 continuous visual localization
+
+Start the Standalone simulator first, then start only the ROS visual-localization side in another terminal:
+
+```bash
+./scripts/run_sim.sh --headless
+./scripts/run_visual_slam.sh
+```
+
+For the complete control plus localization bringup, use:
+
+```bash
+ros2 launch nova_carter_bringup phase5.launch.py
+```
+
+The launch composes the two GPU mono converters and `VisualSlamNode` in one multithreaded component container. cuVSLAM runs in stereo+IMU VIO mode and is the only publisher of `map→odom` and `odom→base_link`. Its public map interfaces are:
+
+```bash
+ros2 service call /visual_slam/save_map \
+  isaac_ros_visual_slam_interfaces/srv/FilePath \
+  "{file_path: '/absolute/path/to/cuvslam_map'}"
+
+ros2 service call /visual_slam/load_map \
+  isaac_ros_visual_slam_interfaces/srv/FilePath \
+  "{file_path: '/absolute/path/to/cuvslam_map'}"
+
+ros2 service call /visual_slam/get_all_poses \
+  isaac_ros_visual_slam_interfaces/srv/GetAllPoses \
+  "{max_count: 10000}"
+```
+
+Use the reproducible acceptance instead of manual driving:
+
+```bash
+./scripts/run_phase5_tests.sh
+```
+
+The suite uses isolated domain 45, starts and cleans only its own process groups, commands a repeated forward/reverse S-course for at least 122 simulation seconds, audits tracking state and TF ownership, compares direction and metric scale against ground truth, and exercises all three map interfaces. Reports are written under `data/reports/phase5`; detailed evidence is in `docs/phase5_validation.md`.
