@@ -2,7 +2,7 @@
 
 本仓库用于在 Ubuntu 24.04、ROS 2 Jazzy、Isaac Sim 6.0.1 和 RTX 4090 上构建 Nova Carter 视觉导航系统。目标组件包括 Isaac Sim Standalone Python、Isaac ROS cuVSLAM、nvblox、Visual Global Localization 和 Nav2。
 
-当前状态：**阶段0至阶段3已完成并在本机实测通过。** 已安装CUDA Toolkit 13.0.3、TensorRT 10.13.3.9和Isaac ROS 4.5.0；Standalone程序会直接打开官方Warehouse，在匿名session layer中引用Nova Carter主USD，并在运行时自建两轮控制与状态发布OmniGraph。
+当前状态：**阶段0至阶段4已完成并在本机实测通过。** 已安装CUDA Toolkit 13.0.3、TensorRT 10.13.3.9和Isaac ROS 4.5.0；Standalone程序直接打开官方Warehouse，在匿名session layer中引用Nova Carter主USD，并在运行时自建控制、前向双目、深度和IMU OmniGraph。
 
 ## 固定资产
 
@@ -34,7 +34,7 @@ cd /home/lyb/Workspace/Isaac_ROS_cuVSLAM_Nvblox_Nav2
 
 该命令不会安装依赖、启动Isaac Sim GUI、修改官方USD或终止其他进程。
 
-## 阶段3仿真与控制入口
+## 阶段4仿真、控制与传感器入口
 
 Headless模式：
 
@@ -69,6 +69,20 @@ GUI模式：
 普通仿真日志位于`data/logs/stage3`；运动验收结果位于`data/reports/phase3`。报告记录图结构、被控关节、轨迹误差、轮里程计误差、平滑性、安全时延、PhysX重叠、timeline推进以及官方USD运行前后的文件指纹。
 
 阶段2的组合基线见[Phase 2 Validation](docs/phase2_validation.md)，阶段3控制结果见[Phase 3 Validation](docs/phase3_validation.md)。
+
+另一个终端可单独启动`robot_state_publisher`和双路Isaac ROS GPU灰度转换：
+
+```bash
+./scripts/run_sensors.sh
+```
+
+一键执行阶段4通信与运动联合验收：
+
+```bash
+./scripts/run_phase4_tests.sh
+```
+
+该测试抽检完整RGB/深度载荷，并持续验证30 Hz双目/深度、120 Hz Clock/IMU、mono8、CameraInfo、时间戳、TF和JointState；同时执行静止、左右圆弧、原地旋转和停车阶段。详细结果见[Phase 4 Validation](docs/phase4_validation.md)。
 
 ## 阶段1完整环境配置
 

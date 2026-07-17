@@ -44,10 +44,13 @@ def _create_clock_graph(topic: str) -> str:
     path = f"{GRAPH_ROOT}/Clock"
     keys = og.Controller.Keys
     og.Controller.edit(
-        {"graph_path": path, "evaluator_name": "execution"},
+        {
+            "graph_path": path,
+            "pipeline_stage": og.GraphPipelineStage.GRAPH_PIPELINE_STAGE_ONDEMAND,
+        },
         {
             keys.CREATE_NODES: [
-                ("OnPlaybackTick", "omni.graph.action.OnPlaybackTick"),
+                ("OnPhysicsStep", "isaacsim.core.nodes.OnPhysicsStep"),
                 ("Context", "isaacsim.ros2.bridge.ROS2Context"),
                 ("SimulationTime", "isaacsim.core.nodes.IsaacReadSimulationTime"),
                 ("PublishClock", "isaacsim.ros2.bridge.ROS2PublishClock"),
@@ -57,7 +60,7 @@ def _create_clock_graph(topic: str) -> str:
                 ("PublishClock.inputs:topicName", topic),
             ],
             keys.CONNECT: [
-                ("OnPlaybackTick.outputs:tick", "PublishClock.inputs:execIn"),
+                ("OnPhysicsStep.outputs:step", "PublishClock.inputs:execIn"),
                 ("Context.outputs:context", "PublishClock.inputs:context"),
                 ("SimulationTime.outputs:simulationTime", "PublishClock.inputs:timeStamp"),
             ],

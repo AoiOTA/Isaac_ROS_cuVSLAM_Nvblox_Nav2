@@ -1,37 +1,37 @@
-simulation:
-  physics_hz: 120
-  clock_hz: 120
-  reset_time_on_stop: false
-
 front_stereo:
-  namespace: /front_stereo_camera
-  width: 1280
-  height: 800
-  rate_hz: 30
-  left_frame: front_stereo_camera_left_optical
-  right_frame: front_stereo_camera_right_optical
+  left_camera_prim: /World/NovaCarter/chassis_link/sensors/front_hawk/left/camera_left
+  right_camera_prim: /World/NovaCarter/chassis_link/sensors/front_hawk/right/camera_right
+  imu_prim: /World/NovaCarter/chassis_link/sensors/front_hawk/Imu/Imu_Sensor
+  image_width: 1280
+  image_height: 800
+  depth_width: 640
+  depth_height: 400
+  image_rate_hz: 30.0
+  imu_rate_hz: 120.0
 
-front_depth:
-  topic: /front_stereo_camera/depth/image_raw
-  camera_info_topic: /front_stereo_camera/depth/camera_info
-  frame: front_stereo_camera_left_optical
-  width: 640
-  height: 400
-  rate_hz: 30
-  encoding: 32FC1
-  unit: meter
-  minimum_range_m: 0.2
-  maximum_range_m: 7.0
+topics:
+  left_rgb_raw: /front_stereo_camera/left/image_raw_rgb
+  right_rgb_raw: /front_stereo_camera/right/image_raw_rgb
+  left_mono: /front_stereo_camera/left/image_raw
+  right_mono: /front_stereo_camera/right/image_raw
+  left_camera_info: /front_stereo_camera/left/camera_info
+  right_camera_info: /front_stereo_camera/right/camera_info
+  depth: /front_stereo_camera/depth/image_raw
+  depth_camera_info: /front_stereo_camera/depth/camera_info
+  imu: /front_stereo_imu/imu
 
-front_imu:
-  topic: /front_stereo_imu/imu
-  frame: front_stereo_camera_imu
-  rate_hz: 120
+frames:
+  base: base_link
+  camera_link: front_stereo_camera_link
+  left_optical: front_stereo_camera_left_optical
+  right_optical: front_stereo_camera_right_optical
+  imu: front_stereo_camera_imu
 
-directional_stereo:
-  directions: [left, right, back]
-  rate_hz_when_enabled: 10
-  enabled_during: [mapping, relocalization]
-
-lidar:
-  publish: false
+extrinsics:
+  camera_link_xyz_m: [0.1003, -0.000002, 0.3459]
+  left_from_camera_link_xyz_m: [0.0, 0.075, 0.0]
+  right_from_camera_link_xyz_m: [0.0, -0.075, 0.0]
+  optical_rpy_rad: [-1.5707963267948966, 0.0, -1.5707963267948966]
+  imu_from_camera_link_xyz_m: [0.0, -0.0197, 0.0061]
+  imu_from_camera_link_rpy_rad: [0.0, 1.5707963267948966, 0.0]
+  stereo_baseline_m: 0.15

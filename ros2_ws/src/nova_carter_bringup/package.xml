@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>nova_carter_bringup</name>
+  <version>0.1.0</version>
+  <description>Phase 4 Nova Carter sensor and TF bringup.</description>
+  <maintainer email="lyb@example.com">lyb</maintainer>
+  <license>Apache-2.0</license>
+  <buildtool_depend>ament_python</buildtool_depend>
+  <exec_depend>ament_index_python</exec_depend>
+  <exec_depend>isaac_ros_image_proc</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>nova_carter_control</exec_depend>
+  <exec_depend>rclcpp_components</exec_depend>
+  <exec_depend>robot_state_publisher</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>xacro</exec_depend>
+  <test_depend>ament_pytest</test_depend>
+  <test_depend>python3-yaml</test_depend>
+  <export><build_type>ament_python</build_type></export>
+</package>

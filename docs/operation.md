@@ -1,6 +1,6 @@
 # Operation
 
-Available through Phase 3:
+Available through Phase 4:
 
 ```bash
 ./scripts/build.sh
@@ -11,6 +11,8 @@ python3 tools/check_stage1.py
 ./scripts/run_sim.sh --headless
 ./scripts/run_control.sh
 ./scripts/run_phase3_tests.sh
+./scripts/run_sensors.sh
+./scripts/run_phase4_tests.sh
 ```
 
 `smoke_ros_bridge.sh` starts only its own Isaac Sim process group, receives real `/clock`, image, and CameraInfo messages, and then terminates that process group. It never uses `killall` or `pkill`.
@@ -74,3 +76,19 @@ Use the automated suite for acceptance instead of judging motion by eye:
 The suite starts the simulator and ROS nodes in process groups it owns, uses ROS domain 43 by default for test isolation, records JSON and logs, and shuts down through a simulator stop sentinel. Override only the temporary test domain with `PHASE3_TEST_ROS_DOMAIN_ID`; the public project domain remains 42.
 
 Mapping, navigation, and final acceptance entry points will be added only when their corresponding phases are implemented and verified.
+
+## Phase 4 visual sensor data flow
+
+`run_sim.sh` now also authors `FrontStereo`, `FrontDepth`, and `FrontImu` under `/World/Graphs`. In a separate terminal, start the below-`base_link` TF tree and Isaac ROS mono conversion with:
+
+```bash
+./scripts/run_sensors.sh
+```
+
+The complete Phase 4 bringup used by automation is `ros2 launch nova_carter_bringup phase4.launch.py`; it includes Phase 3 control, robot_state_publisher, and two GPU `ImageFormatConverterNode` components. The acceptance entry is:
+
+```bash
+./scripts/run_phase4_tests.sh
+```
+
+It uses isolated domain 44 by default. Override only for test isolation with `PHASE4_TEST_ROS_DOMAIN_ID`; normal project commands remain on domain 42. Reports are placed under `data/reports/phase4` and logs under `data/logs/stage4`.

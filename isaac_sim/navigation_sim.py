@@ -93,6 +93,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--control-config", type=Path, default=PROJECT_ROOT / "config/control.yaml"
     )
+    parser.add_argument(
+        "--sensor-config", type=Path, default=PROJECT_ROOT / "config/sensors.yaml"
+    )
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--headless", action="store_true")
     mode.add_argument("--gui", action="store_true")
@@ -124,12 +127,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--width", type=int, default=int(resolution[0]))
     parser.add_argument("--height", type=int, default=int(resolution[1]))
     parser.add_argument(
-        "--report", type=Path, default=PROJECT_ROOT / "data/logs/stage3/latest.json"
+        "--report", type=Path, default=PROJECT_ROOT / "data/logs/stage4/latest.json"
     )
     parser.add_argument(
         "--disable-ros-control",
         action="store_true",
         help="run the composed stage without Phase 3 runtime ROS control graphs",
+    )
+    parser.add_argument(
+        "--disable-sensors",
+        action="store_true",
+        help="run without the Phase 4 front stereo, depth, and IMU graphs",
     )
     parser.add_argument(
         "--lock-file", type=Path, default=lock_path
@@ -158,6 +166,15 @@ def parse_args() -> argparse.Namespace:
         for key in ("kinematics", "limits", "topics", "frames"):
             if not isinstance(args.control.get(key), dict):
                 raise ValueError(f"control config entry {key!r} must be a mapping")
+    except (OSError, ValueError, yaml.YAMLError) as exc:
+        parser.error(str(exc))
+    if not args.sensor_config.is_file():
+        parser.error(f"sensor config does not exist: {args.sensor_config}")
+    try:
+        args.sensor = load_mapping(args.sensor_config, "sensor config")
+        for key in ("front_stereo", "topics", "frames", "extrinsics"):
+            if not isinstance(args.sensor.get(key), dict):
+                raise ValueError(f"sensor config entry {key!r} must be a mapping")
     except (OSError, ValueError, yaml.YAMLError) as exc:
         parser.error(str(exc))
     return args
@@ -189,6 +206,7 @@ def run(args: argparse.Namespace) -> int:
     from isaacsim.core.utils.extensions import enable_extension
 
     from nova_carter_sim.graphs import create_control_graphs
+    from nova_carter_sim.sensors import create_sensor_graphs
     from nova_carter_sim.runtime import (
         stage_identity,
         unexpected_robot_overlaps,
@@ -217,14 +235,15 @@ def run(args: argparse.Namespace) -> int:
     }
     started_wall = time.monotonic()
     try:
-        if not args.disable_ros_control:
+        if not args.disable_ros_control or not args.disable_sensors:
             if os.environ.get("ROS_DISTRO") != "jazzy":
                 raise RuntimeError(
-                    "ROS 2 Jazzy must be sourced before enabling Phase 3 control graphs"
+                    "ROS 2 Jazzy must be sourced before enabling runtime ROS graphs"
                 )
             enable_extension("isaacsim.ros2.bridge")
             enable_extension("isaacsim.robot.wheeled_robots")
             enable_extension("isaacsim.sensors.physics.nodes")
+            enable_extension("isaacsim.sensors.camera")
             app.update()
         stage = open_warehouse_once(app, args.warehouse_usd)
         report["stage_open_count"] = 1
@@ -257,6 +276,19 @@ def run(args: argparse.Namespace) -> int:
             if stage_identity() != active_stage_identity:
                 raise RuntimeError("active stage changed while creating Phase 3 graphs")
 
+        if args.disable_sensors:
+            report["sensor_graphs"] = {"enabled": False}
+        else:
+            sensor_summary = create_sensor_graphs(stage, args.sensor)
+            app.update()
+            report["sensor_graphs"] = {
+                "enabled": True,
+                **sensor_summary.to_dict(),
+                "official_ros_sample_loaded": False,
+            }
+            if stage_identity() != active_stage_identity:
+                raise RuntimeError("active stage changed while creating Phase 4 graphs")
+
         timeline = omni.timeline.get_timeline_interface()
         timeline.set_time_codes_per_second(float(args.physics_hz))
         timeline.play()
@@ -273,12 +305,12 @@ def run(args: argparse.Namespace) -> int:
         )
         if initial_overlaps:
             raise RuntimeError(f"PhysX found initial obstacle overlap: {initial_overlaps}")
-        print(
-            "NOVA_CARTER_CONTROL_READY "
+        ready_fields = (
             f"mode={report['mode']} spawn=({spawn.x:.3f},{spawn.y:.3f},{spawn.z:.3f}) "
-            f"control={not args.disable_ros_control}",
-            flush=True,
+            f"control={not args.disable_ros_control} sensors={not args.disable_sensors}"
         )
+        print(f"NOVA_CARTER_CONTROL_READY {ready_fields}", flush=True)
+        print(f"NOVA_CARTER_SENSORS_READY {ready_fields}", flush=True)
 
         run_started = time.monotonic()
         deadline = run_started + args.duration if args.duration > 0.0 else None
@@ -357,7 +389,8 @@ def run(args: argparse.Namespace) -> int:
         print(
             "NOVA_CARTER_SIM_COMPLETED "
             f"mode={report['mode']} spawn=({spawn.x:.3f},{spawn.y:.3f},{spawn.z:.3f}) "
-            f"control={not args.disable_ros_control} frames={frames} "
+            f"control={not args.disable_ros_control} sensors={not args.disable_sensors} "
+            f"frames={frames} "
             f"sim_delta={last_simulation_time - start_simulation_time:.3f}",
             flush=True,
         )
@@ -401,7 +434,7 @@ def main() -> int:
                 persisted = json.loads(args.report.read_text(encoding="utf-8"))
                 if persisted.get("status") != "passed":
                     print(
-                        f"error: persisted phase-2 report is not passed: {args.report}",
+                        f"error: persisted simulation report is not passed: {args.report}",
                         file=sys.stderr,
                     )
                     return 1

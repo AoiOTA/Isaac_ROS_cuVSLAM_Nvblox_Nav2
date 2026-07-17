@@ -43,3 +43,17 @@ The project first targets a front-stereo static-map MVP. Four-direction VGL, dyn
 ```
 
 The runtime graphs are `/World/Graphs/Clock`, `DifferentialDrive`, `JointState`, and `GroundTruth`. JointState uses the Isaac Sim 6.0 `IsaacReadJointState` sensor-output path. Ground truth publishes only an Odometry message in `sim_world`; it never enters the navigation TF tree. The ROS wheel odometry node integrates only the two driven wheels and also publishes no TF.
+
+## Implemented Phase 4 sensor boundary
+
+```text
+front Hawk left/right cameras
+  -> runtime FrontStereo (RGB + stereo CameraInfo, 1280x800 @ 30 Hz)
+  -> Isaac ROS ImageFormatConverterNode x2
+  -> mono8 left/right
+
+front Hawk left camera -> runtime FrontDepth (32FC1 meters, 640x400 @ 30 Hz)
+front Hawk IMU -> runtime FrontImu (physics step @ 120 Hz)
+```
+
+`Clock` and `FrontImu` use on-demand physics-step graphs; camera and depth graphs use render products at the camera's authored 30 Hz tick rate. All sensor publishers use Best-Effort SensorData QoS. The simplified Xacro contains the USD-extracted 0.15 m stereo baseline, optical-frame rotations, IMU mount, active wheels, and passive caster chain. Only robot_state_publisher owns TF below `base_link`.

@@ -36,12 +36,12 @@ require_file "${NOVA_CARTER_USD}"
 require_file "${NOVA_CARTER_ROS_SAMPLE_USD}"
 
 RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)"
-LOG_DIR="${PROJECT_ROOT}/data/logs/stage3"
+LOG_DIR="${PROJECT_ROOT}/data/logs/stage4"
 REPORT="${LOG_DIR}/run-${RUN_ID}.json"
 LOG_FILE="${LOG_DIR}/run-${RUN_ID}.log"
 mkdir -p "${LOG_DIR}"
 
-info "Starting standalone simulator with Phase 3 runtime control graphs"
+info "Starting standalone simulator with Phase 4 runtime control and sensor graphs"
 info "Report: ${REPORT}"
 info "Log: ${LOG_FILE}"
 set +e
@@ -57,5 +57,5 @@ if [[ ${status} -ne 0 ]]; then
   die "simulator exited with status ${status}; inspect ${REPORT} and ${LOG_FILE}"
 fi
 
-python3 "${PROJECT_ROOT}/tools/check_stage3_sim_report.py" "${REPORT}"
+python3 "${PROJECT_ROOT}/tools/check_stage4_sim_report.py" "${REPORT}"
 info "Standalone simulator run passed"
