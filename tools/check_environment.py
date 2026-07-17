@@ -93,7 +93,7 @@ def main() -> int:
         },
         "assets": {"warehouse": warehouse_usd, "robot": robot_usd},
         "isaac_ros_installed": installed_isaac_ros,
-        "phase": 1 if all(installed_isaac_ros.values()) else 0,
+        "phase1_environment_ready": all(installed_isaac_ros.values()),
     }
     print(json.dumps(report, indent=2, sort_keys=True))
     return 0

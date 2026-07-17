@@ -56,7 +56,7 @@ if find "${PROJECT_ROOT}/ros2_ws/src" -name package.xml -print -quit | grep -q .
     --log-base "${PROJECT_ROOT}/ros2_ws/log" \
     --symlink-install
 else
-  echo "ROS workspace skeleton has no packages yet; colcon build skipped for phase 0"
+  echo "ROS workspace has no packages through phase 2; colcon build skipped"
 fi
 
 if ros2 pkg prefix isaac_ros_visual_slam >/dev/null 2>&1; then

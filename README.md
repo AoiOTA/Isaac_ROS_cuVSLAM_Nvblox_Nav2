@@ -2,7 +2,7 @@
 
 本仓库用于在 Ubuntu 24.04、ROS 2 Jazzy、Isaac Sim 6.0.1 和 RTX 4090 上构建 Nova Carter 视觉导航系统。目标组件包括 Isaac Sim Standalone Python、Isaac ROS cuVSLAM、nvblox、Visual Global Localization 和 Nav2。
 
-当前状态：**阶段0和阶段1已完成并在本机实测通过。** 已安装CUDA Toolkit 13.0.3、TensorRT 10.13.3.9和Isaac ROS 4.5.0；仿真导航主体从阶段2开始实现。
+当前状态：**阶段0、阶段1和阶段2已完成并在本机实测通过。** 已安装CUDA Toolkit 13.0.3、TensorRT 10.13.3.9和Isaac ROS 4.5.0；Standalone程序会直接打开官方Warehouse，并在匿名session layer中引用Nova Carter主USD。
 
 ## 固定资产
 
@@ -33,6 +33,26 @@ cd /home/lyb/Workspace/Isaac_ROS_cuVSLAM_Nvblox_Nav2
 - Isaac ROS已安装时，附加检查CUDA、TensorRT共享库和五个核心ROS包。
 
 该命令不会安装依赖、启动Isaac Sim GUI、修改官方USD或终止其他进程。
+
+## 阶段2仿真入口
+
+Headless模式：
+
+```bash
+./scripts/run_sim.sh --headless
+```
+
+GUI模式：
+
+```bash
+./scripts/run_sim.sh --gui
+```
+
+测试时可添加`--duration 60`，使程序按墙钟运行60秒后自动退出。程序只打开一次Warehouse stage，在匿名session layer中创建`/World/NovaCarter`引用，强制选择`Physics=physx`、`Sensors=All_Sensors`和`ROS=Disabled`，并从场景碰撞几何自动搜索出生点。它不会加载`Nova_Carter_ROS.usd`、保存组合stage或管理其他项目的进程。
+
+每次运行的日志和机器可读验收报告位于`data/logs/stage2`。报告会记录出生点依据、variant、必要prim、PhysX重叠检查、timeline推进以及官方USD运行前后的文件指纹。
+
+阶段2的实测结果和通过证据见[Phase 2 Validation](docs/phase2_validation.md)。
 
 ## 阶段1完整环境配置
 

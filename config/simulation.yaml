@@ -1,0 +1,25 @@
+stage:
+  robot_prim: /World/NovaCarter
+  compose_in_session_layer: true
+  save_composed_stage: false
+  stage_open_count: 1
+
+variants:
+  Physics: physx
+  Sensors: All_Sensors
+  ROS: Disabled
+
+spawn_search:
+  preferred_xy_m: [0.0, 0.0]
+  grid_resolution_m: 0.5
+  footprint_clearance_m: 0.15
+  height_above_floor_m: 0.03
+  obstacle_height_m: 1.6
+
+runtime:
+  physics_hz: 120
+  update_hz: 120
+  renderer: RaytracedLighting
+  resolution: [1280, 720]
+  forbid_stage_switching: true
+  project_process_lock: data/locks/navigation_sim.lock

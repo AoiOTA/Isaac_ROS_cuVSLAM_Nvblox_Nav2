@@ -28,6 +28,8 @@ data/logs/*
 !data/logs/.gitkeep
 data/reports/*
 !data/reports/.gitkeep
+data/locks/*
+!data/locks/.gitkeep
 
 *.bag
 *.db3
