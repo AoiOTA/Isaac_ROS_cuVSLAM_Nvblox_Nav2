@@ -2,7 +2,7 @@
 
 本仓库用于在 Ubuntu 24.04、ROS 2 Jazzy、Isaac Sim 6.0.1 和 RTX 4090 上构建 Nova Carter 视觉导航系统。目标组件包括 Isaac Sim Standalone Python、Isaac ROS cuVSLAM、nvblox、Visual Global Localization 和 Nav2。
 
-当前状态：**阶段0至阶段6已完成并在本机实测通过。** 已安装CUDA Toolkit 13.0.3、TensorRT 10.13.3.9和Isaac ROS 4.5.0；Standalone程序直接打开官方Warehouse，在匿名session layer中引用Nova Carter主USD，并在运行时自建控制、前向双目、深度和IMU OmniGraph。前向双目+IMU已接入cuVSLAM，主TF链、连续定位及地图保存/加载均已通过自动验收；Isaac Sim原生深度已接入nvblox，TSDF、Mesh、2D ESDF、map slice和地图/PLY保存也已实际验证。
+当前状态：**阶段0至阶段7已完成并在本机实测通过。** 已安装CUDA Toolkit 13.0.3、TensorRT 10.13.3.9和Isaac ROS 4.5.0；Standalone程序直接打开官方Warehouse，在匿名session layer中引用Nova Carter主USD，并在运行时自建控制、前向双目、深度和IMU OmniGraph。前向双目+IMU已接入cuVSLAM，主TF链、连续定位及地图保存/加载均已通过自动验收；Isaac Sim原生深度已接入nvblox；MCAP、cuVSLAM、cuVGL、nvblox、Mesh和occupancy地图已能自动生成，五次独立重启的cuVGL全局定位与cuVSLAM恢复全部通过。
 
 ## 固定资产
 
@@ -120,6 +120,25 @@ GUI模式：
 ```
 
 最终实测完成15.48 m双向S形扫描且cuVSLAM零失锁；TSDF、Mesh、静态ESDF和map slice全部非空，保存得到104.6 MB nvblox地图和14.8 MB PLY。详细证据见[Phase 6 Validation](docs/phase6_validation.md)。在另一台电脑安装、迁移传感器和调参时，以[nvblox完整配置、迁移与调参手册](docs/nvblox_configuration.md)为准；其中记录了完整YAML、launch、TF/深度契约、保存服务、Nav2接入、调参顺序和2D ESDF服务限制。
+
+## 阶段7自动建图和全局重定位
+
+自动创建第一版对齐地图：
+
+```bash
+./scripts/run_mapping.sh --map warehouse_v1
+```
+
+该入口自动启动Standalone、控制、cuVSLAM和nvblox，执行闭环采集路线并录制MCAP，保存在线cuVSLAM、nvblox、PLY和Nav2 occupancy，然后调用官方离线工具生成对齐的cuVSLAM与cuVGL BoW地图，并导出/复用ALIKED、LightGlue TensorRT引擎。
+
+审计地图或执行五次独立重启重定位：
+
+```bash
+python3 tools/check_phase7_maps.py data/maps/warehouse_v1
+./scripts/run_phase7_tests.sh warehouse_v1
+```
+
+本机最终回归地图包含142个cuVGL关键帧，五个不同初始yaw均得到cuVGL位姿并通过`/visual_slam/initial_pose`恢复cuVSLAM。单独启动已有地图的cuVGL使用`./scripts/run_vgl.sh warehouse_v1`。详细结果见[Phase 7 Validation](docs/phase7_validation.md)；另一台电脑的完整安装、建图、launch、接口和调参过程见[cuVGL完整配置、迁移与调参手册](docs/cuvgl_configuration.md)。
 
 ## 阶段1完整环境配置
 

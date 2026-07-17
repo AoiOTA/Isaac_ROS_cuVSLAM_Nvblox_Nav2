@@ -124,6 +124,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--spawn-clearance", type=float, default=float(spawn["footprint_clearance_m"])
     )
+    parser.add_argument("--spawn-x", type=float, default=None)
+    parser.add_argument("--spawn-y", type=float, default=None)
+    parser.add_argument("--spawn-yaw", type=float, default=0.0, help="initial yaw in radians")
     parser.add_argument("--width", type=int, default=int(resolution[0]))
     parser.add_argument("--height", type=int, default=int(resolution[1]))
     parser.add_argument(
@@ -152,6 +155,10 @@ def parse_args() -> argparse.Namespace:
     args.spawn_height = float(spawn["height_above_floor_m"])
     args.spawn_obstacle_height = float(spawn["obstacle_height_m"])
     args.spawn_preferred_xy = tuple(float(value) for value in preferred_xy)
+    if (args.spawn_x is None) != (args.spawn_y is None):
+        parser.error("--spawn-x and --spawn-y must be supplied together")
+    if args.spawn_x is not None:
+        args.spawn_preferred_xy = (args.spawn_x, args.spawn_y)
     for label, path in (
         ("warehouse", args.warehouse_usd),
         ("Nova Carter", args.robot_usd),
@@ -258,6 +265,7 @@ def run(args: argparse.Namespace) -> int:
             spawn_height=args.spawn_height,
             spawn_obstacle_height=args.spawn_obstacle_height,
             spawn_preferred_xy=args.spawn_preferred_xy,
+            spawn_yaw=args.spawn_yaw,
         )
         app.update()
         if stage_identity() != active_stage_identity:

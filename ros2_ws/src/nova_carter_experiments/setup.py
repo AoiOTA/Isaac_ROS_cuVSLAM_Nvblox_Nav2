@@ -27,6 +27,9 @@ setup(
             "visual_slam_test_runner = nova_carter_experiments.visual_slam_test_runner:main",
             "nvblox_map_saver = nova_carter_experiments.nvblox_map_saver:main",
             "nvblox_test_runner = nova_carter_experiments.nvblox_test_runner:main",
+            "occupancy_saver = nova_carter_experiments.occupancy_saver:main",
+            "vgl_pose_relay = nova_carter_experiments.vgl_pose_relay:main",
+            "vgl_test_runner = nova_carter_experiments.vgl_test_runner:main",
         ]
     },
 )

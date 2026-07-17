@@ -106,6 +106,7 @@ def compose_robot(
     spawn_height: float,
     spawn_obstacle_height: float,
     spawn_preferred_xy: tuple[float, float],
+    spawn_yaw: float = 0.0,
 ) -> tuple[Usd.Prim, SpawnPose, dict[str, object]]:
     if robot_path.resolve() == forbidden_ros_sample_path.resolve():
         raise RuntimeError("the project is forbidden from loading Nova_Carter_ROS.usd")
@@ -119,6 +120,7 @@ def compose_robot(
         spawn_height=spawn_height,
         obstacle_height=spawn_obstacle_height,
         preferred_xy=spawn_preferred_xy,
+        yaw_radians=spawn_yaw,
     )
 
     session_layer = stage.GetSessionLayer()

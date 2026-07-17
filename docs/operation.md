@@ -19,6 +19,8 @@ python3 tools/check_stage1.py
 ./scripts/run_phase6.sh
 ./scripts/save_nvblox_map.sh
 ./scripts/run_phase6_tests.sh
+./scripts/run_mapping.sh --map warehouse_v1
+./scripts/run_phase7_tests.sh warehouse_v1
 ```
 
 `smoke_ros_bridge.sh` starts only its own Isaac Sim process group, receives real `/clock`, image, and CameraInfo messages, and then terminates that process group. It never uses `killall` or `pkill`.
@@ -166,6 +168,16 @@ Run the full isolated acceptance:
 ```
 
 The suite audits the effective runtime parameters, rate-limits a 60-second bidirectional S course to 20 Hz control, verifies healthy cuVSLAM tracking and nonempty TSDF/Mesh/ESDF/map-slice outputs, invokes all four save services, and checks the simulator for unexpected PhysX overlap. Results go under `data/reports/phase6`; see [`docs/phase6_validation.md`](phase6_validation.md).
+
+## Stage 7 mapping and relocalization
+
+```bash
+./scripts/run_mapping.sh --map warehouse_v1
+python3 tools/check_phase7_maps.py data/maps/warehouse_v1
+./scripts/run_phase7_tests.sh warehouse_v1
+```
+
+The mapping entry owns only its own process groups, records MCAP, persists the online reconstruction, creates aligned cuVSLAM/cuVGL products, caches TensorRT engines, writes a manifest, and exits without GUI interaction. The acceptance entry starts five fresh simulator/ROS graphs, triggers cuVGL, relays each pose to cuVSLAM, and requires tracking recovery without a failed-localization hint. See [`docs/phase7_validation.md`](phase7_validation.md).
 
 The mapper is intentionally in 2D ESDF mode. Do not call `get_esdf_and_gradient` in this mode on nvblox 4.5; it is a 3D-only service and terminates the node. Use `static_esdf_pointcloud` and `static_map_slice` for 2D validation.
 

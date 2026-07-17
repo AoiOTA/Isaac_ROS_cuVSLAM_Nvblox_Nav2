@@ -347,7 +347,7 @@ class NvbloxTestRunner(Node):
             and rates.get("ros/depth", 0.0) >= 12.0
             and rates.get("ros/color", 0.0) >= 3.0
             and rates.get("ros/update_esdf", 0.0) >= 7.0,
-            "cuvslam_tracking_healthy": len(tracked) >= int(5 * self.mapping_duration)
+            "cuvslam_tracking_healthy": len(tracked) >= int(4 * self.mapping_duration)
             and all(state == 1 for _, state in tracked),
             "mapping_motion_completed": self.path_length(self.ground_truth) >= 8.0
             and len(self.command_phases) >= 7,

@@ -2,7 +2,8 @@ from pathlib import Path
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.substitutions import Command, FindExecutable
+from launch.actions import DeclareLaunchArgument
+from launch.substitutions import Command, FindExecutable, LaunchConfiguration
 from launch_ros.actions import ComposableNodeContainer, Node
 from launch_ros.descriptions import ComposableNode
 
@@ -38,7 +39,13 @@ def generate_launch_description() -> LaunchDescription:
         package="isaac_ros_visual_slam",
         plugin="nvidia::isaac_ros::visual_slam::VisualSlamNode",
         name="visual_slam_node",
-        parameters=[str(share / "config/visual_slam.yaml")],
+        parameters=[
+            str(share / "config/visual_slam.yaml"),
+            {
+                "load_map_folder_path": LaunchConfiguration("load_map_folder_path"),
+                "localize_on_startup": LaunchConfiguration("localize_on_startup"),
+            },
+        ],
         remappings=[
             ("/visual_slam/image_0", "/front_stereo_camera/left/image_raw"),
             ("/visual_slam/camera_info_0", "/front_stereo_camera/left/camera_info"),
@@ -50,6 +57,8 @@ def generate_launch_description() -> LaunchDescription:
     )
     return LaunchDescription(
         [
+            DeclareLaunchArgument("load_map_folder_path", default_value=""),
+            DeclareLaunchArgument("localize_on_startup", default_value="false"),
             Node(
                 package="robot_state_publisher",
                 executable="robot_state_publisher",
