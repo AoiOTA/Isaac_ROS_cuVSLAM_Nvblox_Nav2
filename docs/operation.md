@@ -1,6 +1,6 @@
 # Operation
 
-Available through Phase 5:
+Available through Phase 6:
 
 ```bash
 ./scripts/build.sh
@@ -15,6 +15,10 @@ python3 tools/check_stage1.py
 ./scripts/run_phase4_tests.sh
 ./scripts/run_visual_slam.sh
 ./scripts/run_phase5_tests.sh
+./scripts/run_nvblox.sh
+./scripts/run_phase6.sh
+./scripts/save_nvblox_map.sh
+./scripts/run_phase6_tests.sh
 ```
 
 `smoke_ros_bridge.sh` starts only its own Isaac Sim process group, receives real `/clock`, image, and CameraInfo messages, and then terminates that process group. It never uses `killall` or `pkill`.
@@ -135,3 +139,34 @@ Use the reproducible acceptance instead of manual driving:
 The suite uses isolated domain 45, starts and cleans only its own process groups, commands a repeated forward/reverse S-course for at least 122 simulation seconds, audits tracking state and TF ownership, compares direction and metric scale against ground truth, and exercises all three map interfaces. Reports are written under `data/reports/phase5`; detailed evidence is in `docs/phase5_validation.md`.
 
 For a clean-machine manual setup, camera migration, parameter-by-parameter tuning, map services, and troubleshooting, follow [`docs/cuvslam_configuration.md`](cuvslam_configuration.md).
+
+## Phase 6 nvblox reconstruction
+
+Start the simulator in one terminal and the complete control, cuVSLAM, and nvblox stack in another:
+
+```bash
+./scripts/run_sim.sh --headless
+./scripts/run_phase6.sh
+```
+
+`run_nvblox.sh` starts only the nvblox component and assumes the sensor streams and `odom→base_link→front_stereo_camera_left_optical` TF are already live. Phase 6 remaps one native 32FC1 depth stream and the front-left RGB stream into `nvblox::NvbloxNode`. The mapper uses `static_tsdf`, 5 cm voxels, `global_frame=odom`, 2D ESDF, no lidar, and SensorData QoS.
+
+Save the current map, PLY, rates, and timings without RViz interaction:
+
+```bash
+./scripts/save_nvblox_map.sh \
+  data/maps/warehouse_v1/nvblox \
+  warehouse
+```
+
+Run the full isolated acceptance:
+
+```bash
+./scripts/run_phase6_tests.sh
+```
+
+The suite audits the effective runtime parameters, rate-limits a 60-second bidirectional S course to 20 Hz control, verifies healthy cuVSLAM tracking and nonempty TSDF/Mesh/ESDF/map-slice outputs, invokes all four save services, and checks the simulator for unexpected PhysX overlap. Results go under `data/reports/phase6`; see [`docs/phase6_validation.md`](phase6_validation.md).
+
+The mapper is intentionally in 2D ESDF mode. Do not call `get_esdf_and_gradient` in this mode on nvblox 4.5; it is a 3D-only service and terminates the node. Use `static_esdf_pointcloud` and `static_map_slice` for 2D validation.
+
+For installation on another computer, input/TF contracts, complete copyable YAML and launch files, persistence, parameter tuning, dynamic-mode migration, Nav2 integration, and troubleshooting, follow [`docs/nvblox_configuration.md`](nvblox_configuration.md).

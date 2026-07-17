@@ -69,3 +69,19 @@ cuVSLAM -> map→odom→base_link + tracking odometry/status + map services
 The official Hawk assets use the legacy `fisheyePolynomial` projection. Isaac Sim 6.0.1 renders that distortion but its stereo CameraInfo helper reports zero distortion, which is not a valid `rectified_images=true` input. The simulator therefore overrides only the two front navigation cameras to zero-distortion pinhole in the anonymous session layer before creating render products. The source USD remains unchanged. The 0.15 m stereo baseline remains encoded by the right CameraInfo projection matrix and the robot_state_publisher transform.
 
 `visual_slam.launch.py` composes both GPU converters and cuVSLAM in a single multithreaded container with intra-process communication for normalized images. cuVSLAM uses the front stereo pair and IMU, publishes both main TF edges, enables mapping, and exposes save/load/get-all-poses services. Wheel odometry and simulator ground truth remain observation-only and never enter the main TF tree.
+
+## Implemented Phase 6 reconstruction boundary
+
+```text
+native 32FC1 depth + depth CameraInfo ─┐
+front-left RGB + color CameraInfo ─────┼→ nvblox static TSDF in odom
+cuVSLAM/robot-state-publisher TF ──────┘     ├→ TSDF/color layers
+                                              ├→ Mesh
+                                              ├→ static 2D ESDF
+                                              ├→ static_map_slice
+                                              └→ .nvblx / .ply
+```
+
+`nvblox.launch.py` creates a project-owned multithreaded component container and loads `nvblox::NvbloxNode`. It uses one camera, 5 cm voxels, no lidar, native simulated depth, 30 Hz configured depth integration, 5 Hz color integration, 10 Hz ESDF update and 1 Hz mesh/layer output. `global_frame=odom` matches the future Nav2 local rolling costmap and avoids loop-closure discontinuities inside the reconstruction frame.
+
+The 2D ESDF spans 0.09–0.65 m and is published as both a pointcloud and `DistanceMapSlice`. In nvblox 4.5 the dense `get_esdf_and_gradient` service is 3D-only, so it is deliberately not called in this configuration. Map, PLY, rates and timings are saved through actual nvblox services.

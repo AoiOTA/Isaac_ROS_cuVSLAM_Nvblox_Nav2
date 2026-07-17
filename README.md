@@ -2,7 +2,7 @@
 
 本仓库用于在 Ubuntu 24.04、ROS 2 Jazzy、Isaac Sim 6.0.1 和 RTX 4090 上构建 Nova Carter 视觉导航系统。目标组件包括 Isaac Sim Standalone Python、Isaac ROS cuVSLAM、nvblox、Visual Global Localization 和 Nav2。
 
-当前状态：**阶段0至阶段5已完成并在本机实测通过。** 已安装CUDA Toolkit 13.0.3、TensorRT 10.13.3.9和Isaac ROS 4.5.0；Standalone程序直接打开官方Warehouse，在匿名session layer中引用Nova Carter主USD，并在运行时自建控制、前向双目、深度和IMU OmniGraph。前向双目+IMU已接入cuVSLAM，主TF链、连续定位及地图保存/加载均已通过自动验收。
+当前状态：**阶段0至阶段6已完成并在本机实测通过。** 已安装CUDA Toolkit 13.0.3、TensorRT 10.13.3.9和Isaac ROS 4.5.0；Standalone程序直接打开官方Warehouse，在匿名session layer中引用Nova Carter主USD，并在运行时自建控制、前向双目、深度和IMU OmniGraph。前向双目+IMU已接入cuVSLAM，主TF链、连续定位及地图保存/加载均已通过自动验收；Isaac Sim原生深度已接入nvblox，TSDF、Mesh、2D ESDF、map slice和地图/PLY保存也已实际验证。
 
 ## 固定资产
 
@@ -34,7 +34,7 @@ cd /home/lyb/Workspace/Isaac_ROS_cuVSLAM_Nvblox_Nav2
 
 该命令不会安装依赖、启动Isaac Sim GUI、修改官方USD或终止其他进程。
 
-## 阶段2至阶段5仿真、控制与视觉定位入口
+## 阶段2至阶段6仿真、定位与重建入口
 
 Headless模式：
 
@@ -100,6 +100,27 @@ GUI模式：
 
 在另一台电脑上手动配置、迁移相机或逐项调参时，使用[cuVSLAM完整配置、迁移与调参手册](docs/cuvslam_configuration.md)。该手册包含输入数据契约、CameraInfo/baseline验证、TF和IMU配置、完整YAML、launch组织、地图服务、调参顺序、故障诊断和量化验收。
 
+单独启动nvblox或启动完整阶段6：
+
+```bash
+./scripts/run_nvblox.sh
+./scripts/run_phase6.sh
+```
+
+前者要求相机和cuVSLAM TF已经由其他进程提供；后者同时包含阶段3控制、阶段5 cuVSLAM和阶段6 nvblox。手动保存当前重建：
+
+```bash
+./scripts/save_nvblox_map.sh data/maps/warehouse_v1/nvblox warehouse
+```
+
+完整阶段6自动验收：
+
+```bash
+./scripts/run_phase6_tests.sh
+```
+
+最终实测完成15.48 m双向S形扫描且cuVSLAM零失锁；TSDF、Mesh、静态ESDF和map slice全部非空，保存得到104.6 MB nvblox地图和14.8 MB PLY。详细证据见[Phase 6 Validation](docs/phase6_validation.md)。在另一台电脑安装、迁移传感器和调参时，以[nvblox完整配置、迁移与调参手册](docs/nvblox_configuration.md)为准；其中记录了完整YAML、launch、TF/深度契约、保存服务、Nav2接入、调参顺序和2D ESDF服务限制。
+
 ## 阶段1完整环境配置
 
 另一台电脑需要重新配置环境时，以[阶段1裸机环境完整配置手册](docs/installation.md)为准。该文档把操作拆分为独立步骤，包含每条命令的目的、预期结果、安全门和失败恢复，不要求先运行本仓库的安装脚本。
@@ -126,7 +147,7 @@ python3 tools/check_stage1.py
 ```
 
 安装脚本不修改 `~/.bashrc`，不卸载系统OpenCV，并在APT模拟出现任何待删除包时自动停止。
-建图、导航和最终验收入口会在对应阶段实现，在实现前不会用空壳脚本冒充可用功能。
+自动地图集合、导航和最终验收入口会在对应阶段实现，在实现前不会用空壳脚本冒充可用功能。
 
 本机阶段1验收已确认：
 
