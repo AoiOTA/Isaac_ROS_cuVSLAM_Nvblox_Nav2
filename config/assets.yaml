@@ -1,0 +1,18 @@
+asset_root: /home/lyb/isaacsim_assets/Assets/Isaac/6.0
+
+warehouse:
+  logical_path: /Isaac/Environments/Simple_Warehouse/warehouse_with_forklifts.usd
+  resolved_path: /home/lyb/isaacsim_assets/Assets/Isaac/6.0/Isaac/Environments/Simple_Warehouse/warehouse_with_forklifts.usd
+  expected_default_prim: /World
+
+robot:
+  logical_path: /Isaac/Robots/NVIDIA/NovaCarter/nova_carter.usd
+  resolved_path: /home/lyb/isaacsim_assets/Assets/Isaac/6.0/Isaac/Robots/NVIDIA/NovaCarter/nova_carter.usd
+  expected_default_prim: /nova_carter
+  ros_variant: Disabled
+  physics_variant: physx
+  sensors_variant: All_Sensors
+
+reference_only:
+  ros_sample: /home/lyb/isaacsim_assets/Assets/Isaac/6.0/Isaac/Samples/ROS2/Robots/Nova_Carter_ROS.usd
+  policy: never_load_or_reference

@@ -1,0 +1,37 @@
+simulation:
+  physics_hz: 120
+  clock_hz: 120
+  reset_time_on_stop: false
+
+front_stereo:
+  namespace: /front_stereo_camera
+  width: 1280
+  height: 800
+  rate_hz: 30
+  left_frame: front_stereo_camera_left_optical
+  right_frame: front_stereo_camera_right_optical
+
+front_depth:
+  topic: /front_stereo_camera/depth/image_raw
+  camera_info_topic: /front_stereo_camera/depth/camera_info
+  frame: front_stereo_camera_left_optical
+  width: 640
+  height: 400
+  rate_hz: 30
+  encoding: 32FC1
+  unit: meter
+  minimum_range_m: 0.2
+  maximum_range_m: 7.0
+
+front_imu:
+  topic: /front_stereo_imu/imu
+  frame: front_stereo_camera_imu
+  rate_hz: 120
+
+directional_stereo:
+  directions: [left, right, back]
+  rate_hz_when_enabled: 10
+  enabled_during: [mapping, relocalization]
+
+lidar:
+  publish: false

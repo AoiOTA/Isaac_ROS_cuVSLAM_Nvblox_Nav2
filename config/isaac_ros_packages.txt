@@ -1,0 +1,13 @@
+# Phase 1 bare-metal runtime and developer tools.
+# One Debian package per line; comments and blank lines are ignored.
+cuda-toolkit-13-0
+tensorrt
+git-lfs
+ccache
+ros-jazzy-isaac-ros-visual-slam
+ros-jazzy-isaac-ros-nvblox
+ros-jazzy-isaac-ros-visual-global-localization
+ros-jazzy-isaac-ros-visual-mapping
+ros-jazzy-isaac-mapping-ros
+ros-jazzy-isaac-ros-image-pipeline
+ros-jazzy-depthimage-to-laserscan

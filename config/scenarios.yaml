@@ -1,0 +1,20 @@
+defaults:
+  name: warehouse_nominal
+  seed: 42
+  headless: true
+  lighting_profile: nominal
+  material_profile: original
+  dynamic_obstacles: false
+  spawn_policy: automatic_collision_free
+  goal_policy: automatic_reachable
+
+profiles:
+  nominal:
+    lighting_scale: 1.0
+    color_temperature_k: 5500
+  low_light:
+    lighting_scale: 0.4
+    color_temperature_k: 4000
+  bright:
+    lighting_scale: 1.5
+    color_temperature_k: 6500

@@ -1,0 +1,18 @@
+trial_counts:
+  static: 40
+  dynamic: 40
+  heterogeneous: 50
+
+thresholds:
+  static_success_rate: 0.95
+  dynamic_success_rate: 0.90
+  heterogeneous_success_rate: 0.90
+  path_stretch_p95: 0.20
+  goal_position_tolerance_m: 0.25
+  goal_yaw_tolerance_deg: 10.0
+
+navigation_success_requires:
+  goal_reached: true
+  collision_free: true
+  localization_healthy: true
+  no_manual_intervention: true
