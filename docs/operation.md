@@ -1,6 +1,6 @@
 # Operation
 
-Available through Phase 1:
+Available through Phase 3:
 
 ```bash
 ./scripts/build.sh
@@ -8,6 +8,9 @@ Available through Phase 1:
 ./scripts/smoke_ros_bridge.sh
 python3 tools/check_stage1.py
 ./scripts/smoke_isaac_ros_nodes.sh
+./scripts/run_sim.sh --headless
+./scripts/run_control.sh
+./scripts/run_phase3_tests.sh
 ```
 
 `smoke_ros_bridge.sh` starts only its own Isaac Sim process group, receives real `/clock`, image, and CameraInfo messages, and then terminates that process group. It never uses `killall` or `pkill`.
@@ -43,4 +46,31 @@ The composed stage is never saved. A successful report can be checked independen
 python3 tools/check_stage2_report.py data/logs/stage2/latest.json
 ```
 
-Phase 3 will add the runtime differential-drive OmniGraph and ROS topics. Phase 2 intentionally contains no project OmniGraph. Mapping, navigation, and acceptance entry points will be added only when their corresponding phases are implemented and verified.
+## Phase 3 differential drive
+
+`run_sim.sh` now enables the ROS 2 Bridge, Wheeled Robots, physics sensor nodes, and four project-owned runtime graphs after composing the Phase 2 stage. It publishes `/clock`, `/joint_states`, and `/ground_truth/odometry`, and subscribes to `/cmd_vel_sim`.
+
+In a second terminal, run:
+
+```bash
+./scripts/run_control.sh
+```
+
+This launches the Command Guard and `/wheel/odometry`. A manual smoke command can then be sent with:
+
+```bash
+source /opt/ros/jazzy/setup.bash
+source ros2_ws/install/setup.bash
+ros2 topic pub --rate 20 /cmd_vel_safe geometry_msgs/msg/Twist \
+  '{linear: {x: 0.2}, angular: {z: 0.0}}'
+```
+
+Use the automated suite for acceptance instead of judging motion by eye:
+
+```bash
+./scripts/run_phase3_tests.sh
+```
+
+The suite starts the simulator and ROS nodes in process groups it owns, uses ROS domain 43 by default for test isolation, records JSON and logs, and shuts down through a simulator stop sentinel. Override only the temporary test domain with `PHASE3_TEST_ROS_DOMAIN_ID`; the public project domain remains 42.
+
+Mapping, navigation, and final acceptance entry points will be added only when their corresponding phases are implemented and verified.

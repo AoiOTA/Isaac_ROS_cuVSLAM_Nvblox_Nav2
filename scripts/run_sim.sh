@@ -4,6 +4,7 @@ set -Eeuo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 load_project_environment
+load_ros
 
 usage() {
   cat <<'EOF'
@@ -35,12 +36,12 @@ require_file "${NOVA_CARTER_USD}"
 require_file "${NOVA_CARTER_ROS_SAMPLE_USD}"
 
 RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)"
-LOG_DIR="${PROJECT_ROOT}/data/logs/stage2"
+LOG_DIR="${PROJECT_ROOT}/data/logs/stage3"
 REPORT="${LOG_DIR}/run-${RUN_ID}.json"
 LOG_FILE="${LOG_DIR}/run-${RUN_ID}.log"
 mkdir -p "${LOG_DIR}"
 
-info "Starting phase-2 standalone simulator"
+info "Starting standalone simulator with Phase 3 runtime control graphs"
 info "Report: ${REPORT}"
 info "Log: ${LOG_FILE}"
 set +e
@@ -56,5 +57,5 @@ if [[ ${status} -ne 0 ]]; then
   die "simulator exited with status ${status}; inspect ${REPORT} and ${LOG_FILE}"
 fi
 
-python3 "${PROJECT_ROOT}/tools/check_stage2_report.py" "${REPORT}"
-info "Phase-2 simulator run passed"
+python3 "${PROJECT_ROOT}/tools/check_stage3_sim_report.py" "${REPORT}"
+info "Standalone simulator run passed"

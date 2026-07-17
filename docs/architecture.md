@@ -2,7 +2,7 @@
 
 ## Runtime composition
 
-The simulator will open the fixed warehouse USD once, reference the official Nova Carter main USD into the session layer, and create project-owned OmniGraphs at runtime. The official ROS sample USD is never loaded.
+The simulator opens the fixed warehouse USD once, references the official Nova Carter main USD into the session layer, and creates project-owned OmniGraphs at runtime. The official ROS sample USD is never loaded.
 
 The intended pipeline is:
 
@@ -30,3 +30,16 @@ map -> odom -> base_link -> sensors and wheel frames
 ## Initial integration order
 
 The project first targets a front-stereo static-map MVP. Four-direction VGL, dynamic nvblox, lighting variation, and statistical acceptance are added only after the end-to-end mapping/localization/navigation loop works.
+
+## Implemented Phase 3 control boundary
+
+```text
+/cmd_vel_safe
+  -> Command Guard (finite check, planar projection, slew limits, watchdog)
+  -> /cmd_vel_sim
+  -> runtime DifferentialController
+  -> runtime IsaacArticulationController
+  -> [joint_wheel_left, joint_wheel_right]
+```
+
+The runtime graphs are `/World/Graphs/Clock`, `DifferentialDrive`, `JointState`, and `GroundTruth`. JointState uses the Isaac Sim 6.0 `IsaacReadJointState` sensor-output path. Ground truth publishes only an Odometry message in `sim_world`; it never enters the navigation TF tree. The ROS wheel odometry node integrates only the two driven wheels and also publishes no TF.

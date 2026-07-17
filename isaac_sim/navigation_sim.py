@@ -54,6 +54,14 @@ def load_config(path: Path) -> dict[str, object]:
     return config
 
 
+def load_mapping(path: Path, label: str) -> dict[str, object]:
+    with path.open(encoding="utf-8") as stream:
+        value = yaml.safe_load(stream)
+    if not isinstance(value, dict):
+        raise ValueError(f"{label} must contain a mapping: {path}")
+    return value
+
+
 def parse_args() -> argparse.Namespace:
     pre_parser = argparse.ArgumentParser(add_help=False)
     pre_parser.add_argument("--config", type=Path, default=PROJECT_ROOT / "config/simulation.yaml")
@@ -82,6 +90,9 @@ def parse_args() -> argparse.Namespace:
         description="Open the official warehouse once and compose Nova Carter in memory"
     )
     parser.add_argument("--config", type=Path, default=pre_args.config)
+    parser.add_argument(
+        "--control-config", type=Path, default=PROJECT_ROOT / "config/control.yaml"
+    )
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--headless", action="store_true")
     mode.add_argument("--gui", action="store_true")
@@ -99,6 +110,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--duration", type=float, default=0.0, help="wall seconds; 0 runs until stopped"
     )
+    parser.add_argument(
+        "--stop-file",
+        type=Path,
+        default=None,
+        help="optional runtime sentinel; exit cleanly when this file appears",
+    )
     parser.add_argument("--physics-hz", type=int, default=int(runtime["physics_hz"]))
     parser.add_argument("--update-hz", type=float, default=float(runtime["update_hz"]))
     parser.add_argument(
@@ -107,7 +124,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--width", type=int, default=int(resolution[0]))
     parser.add_argument("--height", type=int, default=int(resolution[1]))
     parser.add_argument(
-        "--report", type=Path, default=PROJECT_ROOT / "data/logs/stage2/latest.json"
+        "--report", type=Path, default=PROJECT_ROOT / "data/logs/stage3/latest.json"
+    )
+    parser.add_argument(
+        "--disable-ros-control",
+        action="store_true",
+        help="run the composed stage without Phase 3 runtime ROS control graphs",
     )
     parser.add_argument(
         "--lock-file", type=Path, default=lock_path
@@ -129,6 +151,15 @@ def parse_args() -> argparse.Namespace:
     ):
         if not path.is_file():
             parser.error(f"{label} USD does not exist: {path}")
+    if not args.control_config.is_file():
+        parser.error(f"control config does not exist: {args.control_config}")
+    try:
+        args.control = load_mapping(args.control_config, "control config")
+        for key in ("kinematics", "limits", "topics", "frames"):
+            if not isinstance(args.control.get(key), dict):
+                raise ValueError(f"control config entry {key!r} must be a mapping")
+    except (OSError, ValueError, yaml.YAMLError) as exc:
+        parser.error(str(exc))
     return args
 
 
@@ -155,6 +186,9 @@ def run(args: argparse.Namespace) -> int:
 
     import omni.timeline
 
+    from isaacsim.core.utils.extensions import enable_extension
+
+    from nova_carter_sim.graphs import create_control_graphs
     from nova_carter_sim.runtime import (
         stage_identity,
         unexpected_robot_overlaps,
@@ -183,6 +217,15 @@ def run(args: argparse.Namespace) -> int:
     }
     started_wall = time.monotonic()
     try:
+        if not args.disable_ros_control:
+            if os.environ.get("ROS_DISTRO") != "jazzy":
+                raise RuntimeError(
+                    "ROS 2 Jazzy must be sourced before enabling Phase 3 control graphs"
+                )
+            enable_extension("isaacsim.ros2.bridge")
+            enable_extension("isaacsim.robot.wheeled_robots")
+            enable_extension("isaacsim.sensors.physics.nodes")
+            app.update()
         stage = open_warehouse_once(app, args.warehouse_usd)
         report["stage_open_count"] = 1
         active_stage_identity = stage_identity()
@@ -201,6 +244,19 @@ def run(args: argparse.Namespace) -> int:
         if stage_identity() != active_stage_identity:
             raise RuntimeError("active stage changed after Nova Carter composition")
 
+        if args.disable_ros_control:
+            report["control_graphs"] = {"enabled": False}
+        else:
+            graph_summary = create_control_graphs(stage, args.control)
+            app.update()
+            report["control_graphs"] = {
+                "enabled": True,
+                **graph_summary.to_dict(),
+                "official_ros_sample_loaded": False,
+            }
+            if stage_identity() != active_stage_identity:
+                raise RuntimeError("active stage changed while creating Phase 3 graphs")
+
         timeline = omni.timeline.get_timeline_interface()
         timeline.set_time_codes_per_second(float(args.physics_hz))
         timeline.play()
@@ -217,6 +273,12 @@ def run(args: argparse.Namespace) -> int:
         )
         if initial_overlaps:
             raise RuntimeError(f"PhysX found initial obstacle overlap: {initial_overlaps}")
+        print(
+            "NOVA_CARTER_CONTROL_READY "
+            f"mode={report['mode']} spawn=({spawn.x:.3f},{spawn.y:.3f},{spawn.z:.3f}) "
+            f"control={not args.disable_ros_control}",
+            flush=True,
+        )
 
         run_started = time.monotonic()
         deadline = run_started + args.duration if args.duration > 0.0 else None
@@ -236,6 +298,8 @@ def run(args: argparse.Namespace) -> int:
                 raise RuntimeError("active stage changed during the simulation loop")
             if deadline is not None and time.monotonic() >= deadline:
                 break
+            if args.stop_file is not None and args.stop_file.exists():
+                break
             remaining = 1.0 / args.update_hz - (time.monotonic() - frame_started)
             if remaining > 0.0:
                 time.sleep(remaining)
@@ -243,7 +307,13 @@ def run(args: argparse.Namespace) -> int:
         if frames == 0:
             raise RuntimeError("simulation loop completed without advancing any frames")
         elapsed_run_wall = time.monotonic() - run_started
-        if args.duration > 0.0 and elapsed_run_wall + 0.05 < args.duration:
+        stopped_by_file = args.stop_file is not None and args.stop_file.exists()
+        if (
+            args.duration > 0.0
+            and elapsed_run_wall + 0.05 < args.duration
+            and not STOP_REQUESTED
+            and not stopped_by_file
+        ):
             raise RuntimeError(
                 f"application stopped before the requested duration: "
                 f"requested={args.duration:.3f}s actual={elapsed_run_wall:.3f}s"
@@ -285,9 +355,10 @@ def run(args: argparse.Namespace) -> int:
             }
         )
         print(
-            "PHASE2_SIM_READY "
+            "NOVA_CARTER_SIM_COMPLETED "
             f"mode={report['mode']} spawn=({spawn.x:.3f},{spawn.y:.3f},{spawn.z:.3f}) "
-            f"frames={frames} sim_delta={last_simulation_time - start_simulation_time:.3f}",
+            f"control={not args.disable_ros_control} frames={frames} "
+            f"sim_delta={last_simulation_time - start_simulation_time:.3f}",
             flush=True,
         )
         return 0
@@ -315,7 +386,7 @@ def run(args: argparse.Namespace) -> int:
             report["status"] = "failed"
             report["error"] = "an official USD asset changed during the run"
         write_report(args.report, report)
-        print(f"PHASE2_REPORT {args.report.resolve()}", flush=True)
+        print(f"SIM_REPORT {args.report.resolve()}", flush=True)
         app.close(exit_code=0 if report["status"] == "passed" else 1)
 
 

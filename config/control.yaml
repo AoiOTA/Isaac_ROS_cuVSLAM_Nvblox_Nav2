@@ -1,0 +1,29 @@
+kinematics:
+  wheel_radius_m: 0.14
+  wheel_separation_m: 0.4132
+  left_wheel_joint: joint_wheel_left
+  right_wheel_joint: joint_wheel_right
+
+limits:
+  max_linear_speed_mps: 1.0
+  max_angular_speed_radps: 1.2
+  max_linear_acceleration_mps2: 1.2
+  max_linear_deceleration_mps2: 1.6
+  max_angular_acceleration_radps2: 2.4
+  command_timeout_s: 0.25
+
+topics:
+  command_input: /cmd_vel_safe
+  command_to_sim: /cmd_vel_sim
+  joint_states: /joint_states
+  wheel_odometry: /wheel/odometry
+  ground_truth_odometry: /ground_truth/odometry
+  clock: /clock
+
+frames:
+  odom: odom
+  base: base_link
+  ground_truth_world: sim_world
+
+publish_rates:
+  command_guard_hz: 100.0

@@ -49,11 +49,10 @@ echo "Opening fixed USD assets with the Isaac Sim Python runtime"
 
 if find "${PROJECT_ROOT}/ros2_ws/src" -name package.xml -print -quit | grep -q .; then
   echo "Building ROS workspace"
-  colcon build \
+  colcon --log-base "${PROJECT_ROOT}/ros2_ws/log" build \
     --base-paths "${PROJECT_ROOT}/ros2_ws/src" \
     --build-base "${PROJECT_ROOT}/ros2_ws/build" \
     --install-base "${PROJECT_ROOT}/ros2_ws/install" \
-    --log-base "${PROJECT_ROOT}/ros2_ws/log" \
     --symlink-install
 else
   echo "ROS workspace has no packages through phase 2; colcon build skipped"
