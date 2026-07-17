@@ -98,6 +98,8 @@ GUI模式：
 
 该测试在隔离的ROS domain中自动执行122秒双向S形轨迹，验证cuVSLAM从未失锁、`map→odom→base_link`唯一且连续、视觉轨迹方向和尺度与只读ground truth一致，并实际调用地图保存、全部优化位姿读取和地图加载服务。最终实测连续成功跟踪123.10秒、地图包含1216个优化位姿。详细结果见[Phase 5 Validation](docs/phase5_validation.md)。
 
+在另一台电脑上手动配置、迁移相机或逐项调参时，使用[cuVSLAM完整配置、迁移与调参手册](docs/cuvslam_configuration.md)。该手册包含输入数据契约、CameraInfo/baseline验证、TF和IMU配置、完整YAML、launch组织、地图服务、调参顺序、故障诊断和量化验收。
+
 ## 阶段1完整环境配置
 
 另一台电脑需要重新配置环境时，以[阶段1裸机环境完整配置手册](docs/installation.md)为准。该文档把操作拆分为独立步骤，包含每条命令的目的、预期结果、安全门和失败恢复，不要求先运行本仓库的安装脚本。

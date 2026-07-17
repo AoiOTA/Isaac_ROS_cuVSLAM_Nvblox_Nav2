@@ -133,3 +133,5 @@ Use the reproducible acceptance instead of manual driving:
 ```
 
 The suite uses isolated domain 45, starts and cleans only its own process groups, commands a repeated forward/reverse S-course for at least 122 simulation seconds, audits tracking state and TF ownership, compares direction and metric scale against ground truth, and exercises all three map interfaces. Reports are written under `data/reports/phase5`; detailed evidence is in `docs/phase5_validation.md`.
+
+For a clean-machine manual setup, camera migration, parameter-by-parameter tuning, map services, and troubleshooting, follow [`docs/cuvslam_configuration.md`](cuvslam_configuration.md).
