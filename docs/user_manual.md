@@ -112,7 +112,7 @@ data/maps/warehouse_v2_front/
 
 ## 6. 阶段11正式验收
 
-完整验收固定执行静态 40 次、动态 40 次、异构动态 50 次：
+完整验收按用户最终口径固定执行静态、动态和异构动态各10次：
 
 ```bash
 ./scripts/run_acceptance.sh \
@@ -120,7 +120,9 @@ data/maps/warehouse_v2_front/
   --record-bag
 ```
 
-中断后使用同一个 matrix ID 继续；脚本只复用身份、seed、目标和状态均匹配的通过轮：
+中断后使用同一个 matrix ID 继续；脚本只复用身份、seed和目标均匹配且
+`navigation.json/goals`证明已实际发送目标的完成轮。通过和失败轮都会复用，
+因此不能用断点续跑隐藏真实碰撞或导航失败：
 
 ```bash
 ./scripts/run_acceptance.sh \

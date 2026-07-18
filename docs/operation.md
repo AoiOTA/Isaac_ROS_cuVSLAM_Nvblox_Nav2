@@ -330,7 +330,7 @@ navigation. A trial is passed only by `tools/finalize_stage11_trial.py`, which
 joins the simulator, navigation, command, data-age, GPU, contact, theoretical
 path and optional MCAP evidence.
 
-The formal command reads the default 40/40/50 counts from
+The formal command reads the default 10/10/10 counts from
 `config/stage11.yaml`:
 
 ```bash
@@ -347,8 +347,10 @@ the exact identity set with:
   --resume --skip-build --record-bag
 ```
 
-The resume path accepts only a passed report whose class, seed, goal index and
-Stage number match the expected trial. The final machine report is
+The resume path accepts a completed passed **or failed** report only when its
+class, seed, goal index and Stage number match and `navigation.json/goals` proves
+that a goal was actually attempted. This preserves real failures in the formal
+denominator; only infrastructure-only empty runs are retried. The final machine report is
 `data/reports/phase11/acceptance/<matrix-id>/summary.json`; see
 [`docs/phase11_validation.md`](phase11_validation.md) for the complete metric
 definitions and [`docs/user_manual.md`](user_manual.md) for day-to-day use.

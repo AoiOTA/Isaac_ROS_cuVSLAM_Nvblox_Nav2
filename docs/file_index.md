@@ -15,7 +15,7 @@
 | `config/sensors.yaml` | 前向双目、深度、IMU和话题约定 | 分辨率、频率或传感器prim变化时 |
 | `config/scenarios.yaml` | 仿真出生点、动态actor和基础路线模板 | 新增可重复场景时 |
 | `config/stage10.yaml` | 阶段10故障硬化与20+20预验收口径 | 回归阶段10时 |
-| `config/stage11.yaml` | 六个正式目标、40/40/50、平滑/实时/时延门槛、异构障碍 | 阶段11范围或验收门槛变化时；修改后必须重跑矩阵 |
+| `config/stage11.yaml` | 六个正式目标、10/10/10、平滑/实时/时延门槛、异构障碍 | 阶段11范围或验收门槛变化时；修改后必须重跑受影响轮次 |
 | `config/fastdds.xml` | 常规本地Fast DDS配置 | DDS接口或网卡策略变化时 |
 
 ## Isaac Sim Standalone
@@ -96,7 +96,7 @@
 | `scripts/run_stage11_trial.sh` | 单次阶段11静态/动态/异构正式口径运行 |
 | `scripts/run_stage11_smoke.sh` | 三类长距离代表性smoke |
 | `scripts/run_stage11_tests.sh` | 构建、全部自动测试和代表性smoke |
-| `scripts/run_acceptance.sh` | 静态40/动态40/异构50正式矩阵，支持resume |
+| `scripts/run_acceptance.sh` | 静态/动态/异构各10次正式矩阵，支持resume |
 | `scripts/collect_diagnostics.sh` | 只读收集系统、GPU、ROS、TF、频率与配置 |
 | `scripts/lib/common.sh` | 所有脚本共用的根目录推导、source、检查与日志函数 |
 
@@ -110,7 +110,7 @@
 | `tools/build_stage11_reference_paths.py` | 按带padding不对称footprint执行8航向SE(2) A*并保存六个理论最优路径 |
 | `tools/generate_stage11_scenario.py` | 按class/seed/goal生成不可人工修改的单轮场景 |
 | `tools/finalize_stage11_trial.py` | 合并ROS、仿真、GPU、MCAP和理论路径，执行单轮全项判定 |
-| `tools/summarize_stage11_acceptance.py` | 验证130个身份集合并计算类别成功率、P95、长距离和资源指标 |
+| `tools/summarize_stage11_acceptance.py` | 验证30个身份集合并计算类别成功率、P95、长距离和资源指标 |
 | `tools/record_gpu_metrics.py` | 按秒采样RTX利用率、显存和功耗 |
 | `tools/write_fastdds_super_client.py` | 为晚加入的rosbag参与者生成本地discovery SUPER_CLIENT配置 |
 

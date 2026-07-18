@@ -9,10 +9,11 @@ ROOT = Path(__file__).resolve().parents[4]
 def test_stage11_formal_counts_and_scope() -> None:
     config = yaml.safe_load((ROOT / "config/stage11.yaml").read_text())
     assert config["acceptance"]["trial_counts"] == {
-        "static": 40,
-        "dynamic": 40,
-        "heterogeneous": 50,
+        "static": 10,
+        "dynamic": 10,
+        "heterogeneous": 10,
     }
+    assert config["runtime"]["front_image_rate_hz"] == 12
     assert config["scope"] == {
         "front_stereo_only": True,
         "lidar_enabled": False,
@@ -49,6 +50,9 @@ def test_stage11_automation_is_locked_resumable_and_records_latency() -> None:
     assert "stage11-matrix.lock" in acceptance
     assert "--resume" in acceptance
     assert '[[ -s "${existing_report}" ]] || continue' in acceptance
+    assert 'r.get("status") in ("passed","failed")' in acceptance
+    assert 'len(n["goals"])>0' in acceptance
+    assert "Resuming completed" in acceptance
     assert "HETEROGENEOUS_TRIALS" in acceptance
     assert "INFRASTRUCTURE_RETRIES" in acceptance
     assert 'len(r["goals"])>0' in acceptance

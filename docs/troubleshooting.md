@@ -223,11 +223,13 @@ Keep the existing run directories and use the same matrix ID:
   --matrix-id <same-id> --resume --skip-build --record-bag
 ```
 
-The resume code reuses only exact passed identities. A failed or partial run is
-preserved and a `-retryN` directory is created; do not overwrite its MCAP or
-manually copy another result. If a live matrix owns the lock, inspect `ps` and
-wait for it or stop that foreground command normally—never delete locks held by
-a live process.
+The resume code reuses every exact completed identity, including a failed run,
+when `navigation.json/goals` proves that Nav2 actually attempted the target.
+This prevents a real navigation or collision failure from being hidden by a
+later retry. A partial infrastructure-only run is preserved and retried in a
+`-retryN` directory; do not overwrite its MCAP or manually copy another result.
+If a live matrix owns the lock, inspect `ps` and wait for it or stop that
+foreground command normally—never delete locks held by a live process.
 
 An empty run that has a simulator report but no nonempty
 `navigation.json/goals` is classified as infrastructure-only and retried up to

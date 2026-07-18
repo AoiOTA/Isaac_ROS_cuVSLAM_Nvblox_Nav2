@@ -38,7 +38,7 @@ while (($#)); do
     --resume) RESUME="true"; shift ;;
     --infrastructure-retries) INFRASTRUCTURE_RETRIES="${2:?missing retry count}"; shift 2 ;;
     -h|--help)
-      echo "Usage: ./scripts/run_acceptance.sh [--matrix-id ID] [--resume] [--record-bag|--no-bag] [--static-trials 40 --dynamic-trials 40 --heterogeneous-trials 50]"
+      echo "Usage: ./scripts/run_acceptance.sh [--matrix-id ID] [--resume] [--record-bag|--no-bag] [--static-trials 10 --dynamic-trials 10 --heterogeneous-trials 10]"
       exit 0 ;;
     *) die "unknown argument: $1" ;;
   esac
@@ -102,10 +102,17 @@ for experiment_class in static dynamic heterogeneous; do
       shopt -u nullglob
       for existing_report in "${candidates[@]}"; do
         [[ -s "${existing_report}" ]] || continue
-        existing_valid="$(python3 -c 'import json,sys; r=json.load(open(sys.argv[1])); print(str(r.get("status")=="passed" and r.get("stage")==11 and r.get("seed")==int(sys.argv[2]) and r.get("experiment_class")==sys.argv[3] and r.get("goal_index")==int(sys.argv[4])).lower())' "${existing_report}" "${seed}" "${experiment_class}" "${goal_index}")"
-        if [[ "${existing_valid}" == "true" ]]; then
+        existing_status="$(python3 -c 'import json,sys,pathlib
+try:
+ r=json.load(open(sys.argv[1])); n=json.load(open(pathlib.Path(sys.argv[1]).parent/"navigation.json"))
+ valid=(r.get("status") in ("passed","failed") and r.get("stage")==11 and r.get("seed")==int(sys.argv[2]) and r.get("experiment_class")==sys.argv[3] and r.get("goal_index")==int(sys.argv[4]) and isinstance(n.get("goals"),list) and len(n["goals"])>0)
+ print(r.get("status") if valid else "invalid")
+except Exception:
+ print("invalid")' "${existing_report}" "${seed}" "${experiment_class}" "${goal_index}")"
+        if [[ "${existing_status}" == "passed" || "${existing_status}" == "failed" ]]; then
           reports+=("${existing_report}")
-          info "Resuming ${experiment_class} $((index + 1))/${count} from ${existing_report}"
+          [[ "${existing_status}" != "failed" ]] || failures=$((failures + 1))
+          info "Resuming completed ${experiment_class} $((index + 1))/${count} (${existing_status}) from ${existing_report}"
           reused="true"
           break
         fi
@@ -140,7 +147,7 @@ for experiment_class in static dynamic heterogeneous; do
       fi
       [[ -f "${run_dir}/result.json" ]] || die "trial produced no result: ${run_id}"
 
-      # A seed counts as one of the formal 40/40/50 trials only after the ROS
+      # A seed counts as one of the formal 10/10/10 trials only after the ROS
       # runner actually attempted its goal.  A process interruption between
       # simulator readiness and runner startup must be retried, not disguised
       # as a navigation failure that consumes the statistical failure budget.

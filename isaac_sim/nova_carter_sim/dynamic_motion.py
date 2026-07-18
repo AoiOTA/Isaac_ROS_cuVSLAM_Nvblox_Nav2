@@ -63,3 +63,29 @@ def move_towards(
         current[index] + scale * (target[index] - current[index])
         for index in range(3)
     )
+
+
+def clearance_preserving_step(
+    robot_position: tuple[float, float, float],
+    current_position: tuple[float, float, float],
+    targets: list[tuple[float, float, float]],
+    maximum_distance: float,
+) -> tuple[float, float, float]:
+    """Take a bounded retreat step that never reduces robot clearance.
+
+    A fixed refuge can lie on the opposite side of the robot after visual-map
+    and simulator-world frames are aligned. Moving blindly toward that refuge
+    would make a kinematic actor ram a correctly stopped robot. Keeping the
+    current position as a candidate makes the returned center distance
+    monotonically non-decreasing, while route endpoints provide two escape
+    directions if the direct refuge segment is temporarily unsafe.
+    """
+
+    if not targets:
+        raise ValueError("at least one clearance target is required")
+    candidates = [current_position]
+    candidates.extend(
+        move_towards(current_position, target, maximum_distance)
+        for target in targets
+    )
+    return candidates[farthest_candidate_index(robot_position, candidates)]

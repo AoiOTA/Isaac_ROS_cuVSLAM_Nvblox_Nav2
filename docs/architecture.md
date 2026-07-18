@@ -165,10 +165,14 @@ ground truth remains metrics-only.
 Kinematic obstacle actors retain collision and perception geometry while
 yielding. Ordinary actors retreat along their configured trajectory in the
 direction that increases robot clearance, then resume after release hysteresis.
-The crossing box moves once to a separately validated free-space refuge and
-parks there for the rest of the trial. This avoids both an actor ramming a
-correctly stopped robot and the old stationary-obstacle deadlock. All motion,
-yield events, final positions and PhysX contacts remain acceptance evidence.
+For a latched refuge, every bounded motion step chooses among both route
+endpoints and the refuge while retaining the current position as a candidate;
+the actor is therefore never commanded to reduce its current center clearance
+from the robot. This is necessary because the visual map can be rotated from
+the USD world and a fixed world-frame refuge may temporarily lie beyond the
+robot. It avoids both an actor ramming a correctly stopped robot and the old
+stationary-obstacle deadlock. All motion, yield events, final positions and
+PhysX contacts remain acceptance evidence.
 
 Test-only SetBool services can suppress depth or combined-map health refreshes
 when explicitly enabled by `phase10.launch.py`. Normal Phase 9 launch behavior
@@ -209,7 +213,7 @@ ground-truth metrics-only trajectory -------------------------┤
 ROS navigation/data age/latency/smoothness -------------------┼-> trial finalizer
 PhysX contacts + actor motion + simulator graph identity ------┤
 GPU/RTF + optional compact MCAP -------------------------------┘
-                                                               -> 40/40/50 summary
+                                                               -> 10/10/10 summary
 ```
 
 Each trial owns its DDS server, simulator, ROS stack, recorder, sampler and run

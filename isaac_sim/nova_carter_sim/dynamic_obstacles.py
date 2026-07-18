@@ -9,8 +9,8 @@ from omni.physx import get_physx_simulation_interface
 from pxr import Gf, PhysicsSchemaTools, PhysxSchema, Sdf, Usd, UsdGeom, UsdPhysics
 
 from .dynamic_motion import (
+    clearance_preserving_step,
     farthest_candidate_index,
-    move_towards,
     planar_distance,
     should_yield_to_robot,
 )
@@ -268,12 +268,16 @@ class DynamicObstacleManager:
                     # configured route, choosing the direction that increases
                     # robot clearance, while retaining the physical collider.
                     if item.yield_latched and item.yield_refuge is not None:
-                        # A dedicated refuge avoids trading one blocked route
-                        # for another. Once the actor yields, it parks there
-                        # for the remainder of this deterministic trial.
-                        position = move_towards(
+                        # The visual map need not be axis-aligned with the USD
+                        # world. Consider both route endpoints as well as the
+                        # configured refuge and take only a bounded step that
+                        # does not reduce current robot clearance. This keeps
+                        # the collider while preventing its retreat trajectory
+                        # from sweeping through the robot.
+                        position = clearance_preserving_step(
+                            robot_position,
                             item.last_position,
-                            item.yield_refuge,
+                            [item.start, item.end, item.yield_refuge],
                             item.yield_speed_mps * dt,
                         )
                     else:
