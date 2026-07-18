@@ -8,7 +8,7 @@ source "${SCRIPT_DIR}/lib/common.sh"
 load_ros
 [[ -z "${REQUESTED_ROS_DOMAIN_ID}" ]] || export ROS_DOMAIN_ID="${REQUESTED_ROS_DOMAIN_ID}"
 
-OUTPUT_DIR="${1:-${PROJECT_ROOT}/data/maps/warehouse_v1/nvblox}"
-STEM="${2:-warehouse}"
-exec ros2 run nova_carter_experiments nvblox_map_saver --ros-args \
+OUTPUT_DIR="${1:-${PROJECT_ROOT}/data/maps/kujiale_jackal_8cam/nvblox}"
+STEM="${2:-kujiale}"
+exec ros2 run jackal_experiments nvblox_map_saver --ros-args \
   -p output_dir:="$(realpath -m "${OUTPUT_DIR}")" -p stem:="${STEM}"

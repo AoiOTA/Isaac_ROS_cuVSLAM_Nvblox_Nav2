@@ -8,14 +8,14 @@ load_ros
 
 BAG="${1:?usage: create_vgl_map.sh BAG [MAP_DIR] [--topic-config FILE]}"
 shift
-MAP_DIR="${PROJECT_ROOT}/data/maps/warehouse_v1"
+MAP_DIR="${PROJECT_ROOT}/data/maps/kujiale_jackal_8cam"
 if (($#)) && [[ "$1" != --* ]]; then
   MAP_DIR="$1"
   shift
 fi
 [[ -d "${BAG}" ]] || die "MCAP rosbag directory not found: ${BAG}"
-TOPIC_CONFIG="${PROJECT_ROOT}/ros2_ws/install/nova_carter_bringup/share/nova_carter_bringup/config/mapping_topics.yaml"
-MAX_SYNC_US=100
+TOPIC_CONFIG="${PROJECT_ROOT}/ros2_ws/install/jackal_bringup/share/jackal_bringup/config/mapping_topics_8cam.yaml"
+MAX_SYNC_US=40000
 while (($#)); do
   case "$1" in
     --topic-config) TOPIC_CONFIG="${2:?missing topic config}"; shift 2 ;;
@@ -28,11 +28,18 @@ while (($#)); do
 done
 require_file "${TOPIC_CONFIG}"
 [[ "${MAX_SYNC_US}" =~ ^[1-9][0-9]*$ ]] || die "--max-sync-us must be a positive integer"
-WORK="${MAP_DIR}/offline"
+WORK="$(mktemp -d "${PROJECT_ROOT}/data/bags/.vgl-work.XXXXXX")"
 MODEL_DIR="${PROJECT_ROOT}/data/models/vgl"
-rm -rf "${WORK}"
 mkdir -p "${WORK}" "${MAP_DIR}/config"
 export ISAAC_ROS_WS="${PROJECT_ROOT}/ros2_ws"
+
+cleanup() {
+  case "${WORK}" in
+    "${PROJECT_ROOT}/data/bags/.vgl-work."*) rm -rf -- "${WORK}" ;;
+    *) die "refusing to remove unexpected temporary directory: ${WORK}" ;;
+  esac
+}
+trap cleanup EXIT INT TERM
 
 info "Creating aligned cuVSLAM and cuVGL maps from ${BAG} using ${TOPIC_CONFIG}"
 mkdir -p "${WORK}/edex"
@@ -72,8 +79,9 @@ ros2 run isaac_ros_visual_mapping create_cuvgl_map.py \
 rm -rf "${MAP_DIR}/cuvslam" "${MAP_DIR}/cuvgl"
 cp -a "${WORK}/cuvslam_map" "${MAP_DIR}/cuvslam"
 cp -a "${WORK}/cuvgl_map" "${MAP_DIR}/cuvgl"
-cp -a "$(ros2 pkg prefix isaac_ros_visual_mapping --share)/configs/isaac/." \
-  "${MAP_DIR}/config/"
+python3 "${PROJECT_ROOT}/tools/prepare_vgl_runtime_config.py" \
+  "$(ros2 pkg prefix isaac_ros_visual_mapping --share)/configs/isaac" \
+  "${MAP_DIR}/config" --max-sync-us "${MAX_SYNC_US}"
 
 [[ -n "$(find "${MAP_DIR}/cuvslam" -type f -size +0c -print -quit)" ]] || die "empty cuVSLAM map"
 [[ -n "$(find "${MAP_DIR}/cuvgl/keyframes" -type f -size +0c -print -quit)" ]] || die "empty cuVGL keyframes"

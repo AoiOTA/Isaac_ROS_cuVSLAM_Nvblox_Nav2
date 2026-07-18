@@ -10,7 +10,7 @@ if [[ -n "${CALLER_ROS_DOMAIN_ID}" ]]; then
   export ROS_DOMAIN_ID="${CALLER_ROS_DOMAIN_ID}"
 fi
 
-MAP_NAME="warehouse_v1"
+MAP_NAME="kujiale_jackal_8cam"
 RVIZ="true"
 while (($#)); do
   case "$1" in
@@ -26,19 +26,19 @@ done
 
 MAP_DIR="${PROJECT_ROOT}/data/maps/${MAP_NAME}"
 MODEL_DIR="${PROJECT_ROOT}/data/models/vgl"
-for path in \
-  "${MAP_DIR}/occupancy/map.yaml" "${MAP_DIR}/cuvslam/data.mdb" \
-  "${MAP_DIR}/cuvgl/bow_index.pb"; do
-  require_file "${path}"
-done
-[[ -d "${MAP_DIR}/config" ]] || die "cuVGL config directory missing: ${MAP_DIR}/config"
+python3 "${PROJECT_ROOT}/tools/check_map_manifest.py" "${MAP_DIR}"
 [[ -n "$(find "${MODEL_DIR}" -type f \( -name '*.engine' -o -name '*.plan' \) -size +0c -print -quit)" ]] || \
   die "cuVGL TensorRT engines missing: ${MODEL_DIR}"
 
-exec ros2 launch nova_carter_bringup phase8.launch.py \
+BRINGUP_SHARE="$(ros2 pkg prefix jackal_bringup --share)"
+
+exec ros2 launch jackal_bringup phase8.launch.py \
   map:="${MAP_DIR}/occupancy/map.yaml" \
   vgl_map_dir:="${MAP_DIR}/cuvgl" \
   vgl_config_dir:="${MAP_DIR}/config" \
   vgl_model_dir:="${MODEL_DIR}" \
   cuvslam_map_dir:="${MAP_DIR}/cuvslam" \
+  camera_profile:=navigation_6cam \
+  visual_slam_params:="${BRINGUP_SHARE}/config/visual_slam_navigation_6cam.yaml" \
+  vgl_params:="${BRINGUP_SHARE}/config/vgl_navigation_6cam.yaml" \
   rviz:="${RVIZ}"

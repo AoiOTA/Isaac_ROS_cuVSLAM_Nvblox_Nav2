@@ -1,0 +1,11 @@
+# Portable runtime map binaries are versioned with Git LFS. Raw bags and
+# offline intermediates remain ignored and are never part of the map set.
+data/maps/kujiale_jackal_8cam/**/*.mdb filter=lfs diff=lfs merge=lfs -text
+data/maps/kujiale_jackal_8cam/**/*.db filter=lfs diff=lfs merge=lfs -text
+data/maps/kujiale_jackal_8cam/**/*.pb filter=lfs diff=lfs merge=lfs -text
+data/maps/kujiale_jackal_8cam/**/*.bin filter=lfs diff=lfs merge=lfs -text
+data/maps/kujiale_jackal_8cam/**/*.jpg filter=lfs diff=lfs merge=lfs -text
+data/maps/kujiale_jackal_8cam/**/*.png filter=lfs diff=lfs merge=lfs -text
+data/maps/kujiale_jackal_8cam/**/*.nvblx filter=lfs diff=lfs merge=lfs -text
+data/maps/kujiale_jackal_8cam/**/*.ply filter=lfs diff=lfs merge=lfs -text
+data/maps/kujiale_jackal_8cam/**/*.pgm filter=lfs diff=lfs merge=lfs -text
