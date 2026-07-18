@@ -39,7 +39,7 @@ success_requires:
 # These Map-frame candidates are intentionally checked against the generated
 # occupancy map before any batch starts.  The validator requires each goal to
 # be known-free, footprint-clear, connected to spawn, and to require a detour
-# around occupied cells.  Adjust only after the real 8-camera map is generated.
+# around occupied cells. Adjust only after the real four-Hawk/eight-stream map is generated.
 goals:
   - name: north_room
     pose: [-2.10, 2.85, 1.570796327]
@@ -65,6 +65,8 @@ performance:
     stability_window_s: 5.0
     stable_windows_required: 3
     maximum_mean_change_ratio: 0.03
+    # Applied to consecutive wall-time window means. Periodic Hawk capture
+    # spikes remain visible as per-window frame-time CV in the report.
     maximum_coefficient_of_variation: 0.10
     minimum_sample_s: 30.0
     maximum_sample_s: 180.0

@@ -168,6 +168,7 @@ class AdaptiveOfficialBenchmark:
                     "sample_count": len(new_samples),
                     "mean_ms": 0.0,
                     "coefficient_of_variation": math.inf,
+                    "window_mean_coefficient_of_variation": math.inf,
                     "mean_change_ratio": math.inf,
                     "stable": False,
                 }
@@ -181,8 +182,25 @@ class AdaptiveOfficialBenchmark:
             if self._previous_window_mean not in (None, 0.0)
             else math.inf
         )
+        # A periodic sensor workload intentionally has high frame-to-frame
+        # variance: 10 Hz Hawk captures are heavier than the intervening
+        # physics-only updates.  Stability is therefore a property of the
+        # consecutive wall-time window means, not of individual frames inside
+        # one window.  Keep the raw frame CV above for diagnostics.
+        previous_means = [
+            float(window["mean_ms"])
+            for window in destination
+            if int(window.get("sample_count", 0)) >= 2
+            and math.isfinite(float(window.get("mean_ms", math.inf)))
+        ]
+        recent_means = (previous_means + [mean])[-max(2, self.config.stable_windows_required) :]
+        window_mean_cv = (
+            statistics.stdev(recent_means) / statistics.fmean(recent_means)
+            if len(recent_means) >= 2 and statistics.fmean(recent_means) > 0.0
+            else math.inf
+        )
         stable = (
-            coefficient <= self.config.maximum_coefficient_of_variation
+            window_mean_cv <= self.config.maximum_coefficient_of_variation
             and change <= self.config.maximum_mean_change_ratio
         )
         self._stable_streak = self._stable_streak + 1 if stable else 0
@@ -192,6 +210,7 @@ class AdaptiveOfficialBenchmark:
                 "sample_count": len(new_samples),
                 "mean_ms": mean,
                 "coefficient_of_variation": coefficient,
+                "window_mean_coefficient_of_variation": window_mean_cv,
                 "mean_change_ratio": change,
                 "stable": stable,
                 "stable_streak": self._stable_streak,
