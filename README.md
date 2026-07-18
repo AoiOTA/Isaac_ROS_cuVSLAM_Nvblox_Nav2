@@ -2,7 +2,9 @@
 
 本分支面向 Ubuntu 24.04、ROS 2 Jazzy、Isaac Sim 6.0.1、Isaac ROS 4.5 和 RTX 4090，将仿真环境替换为酷家乐房间、机器人替换为 Clearpath Jackal，并安装四组 Hawk 双目。
 
-当前实现状态：代码构建、离线契约测试以及 `mapping_8cam` / `navigation_6cam` 的 Isaac Sim headless 烟测已通过。实际地图尚未生成，因此正式导航、至少 20 次静态避障统计和本机完整性能观测仍需在手动建图完成后执行；仓库不会预填或伪造这些结果。
+当前实现状态：正式四 Hawk 地图已经由本机实际闭环运行生成并通过 manifest、轨迹几何、
+occupancy 路线和零物理碰撞门禁。手动 GUI/RViz 建图与 cuVGL 自动定位的 RViz 目标流程
+已经配置；至少 20 次静态避障统计仍需继续执行，仓库不会预填或伪造结果。
 
 ## 固定范围
 
@@ -70,7 +72,7 @@ git lfs install
 八路 MCAP、cuVSLAM/cuVGL 和 front Hawk 深度 nvblox 全流程生成。需要人工覆盖时使用：
 
 ```bash
-./scripts/run_mapping.sh --map kujiale_jackal_8cam --interactive --gui
+./scripts/run_manual_mapping.sh --map kujiale_manual_20260719
 ```
 
 人工模式使用 `W/S` 前后、`A/D` 转向、`Space` 急停；松键超过 0.18 秒会自动停车，按 `Q` 停车并保存。自动模式只发非负线速度，并检查闭环完成度、cuVSLAM 跟踪、横向偏差和 PhysX 接触。
@@ -96,7 +98,8 @@ python3 tools/validate_acceptance_routes.py \
   data/maps/kujiale_jackal_8cam --config config/acceptance.yaml
 ```
 
-`config/acceptance.yaml` 中的三个目标目前是候选值。路线验证器会要求出生点与目标均为已知自由空间、满足 Jackal 膨胀半径、连通，并且直线被障碍阻挡以确保确实发生绕行。若验证失败，应根据实际 occupancy map 修正目标后再做实验。
+`config/acceptance.yaml` 中的三个目标已通过正式 occupancy 的已知自由空间、Jackal
+膨胀、连通和非直线路线验证。若另建手工地图，正式统计前仍需对新地图重新验证。
 
 ## 2. 导航
 
@@ -106,16 +109,26 @@ python3 tools/validate_acceptance_routes.py \
 ./scripts/run_all.sh --map kujiale_jackal_8cam --headless --no-rviz
 ```
 
-带 GUI 与 RViz：
+带 GUI、RViz，并由脚本自动发布验收目标：
 
 ```bash
 ./scripts/run_all.sh --map kujiale_jackal_8cam --gui --rviz
 ```
 
-如果仿真已由其他终端启动，只运行 ROS 侧：
+人工在 RViz 使用 `2D Goal Pose`：
 
 ```bash
-./scripts/run_navigation.sh --map kujiale_jackal_8cam --rviz
+./scripts/run_manual_navigation.sh --map kujiale_jackal_8cam
+```
+
+cuVGL 会自动确定当前出生位姿并建立 `map→odom`，无需使用 `2D Pose Estimate`。完整的
+建图、保存、定位就绪和目标发布步骤见
+[手动键盘建图与 RViz 导航教程](docs/manual_mapping_navigation.md)。
+
+手动流程运行时，可从另一个终端做不会发布目标的只读检查：
+
+```bash
+./scripts/check_manual_navigation.sh
 ```
 
 导航入口会先验证地图 manifest，然后强制选择 `navigation_6cam`。后向相机不仅不订阅，也不会创建渲染资源。
@@ -178,6 +191,7 @@ colcon test-result --verbose
 ```
 
 - [用户操作手册](docs/user_manual.md)
+- [手动键盘建图与 RViz 导航教程](docs/manual_mapping_navigation.md)
 - [架构与 TF 所有权](docs/architecture.md)
 - [建图与地图产物](docs/mapping.md)
 - [RTX 4090 性能优化与实测](docs/performance_optimization.md)

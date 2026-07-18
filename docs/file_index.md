@@ -44,7 +44,7 @@
 | 文件 | 作用 |
 |---|---|
 | `config/visual_slam_mapping_8cam.yaml` | 8/8 图像参与建图 |
-| `config/visual_slam_navigation_6cam.yaml` | 保留 8 相机 calibration，从 6 个运行时 publisher 跟踪 |
+| `config/visual_slam_navigation_6cam.yaml` | 只声明 front/left/right 的 6 个运行时输入，避免等待已关闭后向相机 |
 | `config/vgl_mapping_8cam.yaml` | 8 相机 cuVGL 配置 |
 | `config/vgl_navigation_6cam.yaml` | front/left/right 共 6 相机 cuVGL 配置 |
 | `config/mapping_topics_8cam.yaml` | 离线建图固定话题顺序 |
@@ -52,6 +52,8 @@
 | `config/nav2.yaml` | forward-only Smac/MPPI、costmaps、Collision Monitor 与 smoother |
 | `behavior_trees/navigate_forward_only.xml` | 无倒车恢复的 Nav2 行为树 |
 | `launch/phase8.launch.py` | 强制 `navigation_6cam` 的完整导航入口 |
+| `rviz/mapping.rviz` | 手动建图的轨迹、机器人、TF、mesh/ESDF 视图 |
+| `rviz/navigation.rviz` | map/costmap/路径/安全区与 `/goal_pose` 工具 |
 
 ## 用户脚本
 
@@ -60,9 +62,12 @@
 | `scripts/build.sh` | 环境、资产、语法与 ROS build 检查 |
 | `scripts/run_sim.sh` | 单独启动 GUI/headless simulator，可选 camera profile |
 | `scripts/run_mapping.sh` | 自动闭环或人工四 Hawk / 8 路图像建图，完整成功后清理 raw/intermediate |
+| `scripts/run_manual_mapping.sh` | Isaac Sim GUI + 建图 RViz + 键盘控制的一键入口 |
 | `scripts/create_vgl_map.sh` | 用在线 cuVSLAM 优化 TUM 从临时 MCAP 生成同坐标系 cuVGL map |
 | `scripts/run_navigation.sh` | 检查 manifest 并启动 6 路 ROS 导航 |
 | `scripts/run_all.sh` | 启动 simulator + ROS 导航 + 自动路线 runner |
+| `scripts/run_manual_navigation.sh` | GUI + RViz + cuVGL 自动定位 + 2D Goal Pose 一键入口 |
+| `scripts/check_manual_navigation.sh` | 不发目标的 late-join DDS/定位/Nav2/相机只读检查 |
 | `scripts/run_static_trial.sh` | 一次静态有效/无效实验与最终分类 |
 | `scripts/run_static_acceptance.sh` | 至少 20 次、95% 的静态批次 |
 | `scripts/run_performance_benchmark.sh` | 真实 8 路/6 路负载的自适应性能观测 |

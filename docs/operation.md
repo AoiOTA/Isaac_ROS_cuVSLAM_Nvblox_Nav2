@@ -19,10 +19,10 @@ cd /home/lyb/Workspace/Isaac_ROS_cuVSLAM_Nvblox_Nav2
 ## 八路手动建图
 
 ```bash
-./scripts/run_mapping.sh --map kujiale_jackal_8cam --interactive
-python3 tools/check_map_manifest.py data/maps/kujiale_jackal_8cam
+./scripts/run_manual_mapping.sh --map kujiale_manual_20260719
+python3 tools/check_map_manifest.py data/maps/kujiale_manual_20260719
 python3 tools/validate_acceptance_routes.py \
-  data/maps/kujiale_jackal_8cam --config config/acceptance.yaml
+  data/maps/kujiale_manual_20260719 --config config/acceptance.yaml
 ```
 
 ## 六路导航
@@ -30,16 +30,14 @@ python3 tools/validate_acceptance_routes.py \
 ```bash
 ./scripts/run_all.sh --map kujiale_jackal_8cam --headless --no-rviz
 ./scripts/run_all.sh --map kujiale_jackal_8cam --gui --rviz
+./scripts/run_manual_navigation.sh --map kujiale_jackal_8cam
 ```
 
-分离启动：
+推荐始终使用上面的手动入口；它会统一管理 GUI、RViz、自动定位门禁和本地 DDS discovery
+server。运行期间可在另一个终端做只读检查：
 
 ```bash
-# terminal A
-./scripts/run_sim.sh --headless --camera-profile navigation_6cam
-
-# terminal B
-./scripts/run_navigation.sh --map kujiale_jackal_8cam --rviz
+./scripts/check_manual_navigation.sh
 ```
 
 ## 静态避障统计

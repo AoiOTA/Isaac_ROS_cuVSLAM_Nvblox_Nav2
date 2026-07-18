@@ -40,17 +40,19 @@ Jackal LiDAR 明确关闭，模拟器不会创建 LiDAR prim、render product �
 人工建图仍可用：
 
 ```bash
-./scripts/run_mapping.sh --map kujiale_jackal_8cam --interactive --gui
+./scripts/run_manual_mapping.sh --map kujiale_manual_20260719
 ```
 
 该脚本的共同硬保护包括：
 
 - 必须显式选择 `--interactive` 或 `--auto`，不能静默选择驾驶方式；
-- 人工模式必须有 TTY 且使用 GUI；
+- 人工模式必须有 TTY 且使用 GUI，默认同时启动建图 RViz；
 - 目标地图目录非空时拒绝覆盖；
 - 同一时刻只允许一个 mapping workflow。
 
 GUI 出现后用 `W/S/A/D` 驾驶，`Space` 停车，`Q` 保存。建议缓慢遍历所有目标区域、门洞与走廊，并形成闭环。
+完整操作与 cuVGL 自动出生点定位见
+[手动键盘建图、保存与 RViz 导航全流程](manual_mapping_navigation.md)。
 
 酷家乐若干开门洞底边包含与地面共面的三角碰撞面。PhysX 的 contact offset 会在轮胎
 尚有正间隙时提前发出 report；只有“所有 contact 都是非负间隙且冲量范数不超过

@@ -34,7 +34,7 @@ cuVSLAM/cuVGL、nvblox、mesh 和 occupancy 都来自本轮实时运行。
 需要人工控制和 GUI 时运行：
 
 ```bash
-./scripts/run_mapping.sh --map kujiale_jackal_8cam --interactive --gui
+./scripts/run_manual_mapping.sh --map kujiale_manual_20260719
 ```
 
 键位：
@@ -53,6 +53,9 @@ cuVSLAM/cuVGL、nvblox、mesh 和 occupancy 都来自本轮实时运行。
 - 低速覆盖所有房间、门洞和走廊，转弯时给四组 Hawk 留出重叠视野。
 - 回到已走过区域形成闭环后再按 `Q`。
 - 不要直接关闭终端或强杀进程；失败时 raw bag 会保留在忽略目录，便于诊断。
+
+人工模式会同时打开 Isaac Sim 第三人称跟随 GUI 和建图 RViz。详细的保存阶段、窗口说明
+与故障处理见[手动键盘建图、保存与 RViz 导航全流程](manual_mapping_navigation.md)。
 
 自动和人工模式都会在晋升地图前检查 PhysX 接触。与地面共面的门洞底面只有在低位、
 近竖直法向且接触者是轮子/caster 时才归类为支撑；其他任何机器人非地面接触仍会使
@@ -81,7 +84,7 @@ python3 tools/validate_acceptance_routes.py \
 若路线验证失败，根据 occupancy map 修改 `config/acceptance.yaml` 的 `goals[].pose`。每个目标必须：
 
 - 在地图范围内且属于已知自由空间；
-- 按 `0.34 m` 碰撞半径膨胀后仍安全；
+- 按 `0.28 m` 保守圆形代理膨胀后仍安全；
 - 与 map 原点 `[0, 0]` 连通；
 - 原点到目标的直线穿过障碍，以保证测试包含实际绕行。
 
@@ -101,16 +104,20 @@ python3 tools/validate_acceptance_routes.py \
 ./scripts/run_all.sh --map kujiale_jackal_8cam --gui --rviz
 ```
 
-也可以分两个终端运行。终端 A：
+需要自己在 RViz 发布目标时使用手动入口：
 
 ```bash
-./scripts/run_sim.sh --headless --camera-profile navigation_6cam
+./scripts/run_manual_navigation.sh --map kujiale_jackal_8cam
 ```
 
-终端 B：
+终端出现 `MANUAL_NAVIGATION_READY` 后选择 RViz `2D Goal Pose`。cuVGL 自动把当前
+视觉位置锚定到保存地图，不使用 `2D Pose Estimate`，也不需要手工标定出生点。
+
+推荐使用手动入口统一管理 GUI、RViz、自动定位门禁和 DDS discovery server。需要从第二个
+终端只读检查当前链路时运行：
 
 ```bash
-./scripts/run_navigation.sh --map kujiale_jackal_8cam --rviz
+./scripts/check_manual_navigation.sh
 ```
 
 此时可在 RViz 用 `2D Goal Pose` 发目标。导航始终使用 front、left、right 三组 Hawk 的 6 路图像；back Hawk 不创建 render product。nvblox 仍只接 front 原生深度。
