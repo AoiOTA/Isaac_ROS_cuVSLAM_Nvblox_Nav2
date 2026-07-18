@@ -1,6 +1,6 @@
 # RTX 4090 性能优化与实测
 
-本页记录 2026-07-18 在本机 RTX 4090、Isaac Sim 6.0.1 上的 A/B 结果。`mapping_8cam`
+本页记录 2026-07-18 至 2026-07-19 在本机 RTX 4090、Isaac Sim 6.0.1 上的 A/B 结果。`mapping_8cam`
 这个历史 profile 名称表示四组 Hawk 双目产生的八路图像流，不表示八台物理相机。所有 GUI
 对比均保持 1280×720 第三人称跟随视口，没有通过缩小预览窗口获得结果。
 
@@ -16,26 +16,38 @@
 - 物理与应用目标频率均为 60 Hz，避免原 120 Hz 配置在当前循环中重复计算 PhysX。
 - headless 模式设置 `disable_viewport_updates=True`，只跳过无人观看的编辑器视口；Hawk render products 不受影响。
 - GUI 和 headless 都使用 RTX Real-Time 2.0，retrace 设为 0.1，关闭 fractional cutout，DLSS 固定为 Performance。
-- RTX 4090 完整负载约占 10–10.5 GiB / 24 GiB，因此关闭 texture streaming，以显存余量换吞吐。
+- RTX 4090 整机 telemetry 中，建图与导航负载平均约占 10.5 GiB 和 12.8 GiB / 24 GiB，
+  因此关闭 texture streaming，以显存余量换吞吐。
 - 四组 Hawk 的八个 Camera prim 均为 10 Hz Multi-Tick；导航不创建 back Hawk 的两个 render products。
 - Jackal 自带 SICK LiDAR prim、可见支架和碰撞体在匿名 session layer 中关闭，也不创建 LiDAR publisher。
 - Linux CPU governor 使用 `performance`。性能报告会记录实际 governor，脚本不会擅自修改系统设置。
 
 ## GUI 完整工作负载结果
 
-工作负载包含四组 Hawk/八路图像、cuVSLAM、nvblox、ROS 2 发布、临时 MCAP、Jackal 实际运动和
-1280×720 第三人称跟随视口。采样按稳定后的墙钟时间进行，没有固定 600 帧条件。
+建图工作负载包含四组 Hawk/八路图像、cuVSLAM、nvblox、ROS 2 发布、临时 MCAP、Jackal
+实际运动和 1280×720 第三人称跟随视口；导航工作负载加载地图、cuVGL、cuVSLAM、nvblox
+和 Nav2，执行真实目标并只渲染 front/left/right 三组 Hawk。采样按稳定后的墙钟时间进行，
+没有固定 600 帧条件。
 
-| 观测 | Mean FPS | RTF | App mean ms | Physics mean ms | 说明 |
-|---|---:|---:|---:|---:|---|
-| 初始 GUI | 22.026 | 0.367 | 45.403 | 13.628 | legacy RTX，CPU governor 为 powersave |
-| RT2 调优、powersave | 22.769 | 0.379 | 43.918 | 13.678 | 八路完整、零 tracking error |
-| RT2 调优、performance 最佳窗口 | 23.697 | 0.395 | 42.200 | 13.970 | 20 秒稳定采样 |
-| 最终 RT2、performance | 22.732 | 0.379 | 43.992 | 13.186 | 30 秒采样，八路各 187 帧 |
+| 观测 | 路数 | Mean FPS | RTF | App mean ms | Physics mean ms | 说明 |
+|---|---:|---:|---:|---:|---:|---|
+| 初始 GUI | 8 | 22.026 | 0.367 | 45.403 | 13.628 | legacy RTX，CPU governor 为 powersave |
+| RT2 调优、powersave | 8 | 22.769 | 0.379 | 43.918 | 13.678 | 八路完整、零 tracking error |
+| RT2 调优、performance 最佳窗口 | 8 | 23.697 | 0.395 | 42.200 | 13.970 | 历史 20 秒稳定样本 |
+| 历史最终 mapping | 8 | 22.732 | 0.379 | 43.992 | 13.186 | 历史 30 秒样本，八路各 187 帧 |
+| **最终 `mapping_8cam`** | **8** | **22.462** | **0.374** | **44.524** | **13.322** | 35.014 秒稳定样本，临时 MCAP 八路均非零 |
+| **最终 `navigation_6cam`** | **6** | **24.290** | **0.405** | **41.170** | **14.127** | 30.002 秒稳定样本，真实 Nav2 目标运动 |
 
-最终结果没有出现 cuVSLAM PnP/active-track 错误、机器人碰撞或初末重叠。短窗口与 30 秒窗口之间的
-差异说明 RTX 周期性传感器负载存在自然波动，因此这里只报告实际范围，不设置虚假的固定 KPI。
-当前地图 manifest 尚未生成，`navigation_6cam` 被前置校验正确拦截，不能用伪造地图报告导航性能。
+最终建图样本的 App P95/P99 为 `66.110/71.370 ms`，Physics P95/P99 为
+`18.030/21.915 ms`；最终导航样本分别为 `61.791/66.095 ms` 和
+`18.051/22.020 ms`。导航 Physics 曾有一次 `348.885 ms` 最大值，因此不能只看均值；
+P95/P99 和 30 秒总体 RTF 没有被这个单点替代。建图临时 MCAP 共 7001 条消息，八路图像
+分别记录 221 或 222 帧；导航接受 1 个目标、失败 0 个，并在样本内实际运动 1.724 m。
+
+最终结果都满足 `mode=gui`、`preview_resolution_reduced=false`、1280×720、lidar 关闭；
+导航还满足后 Hawk render product 未创建。短窗口和不同批次间的差异说明 RTX 周期性
+传感器负载存在自然波动，因此这里只报告实际观测，不设置虚假的固定 KPI。地图 manifest
+和正式运行记录均已生成，详见 [酷家乐 Jackal 验证记录](kujiale_jackal_validation.md)。
 
 ## 已验证但未采用
 
@@ -49,18 +61,12 @@
 
 ## 复测
 
-确认 governor 后运行完整 GUI 映射观测：
+确认 governor 后运行完整 GUI 双 profile 观测：
 
 ```bash
 cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
-./scripts/run_performance_benchmark.sh --profile mapping_8cam --gui
-```
-
-实际地图生成后再测导航：
-
-```bash
 ./scripts/run_performance_benchmark.sh \
-  --profile navigation_6cam --map kujiale_jackal_8cam --gui
+  --profile all --map kujiale_jackal_8cam --gui
 ```
 
 报告中的 `rendering.preview_resolution_reduced` 必须为 `false`，并同时检查八/六路消息计数、tracking

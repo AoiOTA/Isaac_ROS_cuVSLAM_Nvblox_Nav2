@@ -160,20 +160,27 @@ valid_trial_count >= 20
 
 20 次有效实验时，19/20 通过，18/20 不通过。基础设施无效尝试仍列在汇总中，但不进入有效分母。
 
+2026-07-19 本机正式批次结果为 20 个有效实验、19 次无碰撞通行、0 次物理接触、
+0 次基础设施无效尝试，即 `19/20 = 95.00%`。第 20 次因局部控制停顿超时未到达，
+但定位、仿真和碰撞检查均健康。逐轮分布见
+[酷家乐 Jackal 验证记录](kujiale_jackal_validation.md)。
+
 ## 6. 性能实测
 
 ```bash
 ./scripts/run_performance_benchmark.sh \
-  --profile all --map kujiale_jackal_8cam --headless
+  --profile all --map kujiale_jackal_8cam --gui
 ```
 
 也可单独运行：
 
 ```bash
-./scripts/run_performance_benchmark.sh --profile mapping_8cam --headless
+./scripts/run_performance_benchmark.sh --profile mapping_8cam --gui
 ./scripts/run_performance_benchmark.sh \
-  --profile navigation_6cam --map kujiale_jackal_8cam --headless
+  --profile navigation_6cam --map kujiale_jackal_8cam --gui
 ```
+
+无人观察时可以把 `--gui` 换成 `--headless`，但两种模式是不同工况，结果不可混写。
 
 `mapping_8cam` 会启动实际 8 路 cuVSLAM + nvblox 负载；`navigation_6cam` 会加载地图、cuVGL、Nav2 和 nvblox。性能预热只在工作负载全部 ready 后开始。
 
@@ -188,10 +195,18 @@ valid_trial_count >= 20
 - GPU utilization、memory、power、temperature
 - `host_context.cpu_governors` 和 NVIDIA driver
 
-保持 1280×720 GUI 预览、四组 Hawk/八路图像和实际 ROS 工作负载的本机最终观测为
-22.732 FPS / 0.379 RTF，短窗口最好值为 23.697 / 0.395。它们是本次 RTX 4090 的实际范围，
-不是验收阈值。优化配置、官方依据和被回退的实验见
-[performance_optimization.md](performance_optimization.md)。
+保持 1280×720 GUI 第三人称跟随视口、不缩预览并启用实际 ROS 工作负载时，本机最终
+自适应稳定样本为：
+
+| Profile | Mean FPS | RTF | App mean ms | Physics mean ms |
+|---|---:|---:|---:|---:|
+| `mapping_8cam`（8 路） | 22.462 | 0.374 | 44.524 | 13.322 |
+| `navigation_6cam`（6 路） | 24.290 | 0.405 | 41.170 | 14.127 |
+
+它们是 RTX 4090 本机观测值，不是验收阈值。两者都关闭 lidar，导航不创建后 Hawk
+render product。优化配置、官方依据和被回退的实验见
+[performance_optimization.md](performance_optimization.md)，最终运行证据见
+[kujiale_jackal_validation.md](kujiale_jackal_validation.md)。
 
 ## 7. 结果与停止
 

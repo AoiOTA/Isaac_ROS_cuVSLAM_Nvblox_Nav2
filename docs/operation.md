@@ -54,8 +54,11 @@ server。运行期间可在另一个终端做只读检查：
 
 ```bash
 ./scripts/run_performance_benchmark.sh \
-  --profile all --map kujiale_jackal_8cam --headless
+  --profile all --map kujiale_jackal_8cam --gui
 ```
+
+这会保留 1280×720 第三人称跟随视口，但不会在 GUI 中预览八路相机。无人观察时可把
+`--gui` 换成 `--headless`；报告会记录模式，不能把两种工况合并比较。
 
 性能流程不是空闲栈采样。`mapping_8cam` 在安全原地交替旋转时运行完整
 cuVSLAM、nvblox，并把与正式建图相同的 8 路图像、CameraInfo、IMU、TF 和
@@ -64,6 +67,10 @@ clock 写入临时 MCAP；采样完成后验证 8 路消息均非零并删除 MC
 真实 Nav2 目标，只有同时观察到 `/cmd_vel_sim` 非零和 ground truth 物理位姿变化
 后才开始自适应预热。两种负载的活动证据分别写入各 profile 目录的
 `workload.json`。
+
+2026-07-19 本机 GUI 最终样本：建图 8 路为 `22.462 FPS / 0.374 RTF`，导航
+6 路为 `24.290 FPS / 0.405 RTF`。完整统计与静态 20 轮验收见
+[酷家乐 Jackal 验证记录](kujiale_jackal_validation.md)。
 
 ## 自动测试
 

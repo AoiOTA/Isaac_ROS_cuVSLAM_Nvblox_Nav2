@@ -76,7 +76,8 @@
 `jackal_experiments/mapping_coverage_driver.py`；在线数据库与闭环/平面质量门禁为
 `jackal_experiments/visual_map_saver.py`，拓扑/碰撞门禁为 `tools/validate_mapping_run.py`。
 
-性能配置依据、A/B 数据和回退实验见 `docs/performance_optimization.md`。
+性能配置依据、A/B 数据和回退实验见 `docs/performance_optimization.md`；2026-07-19 的
+静态 20 轮与最终 GUI 8/6 路性能证据摘要见 `docs/kujiale_jackal_validation.md`。
 
 ## 地图、验收与性能工具
 

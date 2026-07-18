@@ -117,7 +117,7 @@
   },
   "validation": {
     "mapping_artifacts_complete": true,
-    "navigation_6cam_smoke_passed": false,
-    "static_avoidance_acceptance_passed": false
+    "navigation_6cam_smoke_passed": true,
+    "static_avoidance_acceptance_passed": true
   }
 }

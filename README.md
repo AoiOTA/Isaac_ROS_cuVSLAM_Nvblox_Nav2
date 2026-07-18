@@ -4,7 +4,8 @@
 
 当前实现状态：正式四 Hawk 地图已经由本机实际闭环运行生成并通过 manifest、轨迹几何、
 occupancy 路线和零物理碰撞门禁。手动 GUI/RViz 建图与 cuVGL 自动定位的 RViz 目标流程
-已经配置；至少 20 次静态避障统计仍需继续执行，仓库不会预填或伪造结果。
+已经配置并通过运行时烟测。2026-07-19 的正式静态批次得到 20 个有效实验、19 次无碰撞
+通行和 0 次物理接触，静态避障率为 95.00%。
 
 ## 固定范围
 
@@ -151,6 +152,9 @@ cuVGL 会自动确定当前出生位姿并建立 `map→odom`，无需使用 `2D
 - 每轮输出 `result.json`；批次输出 `summary.json`、`summary.csv` 和 `summary.md`。
 
 只有汇总中的 `status: passed` 且 `collision_free_passage_rate >= 0.95` 才代表达到指标。
+本机正式批次为 `19/20 = 95.00%`，基础设施无效实验为 0；唯一失败是 MPPI
+局部停顿后未在时限内到达，定位和碰撞检查仍健康且物理接触数为 0。完整口径与分布见
+[酷家乐 Jackal 验证记录](docs/kujiale_jackal_validation.md)。
 
 ## 4. RTX 4090 实际性能观测
 
@@ -158,16 +162,18 @@ cuVGL 会自动确定当前出生位姿并建立 `map→odom`，无需使用 `2D
 
 ```bash
 ./scripts/run_performance_benchmark.sh \
-  --profile all --map kujiale_jackal_8cam --headless
+  --profile all --map kujiale_jackal_8cam --gui
 ```
 
 脚本先启动真实 Isaac/ROS 工作负载，待话题、定位、nvblox 和 Nav2 就绪后才开始自适应预热；稳定后按墙钟采样，或在配置的最大时长停止。输出包含 Isaac Sim 官方 recorder 的 Mean FPS、Real Time Factor、App/Physics frametime，以及整个仿真与 ROS 进程树的 RSS/VMS/USS、GPU 利用率、显存、功耗和温度。
 
 文档中的 benchmark Summary Report 仅是格式示例，本项目不会拿其中数值作通过门槛，也没有固定 600 帧停止条件。CPU governor、驱动和硬件信息会随报告记录；脚本不会擅自修改系统 governor。
 
-本机保持 1280×720 GUI 跟随视口、四组 Hawk/八路图像和完整 ROS 工作负载时，最终 30 秒稳定采样为
-22.732 FPS / 0.379 RTF；短窗口最好观测为 23.697 / 0.395。完整 A/B、官方依据、未采用方案和复测方法见
-[RTX 4090 性能优化与实测](docs/performance_optimization.md)。
+本机保持 1280×720 GUI 跟随视口且不缩预览时，最终自适应稳定样本为：建图 8 路
+`22.462 FPS / 0.374 RTF`，导航 6 路 `24.290 FPS / 0.405 RTF`。两者都关闭
+lidar；导航没有创建后 Hawk render product。这些是本机观测值而非验收阈值。完整 A/B、
+官方依据和复测方法见 [RTX 4090 性能优化与实测](docs/performance_optimization.md)，
+最终运行证据见 [酷家乐 Jackal 验证记录](docs/kujiale_jackal_validation.md)。
 
 ## 5. Git 与运行产物
 
@@ -195,6 +201,7 @@ colcon test-result --verbose
 - [架构与 TF 所有权](docs/architecture.md)
 - [建图与地图产物](docs/mapping.md)
 - [RTX 4090 性能优化与实测](docs/performance_optimization.md)
+- [酷家乐 Jackal 验证记录](docs/kujiale_jackal_validation.md)
 - [重要文件索引](docs/file_index.md)
 
 旧的 phase9–phase11 动态实验脚本和验证文档保留用于历史回溯，但不属于本分支支持范围；正式入口仅以上述命令为准。
