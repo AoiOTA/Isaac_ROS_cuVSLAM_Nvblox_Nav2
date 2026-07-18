@@ -54,6 +54,10 @@ def test_runtime_overlay_and_graph_preserve_reference_physics_fixes() -> None:
     stage = (ROOT / "isaac_sim/jackal_sim/stage.py").read_text()
     graph = (ROOT / "isaac_sim/jackal_sim/graphs.py").read_text()
     for token in (
+        "_disable_jackal_lidar(stage)",
+        "JACKAL_LIDAR_SENSOR_PATH",
+        "sensor.SetActive(False)",
+        "collision.SetActive(False)",
         "old_collision.SetActive(False)",
         "UsdGeom.Cylinder.Define",
         "collider.CreateExtentAttr()",

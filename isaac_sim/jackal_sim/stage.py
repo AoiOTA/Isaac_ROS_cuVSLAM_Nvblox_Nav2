@@ -19,6 +19,9 @@ ARTICULATION_ROOT = ROBOT_PRIM_PATH
 BASE_LINK_PRIM_PATH = f"{ROBOT_PRIM_PATH}/base_link"
 PHYSICS_SCENE_PATH = "/World/PhysicsScene"
 WHEEL_NAMES = ("front_left", "front_right", "rear_left", "rear_right")
+JACKAL_LIDAR_FRAME_PATH = f"{BASE_LINK_PRIM_PATH}/sick_lms1xx_lidar_frame"
+JACKAL_LIDAR_SENSOR_PATH = f"{JACKAL_LIDAR_FRAME_PATH}/Lidar"
+JACKAL_LIDAR_COLLISION_PATH = f"{BASE_LINK_PRIM_PATH}/collisions/sick_lms1xx_lidar"
 
 
 @dataclass(frozen=True)
@@ -244,6 +247,40 @@ def _configure_wheel_overlay(stage: Usd.Stage, control: dict[str, object]) -> No
         )
 
 
+def _disable_jackal_lidar(stage: Usd.Stage) -> dict[str, object]:
+    """Disable the unused sensor, visible mount, and collider in the session layer."""
+
+    frame = stage.GetPrimAtPath(JACKAL_LIDAR_FRAME_PATH)
+    sensor = stage.GetPrimAtPath(JACKAL_LIDAR_SENSOR_PATH)
+    collision = stage.GetPrimAtPath(JACKAL_LIDAR_COLLISION_PATH)
+    missing = [
+        path
+        for path, prim in (
+            (JACKAL_LIDAR_FRAME_PATH, frame),
+            (JACKAL_LIDAR_SENSOR_PATH, sensor),
+            (JACKAL_LIDAR_COLLISION_PATH, collision),
+        )
+        if not prim.IsValid()
+    ]
+    if missing:
+        raise RuntimeError(f"Jackal LiDAR overlay is missing expected prims: {missing}")
+
+    UsdGeom.Imageable(frame).MakeInvisible()
+    sensor.SetActive(False)
+    collision.SetActive(False)
+    return {
+        "enabled": False,
+        "publisher_graph_created": False,
+        "frame_path": JACKAL_LIDAR_FRAME_PATH,
+        "frame_visibility": str(UsdGeom.Imageable(frame).ComputeVisibility()),
+        "sensor_path": JACKAL_LIDAR_SENSOR_PATH,
+        "sensor_active": bool(sensor.IsActive()),
+        "collision_path": JACKAL_LIDAR_COLLISION_PATH,
+        "collision_active": bool(collision.IsActive()),
+        "authored_in_session_layer": True,
+    }
+
+
 def _compose_hawk_rig(stage: Usd.Stage, hawk_path: Path) -> dict[str, object]:
     pair_yaws = {
         "front": 0.0,
@@ -348,6 +385,7 @@ def compose_robot(
         if not robot.GetReferences().AddReference(str(robot_path.resolve()), "/jackal"):
             raise RuntimeError(f"failed to reference Jackal asset: {robot_path}")
         _set_pose(robot, (spawn.x, spawn.y, spawn.z), spawn.yaw_radians)
+        jackal_lidar = _disable_jackal_lidar(stage)
         _configure_wheel_overlay(stage, control)
         hawk_rig = _compose_hawk_rig(stage, hawk_path)
         physics_scene = _configure_physics(stage, physics_hz)
@@ -381,6 +419,7 @@ def compose_robot(
         "spawn": asdict(spawn),
         "environment_repairs": environment_repairs,
         "hawk_rig": hawk_rig,
+        "jackal_lidar": jackal_lidar,
         "wheel_overlay": "runtime_reference_caae0c08",
     }
     return stage.GetPrimAtPath(ROBOT_PRIM_PATH), spawn, details
