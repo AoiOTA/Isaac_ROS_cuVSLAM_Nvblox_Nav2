@@ -10,9 +10,12 @@ read_config() {
   python3 -c 'import sys,yaml; c=yaml.safe_load(open(sys.argv[1])); print(c["acceptance"]["trial_counts"][sys.argv[2]])' \
     "${PROJECT_ROOT}/config/stage11.yaml" "$1"
 }
-STATIC_TRIALS="$(read_config static)"
-DYNAMIC_TRIALS="$(read_config dynamic)"
-HETEROGENEOUS_TRIALS="$(read_config heterogeneous)"
+CONFIG_STATIC_TRIALS="$(read_config static)"
+CONFIG_DYNAMIC_TRIALS="$(read_config dynamic)"
+CONFIG_HETEROGENEOUS_TRIALS="$(read_config heterogeneous)"
+STATIC_TRIALS="${CONFIG_STATIC_TRIALS}"
+DYNAMIC_TRIALS="${CONFIG_DYNAMIC_TRIALS}"
+HETEROGENEOUS_TRIALS="${CONFIG_HETEROGENEOUS_TRIALS}"
 SEED_BASE="$(python3 -c 'import sys,yaml; print(yaml.safe_load(open(sys.argv[1]))["acceptance"]["seed_base"])' "${PROJECT_ROOT}/config/stage11.yaml")"
 GOAL_COUNT="$(python3 -c 'import sys,yaml; print(len(yaml.safe_load(open(sys.argv[1]))["goals"]))' "${PROJECT_ROOT}/config/stage11.yaml")"
 MAP_NAME="warehouse_v2_front"
@@ -45,6 +48,10 @@ for value in "${STATIC_TRIALS}" "${DYNAMIC_TRIALS}" "${HETEROGENEOUS_TRIALS}" "$
 done
 (( STATIC_TRIALS > 0 && DYNAMIC_TRIALS > 0 && HETEROGENEOUS_TRIALS > 0 )) || \
   die "all three Stage 11 classes require at least one trial"
+[[ "${STATIC_TRIALS}" == "${CONFIG_STATIC_TRIALS}" \
+  && "${DYNAMIC_TRIALS}" == "${CONFIG_DYNAMIC_TRIALS}" \
+  && "${HETEROGENEOUS_TRIALS}" == "${CONFIG_HETEROGENEOUS_TRIALS}" ]] || \
+  die "formal Stage 11 trial counts are fixed by config/stage11.yaml at ${CONFIG_STATIC_TRIALS}/${CONFIG_DYNAMIC_TRIALS}/${CONFIG_HETEROGENEOUS_TRIALS}"
 
 mkdir -p "${PROJECT_ROOT}/data/locks" "${PROJECT_ROOT}/data/runs/.locks"
 exec 8>"${PROJECT_ROOT}/data/locks/stage11-matrix.lock"
