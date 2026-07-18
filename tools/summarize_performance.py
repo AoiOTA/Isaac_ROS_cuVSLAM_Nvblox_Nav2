@@ -128,6 +128,8 @@ def main() -> int:
     parser.add_argument("--telemetry", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--workload", choices=["mapping", "navigation"], required=True)
+    parser.add_argument("--workload-report", type=Path, required=True)
+    parser.add_argument("--capture-report", type=Path, default=None)
     args = parser.parse_args()
     simulator = json.loads(args.sim_report.read_text(encoding="utf-8"))
     performance = simulator.get("performance", {})
@@ -137,6 +139,29 @@ def main() -> int:
     start = float(sample["start_unix_s"])
     end = float(sample["end_unix_s"])
     metrics = official_metrics(performance)
+    workload_report = json.loads(args.workload_report.read_text(encoding="utf-8"))
+    if (
+        workload_report.get("status") != "passed"
+        or workload_report.get("mode") != args.workload
+        or workload_report.get("active_workload_confirmed") is not True
+        or workload_report.get("physical_motion_confirmed") is not True
+        or int(workload_report.get("commands", {}).get("nonzero_samples", 0)) <= 0
+    ):
+        raise RuntimeError("performance sample lacks a confirmed active workload")
+    capture_report = None
+    if args.workload == "mapping":
+        if args.capture_report is None:
+            raise RuntimeError("mapping performance requires temporary MCAP evidence")
+        capture_report = json.loads(args.capture_report.read_text(encoding="utf-8"))
+        if (
+            capture_report.get("status") != "passed"
+            or capture_report.get("active_rgb_streams") != 8
+            or capture_report.get("all_mapping_streams_recorded") is not True
+        ):
+            raise RuntimeError("mapping performance MCAP did not record all eight streams")
+    telemetry = telemetry_summary(args.telemetry, start, end)
+    if telemetry["sample_count"] <= 0:
+        raise RuntimeError("whole-workload telemetry has no samples in benchmark window")
     result = {
         "schema_version": 1,
         "status": "recorded",
@@ -155,6 +180,8 @@ def main() -> int:
             "sample_stop_reason": sample.get("stop_reason"),
             "sample_stability_reached": sample.get("stability_reached"),
         },
+        "active_workload": workload_report,
+        "temporary_mapping_capture": capture_report,
         "official_isaac_sim_6_0_1": {
             "mean_fps": metrics.get("Mean FPS"),
             "real_time_factor": metrics.get("Real Time Factor"),
@@ -170,10 +197,14 @@ def main() -> int:
             "num_cpus": metrics.get("num_cpus"),
             "gpu_device_name": metrics.get("gpu_device_name"),
         },
-        "whole_workload_telemetry": telemetry_summary(args.telemetry, start, end),
+        "whole_workload_telemetry": telemetry,
         "host_context": host_context(),
         "simulator_report": str(args.sim_report.resolve()),
         "telemetry_csv": str(args.telemetry.resolve()),
+        "workload_report": str(args.workload_report.resolve()),
+        "capture_report": str(args.capture_report.resolve())
+        if args.capture_report is not None
+        else None,
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(

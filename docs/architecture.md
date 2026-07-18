@@ -111,3 +111,9 @@ Ground truth 仅用于验证最小实际运动和轨迹证据，不反馈给定�
 `AdaptiveOfficialBenchmark` 使用 Isaac Sim 6.0.1 的 App、Physics、CPU、Memory 和 Hardware 官方 recorders。外部采样器同时统计 simulator 与 ROS 进程树、系统内存和 `nvidia-smi` 指标。
 
 工作负载 ready file 到达后才开始预热。预热和正式采样均按墙钟窗口稳定性结束，或达到最大墙钟时长；报告显式写入 `fixed_frame_count: null` 和 `fixed_kpi_thresholds: null`。
+
+ready file 不是在 ROS 栈启动后直接创建：建图 profile 同时运行临时 8 路 MCAP
+录制和安全原地交替旋转，导航 profile 循环发送真实 Nav2 目标；只有观察到
+`/cmd_vel_sim` 的非零命令且 ground truth 位姿确实变化后，活动负载驱动器才允许
+自适应预热开始。原始性能 MCAP 在验证 8 路图像均有消息后立即删除，只保留计数
+证据。

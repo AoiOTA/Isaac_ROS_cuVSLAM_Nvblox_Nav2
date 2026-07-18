@@ -59,6 +59,14 @@ python3 tools/validate_acceptance_routes.py \
   --profile all --map kujiale_jackal_8cam --headless
 ```
 
+性能流程不是空闲栈采样。`mapping_8cam` 在安全原地交替旋转时运行完整
+cuVSLAM、nvblox，并把与正式建图相同的 8 路图像、CameraInfo、IMU、TF 和
+clock 写入临时 MCAP；采样完成后验证 8 路消息均非零并删除 MCAP。
+`navigation_6cam` 会循环执行 `config/acceptance.yaml` 中已经通过占据图验证的
+真实 Nav2 目标，只有同时观察到 `/cmd_vel_sim` 非零和 ground truth 物理位姿变化
+后才开始自适应预热。两种负载的活动证据分别写入各 profile 目录的
+`workload.json`。
+
 ## 自动测试
 
 ```bash

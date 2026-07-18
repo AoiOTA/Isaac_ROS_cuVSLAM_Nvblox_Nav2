@@ -151,11 +151,31 @@ def test_benchmark_runs_real_mapping_and_navigation_workloads_without_600_frames
         "--performance-start-file",
         "phase6.launch.py",
         "run_navigation.sh",
+        "ros2 bag record",
+        "performance_workload_driver",
         "record_performance_metrics.py",
+        "summarize_mapping_capture.py",
         "compare_performance_profiles.py",
         "fixed_frames=none",
     ):
         assert token in runner
     assert "600" not in runner
+    driver = (
+        ROOT
+        / "ros2_ws/src/jackal_experiments/jackal_experiments/performance_workload_driver.py"
+    ).read_text()
+    for token in (
+        'self.mode not in {"mapping", "navigation"}',
+        "mapping_direction_period_s",
+        "NavigateToPose",
+        '"/cmd_vel_sim"',
+        "nonzero_command_samples",
+        "active_workload_confirmed",
+        "physical_motion_confirmed",
+    ):
+        assert token in driver
+    normalizer = (ROOT / "tools/summarize_performance.py").read_text()
+    assert "performance sample lacks a confirmed active workload" in normalizer
+    assert "mapping performance requires temporary MCAP evidence" in normalizer
     comparison = (ROOT / "tools/compare_performance_profiles.py").read_text()
     assert "no preset KPI gate" in comparison

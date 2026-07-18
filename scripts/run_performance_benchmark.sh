@@ -37,7 +37,8 @@ while (($#)); do
     --max-sample-s) MAX_SAMPLE="${2:?missing value}"; shift 2 ;;
     --telemetry-period-s) TELEMETRY_PERIOD="${2:?missing value}"; shift 2 ;;
     -h|--help)
-      echo "Usage: ./scripts/run_performance_benchmark.sh [--profile all|mapping_8cam|navigation_6cam] [adaptive wall-time options]"
+      echo "Usage: ./scripts/run_performance_benchmark.sh [--profile all|mapping_8cam|navigation_6cam] [--map NAME] [adaptive wall-time options]"
+      echo "Mapping records a temporary 8-camera MCAP; navigation cycles real goals."
       echo "No frame-count baseline or documentation KPI gate is applied."
       exit 0 ;;
     *) die "unknown argument: $1" ;;
@@ -78,8 +79,12 @@ flock -n 9 || die "another performance benchmark is already running"
 PROFILE_SIM_PID=""
 PROFILE_ROS_PID=""
 PROFILE_METRICS_PID=""
+PROFILE_DRIVER_PID=""
+PROFILE_BAG_PID=""
 PROFILE_SIM_STOP=""
 PROFILE_METRICS_STOP=""
+PROFILE_DRIVER_STOP=""
+PROFILE_BAG_ROOT=""
 process_alive() { [[ -n "$1" ]] && kill -0 "$1" 2>/dev/null; }
 group_alive() { [[ -n "$1" ]] && kill -0 -- "-$1" 2>/dev/null; }
 stop_group() {
@@ -94,8 +99,19 @@ stop_group() {
   fi
   wait "${pid}" 2>/dev/null || true
 }
+remove_profile_bag() {
+  [[ -n "${PROFILE_BAG_ROOT}" ]] || return 0
+  case "${PROFILE_BAG_ROOT}" in
+    "${PROJECT_ROOT}/data/bags/.performance-"*) rm -rf -- "${PROFILE_BAG_ROOT}" ;;
+    *) echo "error: refusing to remove unexpected performance bag: ${PROFILE_BAG_ROOT}" >&2 ;;
+  esac
+  PROFILE_BAG_ROOT=""
+}
 cleanup_profile() {
+  [[ -z "${PROFILE_DRIVER_STOP}" ]] || touch "${PROFILE_DRIVER_STOP}" 2>/dev/null || true
   [[ -z "${PROFILE_METRICS_STOP}" ]] || touch "${PROFILE_METRICS_STOP}" 2>/dev/null || true
+  stop_group "${PROFILE_DRIVER_PID}"
+  stop_group "${PROFILE_BAG_PID}"
   stop_group "${PROFILE_METRICS_PID}"
   stop_group "${PROFILE_ROS_PID}"
   if process_alive "${PROFILE_SIM_PID}"; then
@@ -105,12 +121,16 @@ cleanup_profile() {
   PROFILE_SIM_PID=""
   PROFILE_ROS_PID=""
   PROFILE_METRICS_PID=""
+  PROFILE_DRIVER_PID=""
+  PROFILE_BAG_PID=""
+  remove_profile_bag
 }
 trap cleanup_profile EXIT INT TERM
 
 BRINGUP_SHARE="$(ros2 pkg prefix jackal_bringup --share)"
 STARTUP_TIMEOUT="$(python3 -c 'import sys,yaml; print(float(yaml.safe_load(open(sys.argv[1]))["trials"]["startup_timeout_s"]))' "${ACCEPTANCE_CONFIG}")"
 STARTUP_POLLS="$(python3 -c 'import math,sys; print(math.ceil(float(sys.argv[1])*2))' "${STARTUP_TIMEOUT}")"
+PERFORMANCE_GOALS="$(python3 -c 'import sys,yaml; d=yaml.safe_load(open(sys.argv[1])); print("["+",".join(str(v) for g in d["goals"] for v in g["pose"])+"]")' "${ACCEPTANCE_CONFIG}")"
 
 run_profile() {
   local camera_profile="$1"
@@ -121,11 +141,15 @@ run_profile() {
   local sim_report="${profile_dir}/simulator.json"
   local telemetry="${profile_dir}/telemetry.csv"
   local normalized="${profile_dir}/performance.json"
+  local workload_report="${profile_dir}/workload.json"
+  local capture_report="${profile_dir}/mapping-capture.json"
+  local bag_dir=""
   mkdir -p "${profile_dir}"
   rm -f "${ready_file}"
   PROFILE_SIM_STOP="${profile_dir}/stop-simulator"
   PROFILE_METRICS_STOP="${profile_dir}/stop-telemetry"
-  rm -f "${PROFILE_SIM_STOP}" "${PROFILE_METRICS_STOP}"
+  PROFILE_DRIVER_STOP="${profile_dir}/stop-workload"
+  rm -f "${PROFILE_SIM_STOP}" "${PROFILE_METRICS_STOP}" "${PROFILE_DRIVER_STOP}"
   export ROS_DOMAIN_ID="${domain_id}"
 
   sim_args=("${SIM_MODE}" --duration 0 --camera-profile "${camera_profile}"
@@ -157,8 +181,12 @@ run_profile() {
       camera_profile:=mapping_8cam image_qos:=DEFAULT \
       visual_slam_params:="${BRINGUP_SHARE}/config/visual_slam_mapping_8cam.yaml" \
       >"${profile_dir}/ros.log" 2>&1 & PROFILE_ROS_PID=$!
-    ros2 topic echo --no-daemon --once --no-arr --timeout "${STARTUP_TIMEOUT}" \
-      /back_stereo_camera/right/image_raw sensor_msgs/msg/Image >/dev/null
+    for pair in front left right back; do
+      for side in left right; do
+        ros2 topic echo --no-daemon --once --no-arr --timeout "${STARTUP_TIMEOUT}" \
+          "/${pair}_stereo_camera/${side}/image_raw" sensor_msgs/msg/Image >/dev/null
+      done
+    done
   else
     python3 "${PROJECT_ROOT}/tools/check_map_manifest.py" \
       "${PROJECT_ROOT}/data/maps/${MAP_NAME}"
@@ -190,14 +218,56 @@ run_profile() {
     [[ "${action_ready}" == "true" ]] || die "NavigateToPose action startup timeout"
   fi
 
+  if [[ "${workload}" == "mapping" ]]; then
+    PROFILE_BAG_ROOT="$(mktemp -d "${PROJECT_ROOT}/data/bags/.performance-${camera_profile}.XXXXXX")"
+    bag_dir="${PROFILE_BAG_ROOT}/capture"
+    mapping_topics=()
+    for pair in front left right back; do
+      for side in left right; do
+        mapping_topics+=("/${pair}_stereo_camera/${side}/image_raw")
+        mapping_topics+=("/${pair}_stereo_camera/${side}/camera_info")
+      done
+    done
+    mapping_topics+=(/front_stereo_imu/imu /tf /tf_static /clock)
+    setsid ros2 bag record --storage mcap --storage-preset-profile fastwrite \
+      --disable-keyboard-controls --output "${bag_dir}" --topics "${mapping_topics[@]}" \
+      >"${profile_dir}/rosbag.log" 2>&1 & PROFILE_BAG_PID=$!
+    sleep 2
+    process_alive "${PROFILE_BAG_PID}" || die "mapping performance MCAP recorder exited"
+  fi
+
+  driver_args=(--ros-args -p use_sim_time:=true -p mode:="${workload}"
+    -p ready_file:="${ready_file}" -p stop_file:="${PROFILE_DRIVER_STOP}"
+    -p report_path:="${workload_report}")
+  if [[ "${workload}" == "navigation" ]]; then
+    driver_args+=(-p "goal_poses:=${PERFORMANCE_GOALS}")
+  fi
+  setsid ros2 run jackal_experiments performance_workload_driver "${driver_args[@]}" \
+    >"${profile_dir}/workload.log" 2>&1 & PROFILE_DRIVER_PID=$!
+
+  metrics_args=(--output "${telemetry}" --stop-file "${PROFILE_METRICS_STOP}"
+    --period "${TELEMETRY_PERIOD}" --pid "${PROFILE_SIM_PID}"
+    --pid "${PROFILE_ROS_PID}" --pid "${PROFILE_DRIVER_PID}")
+  [[ -z "${PROFILE_BAG_PID}" ]] || metrics_args+=(--pid "${PROFILE_BAG_PID}")
   setsid python3 "${PROJECT_ROOT}/tools/record_performance_metrics.py" \
-    --output "${telemetry}" --stop-file "${PROFILE_METRICS_STOP}" \
-    --period "${TELEMETRY_PERIOD}" --pid "${PROFILE_SIM_PID}" --pid "${PROFILE_ROS_PID}" \
-    >"${profile_dir}/telemetry.log" 2>&1 & PROFILE_METRICS_PID=$!
-  touch "${ready_file}"
-  info "${camera_profile} workload is ready; adaptive warmup has started"
+    "${metrics_args[@]}" >"${profile_dir}/telemetry.log" 2>&1 & PROFILE_METRICS_PID=$!
+
+  for ((poll=0; poll<STARTUP_POLLS; poll++)); do
+    [[ -f "${ready_file}" ]] && break
+    process_alive "${PROFILE_SIM_PID}" || die "simulator exited before active workload confirmation"
+    process_alive "${PROFILE_ROS_PID}" || die "${workload} ROS workload exited before active load"
+    process_alive "${PROFILE_DRIVER_PID}" || die "${workload} driver exited before active load"
+    [[ -z "${PROFILE_BAG_PID}" ]] || process_alive "${PROFILE_BAG_PID}" || \
+      die "mapping MCAP recorder exited before active load"
+    sleep 0.5
+  done
+  [[ -f "${ready_file}" ]] || die "${workload} workload never produced a nonzero simulator command"
+  info "${camera_profile} active workload is confirmed; adaptive warmup has started"
   while process_alive "${PROFILE_SIM_PID}"; do
     process_alive "${PROFILE_ROS_PID}" || die "${workload} ROS workload exited during sampling"
+    process_alive "${PROFILE_DRIVER_PID}" || die "${workload} driver exited during sampling"
+    [[ -z "${PROFILE_BAG_PID}" ]] || process_alive "${PROFILE_BAG_PID}" || \
+      die "mapping MCAP recorder exited during sampling"
     process_alive "${PROFILE_METRICS_PID}" || die "performance telemetry recorder exited"
     sleep 1
   done
@@ -206,13 +276,35 @@ run_profile() {
   sim_status=$?
   set -e
   PROFILE_SIM_PID=""
+  touch "${PROFILE_DRIVER_STOP}"
   touch "${PROFILE_METRICS_STOP}"
+  for _ in {1..100}; do process_alive "${PROFILE_DRIVER_PID}" || break; sleep 0.05; done
+  if process_alive "${PROFILE_DRIVER_PID}"; then
+    stop_group "${PROFILE_DRIVER_PID}"
+  else
+    set +e
+    wait "${PROFILE_DRIVER_PID}"
+    driver_status=$?
+    set -e
+    (( driver_status == 0 )) || die "${workload} active workload driver failed"
+  fi
+  PROFILE_DRIVER_PID=""
   stop_group "${PROFILE_METRICS_PID}"; PROFILE_METRICS_PID=""
+  if [[ -n "${PROFILE_BAG_PID}" ]]; then
+    stop_group "${PROFILE_BAG_PID}"; PROFILE_BAG_PID=""
+    ros2 bag info "${bag_dir}" >"${profile_dir}/rosbag-info.txt"
+    python3 "${PROJECT_ROOT}/tools/summarize_mapping_capture.py" \
+      "${bag_dir}" --output "${capture_report}" >"${profile_dir}/capture-summary.log"
+    remove_profile_bag
+  fi
   stop_group "${PROFILE_ROS_PID}"; PROFILE_ROS_PID=""
   (( sim_status == 0 )) || die "${camera_profile} performance simulator failed"
+  summary_args=(--sim-report "${sim_report}" --telemetry "${telemetry}"
+    --output "${normalized}" --workload "${workload}"
+    --workload-report "${workload_report}")
+  [[ "${workload}" != "mapping" ]] || summary_args+=(--capture-report "${capture_report}")
   python3 "${PROJECT_ROOT}/tools/summarize_performance.py" \
-    --sim-report "${sim_report}" --telemetry "${telemetry}" \
-    --output "${normalized}" --workload "${workload}" \
+    "${summary_args[@]}" \
     >"${profile_dir}/summary.log"
   profile_reports+=("${normalized}")
   info "Recorded ${camera_profile}: ${normalized}"
