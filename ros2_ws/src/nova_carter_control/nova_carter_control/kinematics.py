@@ -59,30 +59,44 @@ class SlewAxis:
         acceleration_limit: float,
         deceleration_limit: float,
         jerk_limit: float,
+        response_rate: float = 8.0,
     ) -> float:
         if dt <= 0.0:
             return self.value
         error = target - self.value
-        if abs(error) < 1.0e-9:
+        if abs(error) < 1.0e-6 and abs(self.acceleration) < 1.0e-5:
             self.value = target
             self.acceleration = 0.0
             return self.value
 
-        speeding_up = self.value == 0.0 or math.copysign(1.0, error) == math.copysign(
-            1.0, self.value
+        # Critically damped second-order tracking in command-velocity space.
+        # The old target snap reset acceleration at every small MPPI command
+        # change, creating an output jerk spike even though the configured
+        # acceleration limit was respected.  Integrating a bounded jerk keeps
+        # every normal navigation transition continuous.  Emergency health
+        # stops intentionally bypass this filter in CommandGuard.
+        desired_jerk = (
+            response_rate * response_rate * error
+            - 2.0 * response_rate * self.acceleration
         )
-        rate_limit = acceleration_limit if speeding_up else deceleration_limit
-        desired_acceleration = max(-rate_limit, min(rate_limit, error / dt))
-        max_acceleration_change = jerk_limit * dt
-        acceleration_delta = max(
-            -max_acceleration_change,
-            min(max_acceleration_change, desired_acceleration - self.acceleration),
-        )
-        self.acceleration += acceleration_delta
-        candidate = self.value + self.acceleration * dt
-        if (target - self.value) * (target - candidate) <= 0.0:
-            self.value = target
-            self.acceleration = 0.0
+        applied_jerk = max(-jerk_limit, min(jerk_limit, desired_jerk))
+        candidate_acceleration = self.acceleration + applied_jerk * dt
+
+        if abs(self.value) < 1.0e-9:
+            speeding_up = candidate_acceleration * target >= 0.0
         else:
-            self.value = candidate
+            speeding_up = candidate_acceleration * self.value >= 0.0
+        rate_limit = acceleration_limit if speeding_up else deceleration_limit
+        # When a target reversal changes which rate limit applies, approach
+        # the new bound with the same jerk limit instead of clipping the
+        # existing acceleration instantaneously.
+        if (
+            abs(candidate_acceleration) > rate_limit
+            and abs(candidate_acceleration) > abs(self.acceleration)
+        ):
+            candidate_acceleration = math.copysign(
+                max(rate_limit, abs(self.acceleration)), candidate_acceleration
+            )
+        self.acceleration = candidate_acceleration
+        self.value += self.acceleration * dt
         return self.value

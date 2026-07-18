@@ -31,3 +31,21 @@ def test_slew_axis_respects_acceleration_and_reaches_target() -> None:
     values = [axis.update(1.0, 0.01, 1.2, 1.6, 6.0) for _ in range(300)]
     assert all(b >= a for a, b in zip(values, values[1:]))
     assert math.isclose(values[-1], 1.0, abs_tol=1.0e-9)
+
+
+def test_slew_axis_normal_tracking_strictly_respects_jerk() -> None:
+    axis = SlewAxis()
+    dt = 0.01
+    values: list[float] = []
+    for target in (0.8, -0.4, 0.3, 0.0):
+        values.extend(axis.update(target, dt, 1.0, 1.6, 5.0) for _ in range(100))
+    accelerations = [
+        (current - previous) / dt
+        for previous, current in zip(values, values[1:])
+    ]
+    jerks = [
+        (current - previous) / dt
+        for previous, current in zip(accelerations, accelerations[1:])
+    ]
+    assert max(abs(value) for value in accelerations) <= 1.6 + 1.0e-9
+    assert max(abs(value) for value in jerks) <= 5.0 + 1.0e-7

@@ -1,0 +1,113 @@
+version: phase10_front_stereo_v1
+
+scope:
+  front_stereo_only: true
+  lighting_randomization: false
+  color_randomization: false
+
+runtime:
+  map_name: warehouse_v2_front
+  simulator_update_hz: 120
+  front_image_rate_hz: 10
+  ros_domain_base: 70
+  discovery_port_base: 11900
+  goal_timeout_s: 150
+  startup_timeout_s: 150
+  record_compact_mcap: true
+  gpu_sample_period_s: 1.0
+
+# Each pre-acceptance trial starts from the collision-free simulator spawn and
+# executes one goal. Cycling three routes gives independent straight, diagonal,
+# turning and cross-aisle coverage without making one failed goal invalidate
+# unrelated trials.
+goals:
+  - name: east_lane
+    pose: [2.0, 0.0, 0.0]
+  - name: north_east
+    pose: [2.0, 1.5, 1.570796327]
+  - name: north_west
+    pose: [0.5, 1.5, 3.141592654]
+
+preacceptance:
+  static_trials: 20
+  dynamic_trials: 20
+  seed_base: 1000
+  thresholds:
+    static_success_rate: 0.95
+    dynamic_success_rate: 0.90
+    path_stretch_p95: 0.20
+    goal_position_tolerance_m: 0.25
+    goal_yaw_tolerance_deg: 10.0
+    collision_count: 0
+    minimum_realtime_factor: 0.70
+    normal_linear_acceleration_p95_mps2: 1.60
+    normal_angular_acceleration_p95_radps2: 3.00
+    normal_linear_jerk_p95_mps3: 5.50
+    normal_angular_jerk_p95_radps3: 11.00
+
+fault_hardening:
+  # Front-only cuVGL is deliberately triggered on the visually validated
+  # first route; stale data faults exercise the later cross-aisle routes.
+  sequence: [relocalization, depth_stale, map_slice_stale]
+  suppression_duration_s: 2.0
+  stop_grace_s: 1.50
+  maximum_command_while_fault: 0.02
+
+# Frozen after Phase 9's three independent runs and revalidated by the Phase
+# 10 matrix. These are the safety/latency trade-offs that must remain aligned
+# across Command Guard, Collision Monitor, nvblox and Nav2.
+frozen_parameters:
+  command_guard:
+    visual_slam_timeout_s: 1.50
+    depth_timeout_s: 1.25
+    map_slice_timeout_s: 1.25
+    command_timeout_s: 0.25
+    max_linear_acceleration_mps2: 1.0
+    max_linear_jerk_mps3: 5.0
+    max_angular_acceleration_radps2: 2.0
+    max_angular_jerk_radps3: 10.0
+    slew_response_rate: 8.0
+  collision_monitor:
+    stop_clearance_m: 0.25
+    slowdown_clearance_m: 0.50
+    slowdown_ratio: 0.35
+    approach_time_s: 1.2
+  nav2:
+    controller_frequency_hz: 20.0
+    mppi_time_steps: 48
+    mppi_batch_size: 800
+    max_linear_velocity_mps: 0.55
+    max_angular_velocity_radps: 0.90
+    internal_goal_position_tolerance_m: 0.15
+    internal_goal_yaw_tolerance_deg: 8.0
+    local_inflation_radius_m: 0.80
+    global_inflation_radius_m: 0.80
+    footprint_padding_m: 0.03
+  nvblox:
+    voxel_size_m: 0.05
+    dynamic_decay_rate_hz: 10.0
+    occupied_decay_probability: 0.35
+    free_decay_probability: 0.60
+    dynamic_occupied_half_width_m: 0.15
+
+record_topics:
+  - /clock
+  - /tf
+  - /tf_static
+  - /ground_truth/odometry
+  - /wheel/odometry
+  - /odometry/filtered
+  - /visual_slam/status
+  - /visual_slam/tracking/odometry
+  - /visual_localization/pose
+  - /localization/ready
+  - /localization/recovery_state
+  - /navigation/resilient_status
+  - /control/guard_status
+  - /collision_monitor/state
+  - /plan
+  - /transformed_global_plan
+  - /cmd_vel_nav_raw
+  - /cmd_vel_smoothed
+  - /cmd_vel_safe
+  - /cmd_vel_sim

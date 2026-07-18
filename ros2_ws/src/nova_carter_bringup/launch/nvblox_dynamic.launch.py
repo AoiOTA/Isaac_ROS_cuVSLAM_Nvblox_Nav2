@@ -2,6 +2,8 @@ from pathlib import Path
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import ComposableNodeContainer
 from launch_ros.descriptions import ComposableNode
 
@@ -14,7 +16,7 @@ def generate_launch_description() -> LaunchDescription:
         name="nvblox_node",
         parameters=[
             str(share / "config/nvblox.yaml"),
-            str(share / "config/nvblox_dynamic.yaml"),
+            LaunchConfiguration("dynamic_params"),
         ],
         remappings=[
             ("camera_0/depth/image", "/front_stereo_camera/depth/image_raw"),
@@ -26,6 +28,10 @@ def generate_launch_description() -> LaunchDescription:
     )
     return LaunchDescription(
         [
+            DeclareLaunchArgument(
+                "dynamic_params",
+                default_value=str(share / "config/nvblox_dynamic.yaml"),
+            ),
             ComposableNodeContainer(
                 name="nvblox_container",
                 namespace="",

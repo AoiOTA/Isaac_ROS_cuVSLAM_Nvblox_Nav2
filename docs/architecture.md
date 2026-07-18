@@ -153,3 +153,23 @@ The simulator moves an official scene forklift plus project-owned box and
 capsule shapes using session-layer kinematic transforms. PhysX contact reports
 are part of acceptance: moving actors must enter the local cost envelope but
 their physical swept volumes must not ram a correctly stopped robot.
+
+## Implemented Phase 10 experiment and safety boundary
+
+Phase 10 keeps the same front-stereo perception graph and adds an automation
+boundary around it. Every trial owns an isolated DDS discovery server,
+simulator, ROS launch, test runner, optional MCAP recorder and GPU sampler. A
+single finalizer joins navigation, simulation, contact and resource evidence;
+ground truth remains metrics-only.
+
+Kinematic obstacle actors now pause their own trajectory clock before crossing
+a configured robot safety envelope. They remain collidable, visible and fixed
+in the route while yielding, so front depth, dynamic nvblox and Nav2 still have
+to detect and avoid them. This models a responsive warehouse actor and prevents
+an unresponsive kinematic body from pushing a correctly stopped robot. All
+yield events and all PhysX contacts remain acceptance evidence.
+
+Test-only SetBool services can suppress depth or combined-map health refreshes
+when explicitly enabled by `phase10.launch.py`. Normal Phase 9 launch behavior
+is unchanged. The final Guard must enter the corresponding blocked state and
+publish zero motion before the injected fault can count as recovered.

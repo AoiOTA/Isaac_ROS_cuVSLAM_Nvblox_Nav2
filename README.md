@@ -2,7 +2,7 @@
 
 本仓库用于在 Ubuntu 24.04、ROS 2 Jazzy、Isaac Sim 6.0.1 和 RTX 4090 上构建 Nova Carter 视觉导航系统。目标组件包括 Isaac Sim Standalone Python、Isaac ROS cuVSLAM、nvblox、Visual Global Localization 和 Nav2。
 
-当前状态：**阶段0至阶段9已完成并在本机实测通过。** 已安装CUDA Toolkit 13.0.3、TensorRT 10.13.3.9和Isaac ROS 4.5.0；Standalone程序直接打开官方Warehouse，在匿名session layer中引用Nova Carter主USD，并在运行时自建控制、前向双目、深度和IMU OmniGraph。阶段9按当前项目决策只使用前向Hawk双目，不启动侧向或后向相机；cuVSLAM连续跟踪、前向cuVGL全局重定位、dynamic nvblox、Nav2 MPPI DiffDrive、Velocity Smoother、Collision Monitor、Command Guard和自动暂停/恢复导航已组成完整动态导航闭环。
+当前状态：**阶段0至阶段10已完成并在本机实测通过。** 已安装CUDA Toolkit 13.0.3、TensorRT 10.13.3.9和Isaac ROS 4.5.0；Standalone程序直接打开官方Warehouse，在匿名session layer中引用Nova Carter主USD，并在运行时自建控制、前向双目、深度和IMU OmniGraph。当前项目决策固定只使用前向Hawk双目，不启动侧向或后向相机；cuVSLAM连续跟踪、前向cuVGL全局重定位、dynamic nvblox、Nav2 MPPI DiffDrive、Velocity Smoother、Collision Monitor、Command Guard、自动暂停/恢复导航和阶段10实验自动化已组成完整动态导航闭环。
 
 ## 固定资产
 
@@ -180,6 +180,19 @@ cd /home/lyb/Workspace/Isaac_ROS_cuVSLAM_Nvblox_Nav2
 
 本机最终执行3次独立完整重启回归（首轮带RViz），共9/9个目标成功、3/3次强制重定位后自动续航，三轮动态障碍接触均为0；38项包级契约测试全部通过。
 
+## 阶段10 自动化、必要加固与预验收
+
+阶段10按当前范围继续只使用前向双目，明确不做光照或颜色随机化。单次可复现实验、三类安全故障注入和20+20预验收入口为：
+
+```bash
+./scripts/run_phase10_trial.sh --class static --seed 1000 --goal-index 0 --record-bag
+./scripts/run_phase10_trial.sh --class dynamic --seed 11000 --goal-index 0 --record-bag
+./scripts/run_phase10_hardening.sh warehouse_v2_front
+./scripts/run_phase10_preacceptance.sh --map warehouse_v2_front
+```
+
+完整回归入口`./scripts/run_phase10_tests.sh warehouse_v2_front`会执行构建、54项自动测试、真实故障硬化和静态20次/动态20次预验收。每轮都自动生成固定seed场景、启动隔离DDS和完整视觉导航栈、记录MCAP/轨迹/命令/GPU/PhysX接触、计算目标误差、路径伸长率与正常导航加速度/jerk，并只清理本轮创建的进程组。矩阵、单轮和run目录均有独占锁；Nav2只有在生命周期守卫确认8个managed node全部active后才开始试验。最终实测静态20/20、动态20/20、40轮全部0碰撞，成功轨迹伸长率P95为13.58%，最低实时因子为0.763。配置、统计口径、参数冻结和实测证据见[Phase 10 Validation](docs/phase10_validation.md)，实验产物说明见[Experiments](docs/experiments.md)。
+
 ## 阶段1完整环境配置
 
 另一台电脑需要重新配置环境时，以[阶段1裸机环境完整配置手册](docs/installation.md)为准。该文档把操作拆分为独立步骤，包含每条命令的目的、预期结果、安全门和失败恢复，不要求先运行本仓库的安装脚本。
@@ -206,7 +219,7 @@ python3 tools/check_stage1.py
 ```
 
 安装脚本不修改 `~/.bashrc`，不卸载系统OpenCV，并在APT模拟出现任何待删除包时自动停止。
-光照/颜色实验、统计调参和最终正式验收将在阶段10至阶段11实现；当前公开的阶段0至阶段9命令均为实际可执行入口。
+不同光照/颜色实验按本轮用户决策不属于阶段10；阶段11再根据最终验收范围处理。当前公开的阶段0至阶段10命令均为实际可执行入口。
 
 本机阶段1验收已确认：
 

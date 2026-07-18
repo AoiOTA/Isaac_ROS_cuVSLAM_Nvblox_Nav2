@@ -16,22 +16,30 @@ class SimulatorAlreadyRunning(RuntimeError):
 class SimulatorProcessLock:
     """Hold an advisory lock without inspecting or terminating other processes."""
 
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: Path, wait_seconds: float = 0.0) -> None:
         self.path = path
+        self.wait_seconds = float(wait_seconds)
+        if self.wait_seconds < 0.0:
+            raise ValueError("simulator lock wait must be non-negative")
         self._stream = None
 
     def acquire(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         stream = self.path.open("a+", encoding="utf-8")
-        try:
-            fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError as exc:
-            stream.seek(0)
-            owner = stream.read().strip() or "owner information unavailable"
-            stream.close()
-            raise SimulatorAlreadyRunning(
-                f"this project already has a running simulator: {owner}"
-            ) from exc
+        deadline = time.monotonic() + self.wait_seconds
+        while True:
+            try:
+                fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError as exc:
+                if time.monotonic() >= deadline:
+                    stream.seek(0)
+                    owner = stream.read().strip() or "owner information unavailable"
+                    stream.close()
+                    raise SimulatorAlreadyRunning(
+                        f"this project already has a running simulator: {owner}"
+                    ) from exc
+                time.sleep(0.10)
 
         stream.seek(0)
         stream.truncate()

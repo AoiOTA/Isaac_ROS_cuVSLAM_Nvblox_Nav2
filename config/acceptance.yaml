@@ -3,6 +3,10 @@ trial_counts:
   dynamic: 40
   heterogeneous: 50
 
+preacceptance_trial_counts:
+  static: 20
+  dynamic: 20
+
 thresholds:
   static_success_rate: 0.95
   dynamic_success_rate: 0.90

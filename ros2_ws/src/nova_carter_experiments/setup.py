@@ -34,6 +34,7 @@ setup(
             "navigation_test_runner = nova_carter_experiments.navigation_test_runner:main",
             "localization_recovery_manager = nova_carter_experiments.localization_recovery_manager:main",
             "resilient_navigation = nova_carter_experiments.resilient_navigation:main",
+            "nav2_lifecycle_guard = nova_carter_experiments.nav2_lifecycle_guard:main",
         ]
     },
 )

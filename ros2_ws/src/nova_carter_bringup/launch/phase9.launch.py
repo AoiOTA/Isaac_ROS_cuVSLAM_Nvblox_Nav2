@@ -32,6 +32,14 @@ def generate_launch_description() -> LaunchDescription:
             DeclareLaunchArgument("rviz", default_value="true"),
             DeclareLaunchArgument("nvblox_start_delay", default_value="15.0"),
             DeclareLaunchArgument("nav2_start_delay", default_value="25.0"),
+            DeclareLaunchArgument("visual_slam_timeout", default_value="2.0"),
+            DeclareLaunchArgument("depth_timeout", default_value="2.0"),
+            DeclareLaunchArgument("map_slice_timeout", default_value="2.0"),
+            DeclareLaunchArgument("enable_fault_injection", default_value="false"),
+            DeclareLaunchArgument(
+                "nvblox_dynamic_params",
+                default_value=str(share / "config/nvblox_dynamic.yaml"),
+            ),
             DeclareLaunchArgument(
                 "rviz_config", default_value=str(share / "rviz/navigation.rviz")
             ),
@@ -42,12 +50,31 @@ def generate_launch_description() -> LaunchDescription:
                     "vgl_config_dir": LaunchConfiguration("vgl_config_dir"),
                     "vgl_model_dir": LaunchConfiguration("vgl_model_dir"),
                     "cuvslam_map_dir": LaunchConfiguration("cuvslam_map_dir"),
+                    "visual_slam_timeout": LaunchConfiguration(
+                        "visual_slam_timeout"
+                    ),
+                    "depth_timeout": LaunchConfiguration("depth_timeout"),
+                    "map_slice_timeout": LaunchConfiguration(
+                        "map_slice_timeout"
+                    ),
+                    "enable_fault_injection": LaunchConfiguration(
+                        "enable_fault_injection"
+                    ),
                 },
             ),
             include("depth_scan.launch.py"),
             TimerAction(
                 period=LaunchConfiguration("nvblox_start_delay"),
-                actions=[include("nvblox_dynamic.launch.py")],
+                actions=[
+                    include(
+                        "nvblox_dynamic.launch.py",
+                        {
+                            "dynamic_params": LaunchConfiguration(
+                                "nvblox_dynamic_params"
+                            )
+                        },
+                    )
+                ],
             ),
             TimerAction(
                 period=LaunchConfiguration("nav2_start_delay"),

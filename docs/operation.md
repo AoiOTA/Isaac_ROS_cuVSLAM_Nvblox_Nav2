@@ -1,6 +1,6 @@
 # Operation
 
-Available through Phase 9:
+Available through Phase 10:
 
 ```bash
 ./scripts/build.sh
@@ -28,6 +28,10 @@ python3 tools/check_stage1.py
 ./scripts/run_phase9_navigation.sh --map warehouse_v2_front --rviz
 ./scripts/run_phase9.sh --map warehouse_v2_front --headless --rviz
 ./scripts/run_phase9_tests.sh warehouse_v2_front
+./scripts/run_phase10_trial.sh --class dynamic --seed 11000 --goal-index 0 --record-bag
+./scripts/run_phase10_hardening.sh warehouse_v2_front
+./scripts/run_phase10_preacceptance.sh --map warehouse_v2_front
+./scripts/run_phase10_tests.sh warehouse_v2_front
 ```
 
 `smoke_ros_bridge.sh` starts only its own Isaac Sim process group, receives real `/clock`, image, and CameraInfo messages, and then terminates that process group. It never uses `killall` or `pkill`.
@@ -265,3 +269,27 @@ automatic goal resume. Runtime reports are under `data/reports/phase9`; logs
 are under `data/logs/stage9`. These directories are intentionally ignored by
 Git. Full pass criteria and measured data are in
 [`docs/phase9_validation.md`](phase9_validation.md).
+
+## Stage 10 automation and hardening
+
+Stage 10 retains the Stage 9 front-stereo-only runtime and explicitly leaves
+lighting and color unchanged. `run_phase10_trial.sh` is the atomic experiment
+entry: it creates a deterministic scenario, assigns an isolated ROS domain and
+Fast DDS server, launches Isaac Sim and the complete Phase 10 ROS graph,
+records compact MCAP/trajectory/commands/GPU/contact evidence, computes the
+result, and cleans only its own process groups.
+
+Before the recorder or goal runner starts, the script waits for
+`nav2_lifecycle_guard` to report every managed Nav2 node active.  If the first
+launch is only partially activated, the navigation wrapper destroys that
+complete launch and creates a fresh one; no acceptance goal is allowed to
+straddle the restart.  Matrix, trial and run-directory `flock` locks reject
+duplicate invocations before they can share Isaac Sim or overwrite an MCAP.
+
+Use `run_phase10_hardening.sh` for real relocalization/depth/map-slice fault
+injection. Use `run_phase10_preacceptance.sh` for the 20 static plus 20 dynamic
+matrix. The umbrella `run_phase10_tests.sh` runs the build, all automated tests,
+hardening and the complete matrix. See
+[`docs/phase10_validation.md`](phase10_validation.md) for thresholds, frozen
+parameters and measured evidence, and [`docs/experiments.md`](experiments.md)
+for artifact handling and retune workflows.

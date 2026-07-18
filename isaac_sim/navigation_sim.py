@@ -192,9 +192,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--lock-file", type=Path, default=lock_path
     )
+    parser.add_argument(
+        "--lock-wait-seconds",
+        type=float,
+        default=30.0,
+        help="wait briefly for this project's previous simulator to release its lock",
+    )
     args = parser.parse_args()
     if args.duration < 0.0:
         parser.error("--duration must be non-negative")
+    if args.lock_wait_seconds < 0.0:
+        parser.error("--lock-wait-seconds must be non-negative")
     if args.physics_hz <= 0 or args.update_hz <= 0.0:
         parser.error("physics and update frequencies must be positive")
     args.renderer = str(runtime["renderer"])
@@ -299,6 +307,7 @@ def run(args: argparse.Namespace) -> int:
     from isaacsim.core.utils.extensions import enable_extension
 
     from nova_carter_sim.graphs import create_control_graphs
+    from nova_carter_sim.contact_monitor import RobotContactMonitor
     from nova_carter_sim.follow_camera import FollowCamera, activate_viewport_camera
     from nova_carter_sim.dynamic_obstacles import DynamicObstacleManager
     from nova_carter_sim.sensors import create_sensor_graphs
@@ -317,6 +326,7 @@ def run(args: argparse.Namespace) -> int:
     timeline = None
     follow_camera = None
     dynamic_obstacles = None
+    contact_monitor = None
     report: dict[str, object] = {
         "status": "failed",
         "mode": "headless" if args.headless else "gui",
@@ -360,6 +370,7 @@ def run(args: argparse.Namespace) -> int:
         app.update()
         if stage_identity() != active_stage_identity:
             raise RuntimeError("active stage changed after Nova Carter composition")
+        contact_monitor = RobotContactMonitor(stage, ROBOT_PRIM_PATH)
 
         if args.disable_ros_control:
             report["control_graphs"] = {"enabled": False}
@@ -541,6 +552,9 @@ def run(args: argparse.Namespace) -> int:
         if dynamic_obstacles is not None:
             report["dynamic_obstacles"] = dynamic_obstacles.summary()
             dynamic_obstacles.close()
+        if contact_monitor is not None:
+            report["robot_contacts"] = contact_monitor.summary()
+            contact_monitor.close()
         if timeline is not None:
             timeline.stop()
             app.update()
@@ -568,7 +582,7 @@ def main() -> int:
     signal.signal(signal.SIGINT, request_stop)
     signal.signal(signal.SIGTERM, request_stop)
     try:
-        with SimulatorProcessLock(args.lock_file):
+        with SimulatorProcessLock(args.lock_file, args.lock_wait_seconds):
             status = run(args)
             if status == 0:
                 persisted = json.loads(args.report.read_text(encoding="utf-8"))

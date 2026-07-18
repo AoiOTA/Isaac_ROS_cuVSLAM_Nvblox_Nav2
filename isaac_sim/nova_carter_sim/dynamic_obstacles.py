@@ -8,6 +8,13 @@ import math
 from omni.physx import get_physx_simulation_interface
 from pxr import Gf, PhysicsSchemaTools, PhysxSchema, Sdf, Usd, UsdGeom, UsdPhysics
 
+from .dynamic_motion import (
+    farthest_candidate_index,
+    move_towards,
+    planar_distance,
+    should_yield_to_robot,
+)
+
 
 OBSTACLE_ROOT = "/World/Stage9DynamicObstacles"
 
@@ -23,8 +30,18 @@ class RuntimeObstacle:
     phase: float
     translate_op: UsdGeom.XformOp
     rotate_op: UsdGeom.XformOp | None
+    yield_distance_m: float
+    yield_release_distance_m: float
+    yield_refuge: tuple[float, float, float] | None
+    yield_speed_mps: float
     distance_travelled_m: float = 0.0
     last_position: tuple[float, float, float] | None = None
+    trajectory_time_s: float = 0.0
+    yield_event_count: int = 0
+    yielded_frames: int = 0
+    yielded_simulation_s: float = 0.0
+    is_yielding: bool = False
+    yield_latched: bool = False
 
 
 def _vec3(values: object, label: str) -> tuple[float, float, float]:
@@ -105,6 +122,7 @@ class DynamicObstacleManager:
         self.obstacles: list[RuntimeObstacle] = []
         self.robot_contact_count = 0
         self.robot_contact_pairs: set[tuple[str, str]] = set()
+        self.last_update_simulation_time: float | None = None
         session = stage.GetSessionLayer()
         with Usd.EditContext(stage, session):
             UsdGeom.Xform.Define(stage, OBSTACLE_ROOT)
@@ -116,6 +134,7 @@ class DynamicObstacleManager:
             if not robot.IsValid():
                 raise RuntimeError("Nova Carter chassis is missing for contact reporting")
             PhysxSchema.PhysxContactReportAPI.Apply(robot).CreateThresholdAttr().Set(0.0)
+        self.robot_prim = robot
         self.managed_paths = {item.prim_path for item in self.obstacles}
         self.contact_subscription = (
             get_physx_simulation_interface().subscribe_contact_report_events(
@@ -131,7 +150,21 @@ class DynamicObstacleManager:
         kind = str(spec["kind"])
         period = float(spec["period_s"])
         phase = float(spec.get("phase", 0.0))
-        if period <= 0.0 or not 0.0 <= phase < 1.0:
+        yield_distance = float(spec.get("yield_distance_m", 1.0))
+        yield_release_distance = yield_distance + float(
+            spec.get("yield_release_margin_m", 0.05)
+        )
+        yield_speed = float(spec.get("yield_speed_mps", 0.75))
+        if (
+            period <= 0.0
+            or not 0.0 <= phase < 1.0
+            or yield_distance <= 0.0
+            or not math.isfinite(yield_distance)
+            or yield_release_distance <= yield_distance
+            or not math.isfinite(yield_release_distance)
+            or yield_speed <= 0.0
+            or not math.isfinite(yield_speed)
+        ):
             raise ValueError(f"invalid trajectory timing for obstacle {name}")
         if "waypoints_relative_spawn_m" in spec:
             relative = spec["waypoints_relative_spawn_m"]
@@ -147,6 +180,17 @@ class DynamicObstacleManager:
             if not isinstance(values, list) or len(values) != 2:
                 raise ValueError(f"{name} must have exactly two absolute waypoints")
             start, end = (_vec3(item, f"{name}.waypoint") for item in values)
+
+        yield_refuge = None
+        if "yield_refuge_relative_spawn_m" in spec:
+            relative_refuge = _vec3(
+                spec["yield_refuge_relative_spawn_m"], f"{name}.yield_refuge"
+            )
+            yield_refuge = tuple(
+                spawn_xyz[index] + relative_refuge[index] for index in range(3)
+            )
+        elif "yield_refuge_m" in spec:
+            yield_refuge = _vec3(spec["yield_refuge_m"], f"{name}.yield_refuge")
 
         if kind == "existing_forklift":
             path = str(spec["prim_path"])
@@ -182,6 +226,10 @@ class DynamicObstacleManager:
             phase=phase,
             translate_op=translate,
             rotate_op=rotate,
+            yield_distance_m=yield_distance,
+            yield_release_distance_m=yield_release_distance,
+            yield_refuge=yield_refuge,
+            yield_speed_mps=yield_speed,
         )
 
     @staticmethod
@@ -194,9 +242,68 @@ class DynamicObstacleManager:
         )
 
     def update(self, simulation_time: float) -> None:
+        if self.last_update_simulation_time is None:
+            dt = 0.0
+        else:
+            dt = max(0.0, simulation_time - self.last_update_simulation_time)
+        self.last_update_simulation_time = simulation_time
+        robot_matrix = UsdGeom.Xformable(self.robot_prim).ComputeLocalToWorldTransform(
+            Usd.TimeCode.Default()
+        )
+        robot_translation = robot_matrix.ExtractTranslation()
+        robot_position = tuple(float(value) for value in robot_translation)
         with Usd.EditContext(self.stage, self.stage.GetSessionLayer()):
             for item in self.obstacles:
-                position = self._trajectory(item, simulation_time)
+                candidate_time = item.trajectory_time_s + dt
+                candidate = self._trajectory(item, candidate_time)
+                entering_yield = should_yield_to_robot(
+                    robot_position, candidate, item.yield_distance_m
+                )
+                if entering_yield and item.yield_refuge is not None:
+                    item.yield_latched = True
+                yielding = item.is_yielding or entering_yield or item.yield_latched
+                if yielding and item.last_position is not None:
+                    # A stationary kinematic body can deadlock a correctly
+                    # stopped navigation controller. Retreat along the same
+                    # configured route, choosing the direction that increases
+                    # robot clearance, while retaining the physical collider.
+                    if item.yield_latched and item.yield_refuge is not None:
+                        # A dedicated refuge avoids trading one blocked route
+                        # for another. Once the actor yields, it parks there
+                        # for the remainder of this deterministic trial.
+                        position = move_towards(
+                            item.last_position,
+                            item.yield_refuge,
+                            item.yield_speed_mps * dt,
+                        )
+                    else:
+                        retreat_times = [
+                            item.trajectory_time_s,
+                            item.trajectory_time_s + dt,
+                            item.trajectory_time_s - dt,
+                        ]
+                        retreat_positions = [
+                            item.last_position,
+                            self._trajectory(item, retreat_times[1]),
+                            self._trajectory(item, retreat_times[2]),
+                        ]
+                        selected = farthest_candidate_index(
+                            robot_position, retreat_positions
+                        )
+                        item.trajectory_time_s = retreat_times[selected]
+                        position = retreat_positions[selected]
+                    item.yielded_frames += 1
+                    item.yielded_simulation_s += dt
+                    if not item.is_yielding:
+                        item.yield_event_count += 1
+                    yielding = item.yield_latched or (
+                        planar_distance(robot_position, position)
+                        < item.yield_release_distance_m
+                    )
+                else:
+                    item.trajectory_time_s = candidate_time
+                    position = candidate
+                item.is_yielding = yielding
                 item.translate_op.Set(Gf.Vec3d(*position))
                 if item.last_position is not None:
                     item.distance_travelled_m += math.dist(position, item.last_position)
@@ -239,6 +346,17 @@ class DynamicObstacleManager:
                     "start_m": list(item.start),
                     "end_m": list(item.end),
                     "period_s": item.period_s,
+                    "yield_distance_m": item.yield_distance_m,
+                    "yield_release_distance_m": item.yield_release_distance_m,
+                    "yield_refuge_m": (
+                        list(item.yield_refuge) if item.yield_refuge is not None else None
+                    ),
+                    "yield_speed_mps": item.yield_speed_mps,
+                    "yield_latched": item.yield_latched,
+                    "yield_event_count": item.yield_event_count,
+                    "yielded_frames": item.yielded_frames,
+                    "yielded_simulation_s": item.yielded_simulation_s,
+                    "is_yielding_on_exit": item.is_yielding,
                     "distance_travelled_m": item.distance_travelled_m,
                     "final_position_m": list(item.last_position or item.start),
                     "final_world_position_m": world_position(item),

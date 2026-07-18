@@ -14,6 +14,7 @@ from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy, qos_profi
 from rclpy.executors import ExternalShutdownException
 from sensor_msgs.msg import Image
 from std_msgs.msg import Bool, String
+from std_srvs.srv import SetBool
 
 from .kinematics import SlewAxis
 
@@ -32,6 +33,7 @@ class CommandGuard(Node):
         self.declare_parameter("max_angular_deceleration", 3.0)
         self.declare_parameter("max_linear_jerk", 6.0)
         self.declare_parameter("max_angular_jerk", 12.0)
+        self.declare_parameter("slew_response_rate", 8.0)
         self.declare_parameter("command_timeout", 0.25)
         self.declare_parameter("update_rate", 100.0)
         self.declare_parameter("require_navigation_health", False)
@@ -42,6 +44,7 @@ class CommandGuard(Node):
         self.declare_parameter("visual_slam_timeout", 0.75)
         self.declare_parameter("depth_timeout", 0.35)
         self.declare_parameter("map_slice_timeout", 0.75)
+        self.declare_parameter("enable_fault_injection", False)
 
         self.max_linear = float(self.get_parameter("max_linear_speed").value)
         self.max_angular = float(self.get_parameter("max_angular_speed").value)
@@ -51,6 +54,9 @@ class CommandGuard(Node):
         self.angular_decel = float(self.get_parameter("max_angular_deceleration").value)
         self.linear_jerk = float(self.get_parameter("max_linear_jerk").value)
         self.angular_jerk = float(self.get_parameter("max_angular_jerk").value)
+        self.slew_response_rate = float(
+            self.get_parameter("slew_response_rate").value
+        )
         self.timeout_s = float(self.get_parameter("command_timeout").value)
         self.require_navigation_health = bool(
             self.get_parameter("require_navigation_health").value
@@ -58,6 +64,9 @@ class CommandGuard(Node):
         self.visual_slam_timeout = float(self.get_parameter("visual_slam_timeout").value)
         self.depth_timeout = float(self.get_parameter("depth_timeout").value)
         self.map_slice_timeout = float(self.get_parameter("map_slice_timeout").value)
+        self.enable_fault_injection = bool(
+            self.get_parameter("enable_fault_injection").value
+        )
         update_rate = float(self.get_parameter("update_rate").value)
         if min(
             self.max_linear,
@@ -68,6 +77,7 @@ class CommandGuard(Node):
             self.angular_decel,
             self.linear_jerk,
             self.angular_jerk,
+            self.slew_response_rate,
             self.timeout_s,
             update_rate,
         ) <= 0.0:
@@ -89,6 +99,8 @@ class CommandGuard(Node):
         self.last_visual_slam_ns: int | None = None
         self.last_depth_ns: int | None = None
         self.last_map_slice_ns: int | None = None
+        self.suppress_depth_health = False
+        self.suppress_map_slice_health = False
         if self.require_navigation_health:
             ready_qos = QoSProfile(
                 depth=1,
@@ -119,6 +131,17 @@ class CommandGuard(Node):
                 self.on_map_slice,
                 qos_profile_sensor_data,
             )
+            if self.enable_fault_injection:
+                self.create_service(
+                    SetBool,
+                    "/control/fault_depth_stale",
+                    self.on_depth_fault,
+                )
+                self.create_service(
+                    SetBool,
+                    "/control/fault_map_slice_stale",
+                    self.on_map_slice_fault,
+                )
 
         self.target_linear = 0.0
         self.target_angular = 0.0
@@ -139,11 +162,40 @@ class CommandGuard(Node):
         self.visual_slam_tracking = int(message.vo_state) == 1
 
     def on_depth(self, _message: Image) -> None:
-        self.last_depth_ns = self.get_clock().now().nanoseconds
+        if not self.suppress_depth_health:
+            self.last_depth_ns = self.get_clock().now().nanoseconds
 
     def on_map_slice(self, message: DistanceMapSlice) -> None:
-        if message.width > 0 and message.height > 0:
+        if (
+            not self.suppress_map_slice_health
+            and message.width > 0
+            and message.height > 0
+        ):
             self.last_map_slice_ns = self.get_clock().now().nanoseconds
+
+    def on_depth_fault(
+        self, request: SetBool.Request, response: SetBool.Response
+    ) -> SetBool.Response:
+        self.suppress_depth_health = bool(request.data)
+        response.success = True
+        response.message = (
+            "depth health updates suppressed"
+            if self.suppress_depth_health
+            else "depth health updates restored"
+        )
+        return response
+
+    def on_map_slice_fault(
+        self, request: SetBool.Request, response: SetBool.Response
+    ) -> SetBool.Response:
+        self.suppress_map_slice_health = bool(request.data)
+        response.success = True
+        response.message = (
+            "map-slice health updates suppressed"
+            if self.suppress_map_slice_health
+            else "map-slice health updates restored"
+        )
+        return response
 
     def navigation_health_failure(self, now_ns: int) -> str | None:
         if not self.require_navigation_health:
@@ -236,6 +288,7 @@ class CommandGuard(Node):
             self.linear_accel,
             self.linear_decel,
             self.linear_jerk,
+            self.slew_response_rate,
         )
         output.angular.z = self.angular_axis.update(
             self.target_angular,
@@ -243,6 +296,7 @@ class CommandGuard(Node):
             self.angular_accel,
             self.angular_decel,
             self.angular_jerk,
+            self.slew_response_rate,
         )
         self.publisher.publish(output)
 

@@ -239,6 +239,12 @@ def main(args: list[str] | None = None) -> None:
         executor.spin()
     except KeyboardInterrupt:
         pass
+    except Exception:
+        # SIGINT may invalidate the rcl context while the multithreaded
+        # executor is rebuilding its wait set. Suppress only that shutdown
+        # race; a live context still propagates real runtime failures.
+        if rclpy.ok():
+            raise
     finally:
         executor.shutdown()
         node.destroy_node()

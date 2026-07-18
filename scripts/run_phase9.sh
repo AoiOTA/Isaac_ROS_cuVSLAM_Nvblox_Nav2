@@ -116,6 +116,7 @@ test_args=(--ros-args -p use_sim_time:=true -p result_path:="${REPORT}"
   -p action_topic:=/navigate_to_pose_resilient
   -p nvblox_slice_topic:=/nvblox_node/combined_map_slice
   -p phase9_mode:=true -p force_relocalization:=true
+  -p require_dynamic_outputs:=true
   -p force_relocalization_delay_s:="${PHASE9_RECOVERY_FALLBACK_DELAY_S:-45.0}"
   -p force_relocalization_distance_m:="${PHASE9_RECOVERY_DISTANCE_M:-0.15}"
   -p require_surround_cameras:=false)

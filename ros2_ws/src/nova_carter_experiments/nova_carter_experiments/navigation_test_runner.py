@@ -1,12 +1,14 @@
-"""Run Stage 8/9 navigation goals and verify every critical data-flow edge."""
+"""Run Stage 8-10 navigation goals and verify every critical data-flow edge."""
 
 from __future__ import annotations
 
 from collections import defaultdict
+import csv
 import json
 import math
 from pathlib import Path
 import time
+import traceback
 
 from action_msgs.msg import GoalStatus
 from geometry_msgs.msg import Twist
@@ -23,7 +25,7 @@ from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy, qos_profi
 from sensor_msgs.msg import LaserScan, PointCloud2
 from sensor_msgs.msg import CameraInfo, Image
 from std_msgs.msg import Bool, String
-from std_srvs.srv import Trigger
+from std_srvs.srv import SetBool, Trigger
 from tf2_msgs.msg import TFMessage
 
 
@@ -36,6 +38,25 @@ def yaw_from_quaternion(q: object) -> float:
         2.0 * (q.w * q.z + q.x * q.y),
         1.0 - 2.0 * (q.y * q.y + q.z * q.z),
     )
+
+
+def path_length(points: list[tuple[float, float]]) -> float:
+    return sum(math.dist(a, b) for a, b in zip(points, points[1:]))
+
+
+def percentile(values: list[float], quantile: float) -> float:
+    """Return a linearly interpolated percentile without a numpy dependency."""
+
+    if not values:
+        return 0.0
+    ordered = sorted(float(value) for value in values)
+    rank = max(0.0, min(1.0, quantile)) * (len(ordered) - 1)
+    lower = math.floor(rank)
+    upper = math.ceil(rank)
+    if lower == upper:
+        return ordered[lower]
+    fraction = rank - lower
+    return ordered[lower] * (1.0 - fraction) + ordered[upper] * fraction
 
 
 class NavigationTestRunner(Node):
@@ -56,6 +77,19 @@ class NavigationTestRunner(Node):
         self.declare_parameter("force_relocalization_delay_s", 45.0)
         self.declare_parameter("force_relocalization_distance_m", 0.50)
         self.declare_parameter("require_surround_cameras", False)
+        self.declare_parameter("require_dynamic_outputs", False)
+        self.declare_parameter("experiment_class", "stage8")
+        self.declare_parameter("trajectory_path", "")
+        self.declare_parameter("command_trace_path", "")
+        self.declare_parameter("goal_xy_tolerance_m", 0.25)
+        self.declare_parameter("goal_yaw_tolerance_deg", 12.0)
+        self.declare_parameter("minimum_ground_truth_motion_m", 3.0)
+        self.declare_parameter("fault_sequence", "")
+        self.declare_parameter("fault_duration_s", 2.0)
+        self.declare_parameter("fault_stop_grace_s", 1.5)
+        self.declare_parameter("fault_injection_delay_s", 2.0)
+        self.declare_parameter("fault_injection_distance_m", 0.15)
+        self.declare_parameter("maximum_command_while_fault", 0.02)
         self.result_path = Path(str(self.get_parameter("result_path").value)).resolve()
         flat = [float(value) for value in self.get_parameter("goal_poses").value]
         if not flat or len(flat) % 3:
@@ -70,6 +104,50 @@ class NavigationTestRunner(Node):
         self.require_surround_cameras = bool(
             self.get_parameter("require_surround_cameras").value
         )
+        self.require_dynamic_outputs = bool(
+            self.get_parameter("require_dynamic_outputs").value
+        )
+        self.experiment_class = str(
+            self.get_parameter("experiment_class").value
+        )
+        trajectory_value = str(self.get_parameter("trajectory_path").value)
+        command_value = str(self.get_parameter("command_trace_path").value)
+        self.trajectory_path = (
+            Path(trajectory_value).resolve() if trajectory_value else None
+        )
+        self.command_trace_path = (
+            Path(command_value).resolve() if command_value else None
+        )
+        self.goal_xy_tolerance = float(
+            self.get_parameter("goal_xy_tolerance_m").value
+        )
+        self.goal_yaw_tolerance_deg = float(
+            self.get_parameter("goal_yaw_tolerance_deg").value
+        )
+        self.minimum_ground_truth_motion = float(
+            self.get_parameter("minimum_ground_truth_motion_m").value
+        )
+        fault_value = str(self.get_parameter("fault_sequence").value).strip()
+        self.fault_sequence = [
+            item.strip() for item in fault_value.split(",") if item.strip()
+        ]
+        valid_faults = {"depth_stale", "map_slice_stale", "relocalization"}
+        invalid_faults = set(self.fault_sequence) - valid_faults
+        if invalid_faults:
+            raise ValueError(f"unsupported fault types: {sorted(invalid_faults)}")
+        self.fault_duration = float(self.get_parameter("fault_duration_s").value)
+        self.fault_stop_grace = float(
+            self.get_parameter("fault_stop_grace_s").value
+        )
+        self.fault_injection_delay = float(
+            self.get_parameter("fault_injection_delay_s").value
+        )
+        self.fault_injection_distance = float(
+            self.get_parameter("fault_injection_distance_m").value
+        )
+        self.maximum_command_while_fault = float(
+            self.get_parameter("maximum_command_while_fault").value
+        )
         self.force_relocalization_delay = float(
             self.get_parameter("force_relocalization_delay_s").value
         )
@@ -80,12 +158,25 @@ class NavigationTestRunner(Node):
             self.force_relocalization_delay, self.force_relocalization_distance
         ) <= 0.0:
             raise ValueError("forced-relocalization delay and distance must be positive")
+        if min(
+            self.goal_xy_tolerance,
+            self.goal_yaw_tolerance_deg,
+            self.fault_duration,
+            self.fault_stop_grace,
+            self.fault_injection_delay,
+            self.fault_injection_distance,
+            self.maximum_command_while_fault,
+        ) <= 0.0 or self.minimum_ground_truth_motion < 0.0:
+            raise ValueError("Stage 10 tolerances and fault timings are invalid")
         self.counts: defaultdict[str, int] = defaultdict(int)
         self.first_wall: dict[str, float] = {}
         self.last_wall: dict[str, float] = {}
         self.localization_ready = False
         self.tracking_samples = 0
         self.tf_edges: set[tuple[str, str]] = set()
+        self.tf_transforms: dict[
+            tuple[str, str], tuple[float, float, float]
+        ] = {}
         self.scan_finite = 0
         self.safety_scan_finite = 0
         self.depth_cloud_points = 0
@@ -99,6 +190,14 @@ class NavigationTestRunner(Node):
         self.guard_states: set[str] = set()
         self.collision_actions: defaultdict[int, int] = defaultdict(int)
         self.ground_truth: list[tuple[float, float]] = []
+        self.ground_truth_trace: list[dict[str, float]] = []
+        self.command_trace: list[dict[str, float | str]] = []
+        self.active_goal_index = -1
+        self.active_goal_ground_truth_start = 0
+        self.active_goal_command_start = 0
+        self.active_global_plan_length = 0.0
+        self.active_fault: dict[str, object] | None = None
+        self.fault_results: list[dict[str, object]] = []
         self.command_max = defaultdict(float)
         self.command_latest: dict[str, tuple[float, float]] = {}
         self.command_lateral_max = 0.0
@@ -266,6 +365,12 @@ class NavigationTestRunner(Node):
         self.force_client = self.create_client(
             Trigger, "/localization/force_relocalization"
         )
+        self.depth_fault_client = self.create_client(
+            SetBool, "/control/fault_depth_stale"
+        )
+        self.map_slice_fault_client = self.create_client(
+            SetBool, "/control/fault_map_slice_stale"
+        )
         lifecycle_names = (
             "map_server",
             "controller_server",
@@ -340,7 +445,28 @@ class NavigationTestRunner(Node):
     def on_tf(self, message: TFMessage) -> None:
         self.record("tf")
         for transform in message.transforms:
-            self.tf_edges.add((transform.header.frame_id, transform.child_frame_id))
+            edge = (transform.header.frame_id, transform.child_frame_id)
+            self.tf_edges.add(edge)
+            self.tf_transforms[edge] = (
+                float(transform.transform.translation.x),
+                float(transform.transform.translation.y),
+                yaw_from_quaternion(transform.transform.rotation),
+            )
+
+    def current_map_base_pose(self) -> tuple[float, float, float] | None:
+        map_to_odom = self.tf_transforms.get(("map", "odom"))
+        odom_to_base = self.tf_transforms.get(("odom", "base_link"))
+        if map_to_odom is None or odom_to_base is None:
+            return None
+        x_map_odom, y_map_odom, yaw_map_odom = map_to_odom
+        x_odom_base, y_odom_base, yaw_odom_base = odom_to_base
+        cosine = math.cos(yaw_map_odom)
+        sine = math.sin(yaw_map_odom)
+        return (
+            x_map_odom + cosine * x_odom_base - sine * y_odom_base,
+            y_map_odom + sine * x_odom_base + cosine * y_odom_base,
+            yaw_map_odom + yaw_odom_base,
+        )
 
     def on_map(self, message: OccupancyGrid) -> None:
         self.record("map")
@@ -414,6 +540,19 @@ class NavigationTestRunner(Node):
     def on_path(self, name: str, message: NavPath) -> None:
         if message.poses:
             self.record(name)
+            if name == "plan" and self.active_goal is not None:
+                points = [
+                    (pose.pose.position.x, pose.pose.position.y)
+                    for pose in message.poses
+                ]
+                length = path_length(points)
+                if length > 0.0:
+                    # Smac republishes a progressively shorter plan while the
+                    # robot advances. Preserve the complete initial/reference
+                    # route instead of the final few centimetres.
+                    self.active_global_plan_length = max(
+                        self.active_global_plan_length, length
+                    )
 
     def on_command(self, name: str, message: Twist) -> None:
         self.record(name)
@@ -436,12 +575,36 @@ class NavigationTestRunner(Node):
                 abs(message.linear.x),
                 abs(message.angular.z),
             )
+        if name == "cmd_sim":
+            now_wall = time.monotonic()
+            self.command_trace.append(
+                {
+                    "wall_time_s": now_wall,
+                    "sim_time_s": self.get_clock().now().nanoseconds * 1.0e-9,
+                    "goal_index": self.active_goal_index,
+                    "linear_x_mps": float(message.linear.x),
+                    "angular_z_radps": float(message.angular.z),
+                    "guard_state": self.latest_guard_state,
+                }
+            )
+            if self.active_fault is not None:
+                activated = float(self.active_fault["activated_wall_s"])
+                if now_wall - activated >= self.fault_stop_grace:
+                    self.active_fault["max_command_after_grace"] = max(
+                        float(self.active_fault["max_command_after_grace"]),
+                        abs(float(message.linear.x)),
+                        abs(float(message.angular.z)),
+                    )
 
     def on_guard_status(self, message: String) -> None:
         self.record("guard_status")
         try:
             self.latest_guard_state = str(json.loads(message.data)["state"])
             self.guard_states.add(self.latest_guard_state)
+            if self.active_fault is not None:
+                states = self.active_fault["guard_states"]
+                if isinstance(states, set):
+                    states.add(self.latest_guard_state)
         except (json.JSONDecodeError, KeyError, TypeError):
             self.guard_states.add("invalid_status")
 
@@ -455,6 +618,145 @@ class NavigationTestRunner(Node):
         point = (message.pose.pose.position.x, message.pose.pose.position.y)
         if not self.ground_truth or math.dist(point, self.ground_truth[-1]) >= 0.005:
             self.ground_truth.append(point)
+        stamp = message.header.stamp
+        self.ground_truth_trace.append(
+            {
+                "sim_time_s": float(stamp.sec) + float(stamp.nanosec) * 1.0e-9,
+                "goal_index": self.active_goal_index,
+                "x_m": float(message.pose.pose.position.x),
+                "y_m": float(message.pose.pose.position.y),
+                "yaw_rad": yaw_from_quaternion(message.pose.pose.orientation),
+                "linear_x_mps": float(message.twist.twist.linear.x),
+                "angular_z_radps": float(message.twist.twist.angular.z),
+            }
+        )
+
+    def call_bool_service(
+        self, client: object, enabled: bool, timeout_s: float = 3.0
+    ) -> tuple[bool, str]:
+        if not client.wait_for_service(timeout_sec=timeout_s):
+            return False, "service unavailable"
+        request = SetBool.Request()
+        request.data = enabled
+        future = client.call_async(request)
+        rclpy.spin_until_future_complete(self, future, timeout_sec=timeout_s)
+        response = future.result()
+        if response is None:
+            return False, "no response"
+        return bool(response.success), str(response.message)
+
+    def begin_fault(self, kind: str) -> None:
+        target_state = {
+            "depth_stale": "blocked_depth_stale",
+            "map_slice_stale": "blocked_map_slice_stale",
+            "relocalization": "blocked_localization_not_ready",
+        }[kind]
+        result: dict[str, object] = {
+            "kind": kind,
+            "injected": False,
+            "restored": False,
+            "target_guard_state": target_state,
+            "guard_states": set(),
+            "max_command_after_grace": 0.0,
+            "activated_wall_s": time.monotonic(),
+        }
+        if kind == "depth_stale":
+            success, message = self.call_bool_service(self.depth_fault_client, True)
+        elif kind == "map_slice_stale":
+            success, message = self.call_bool_service(
+                self.map_slice_fault_client, True
+            )
+        else:
+            if not self.force_client.wait_for_service(timeout_sec=3.0):
+                success, message = False, "service unavailable"
+            else:
+                future = self.force_client.call_async(Trigger.Request())
+                rclpy.spin_until_future_complete(self, future, timeout_sec=3.0)
+                response = future.result()
+                success = bool(response is not None and response.success)
+                message = response.message if response is not None else "no response"
+                self.force_injected = True
+                self.force_response_success = success
+        result["injected"] = success
+        result["message"] = message
+        result["activated_wall_s"] = time.monotonic()
+        self.active_fault = result
+        self.get_logger().info(f"Injected Stage 10 fault {kind}: {message}")
+
+    def finish_fault(self) -> None:
+        if self.active_fault is None:
+            return
+        kind = str(self.active_fault["kind"])
+        if kind == "depth_stale":
+            success, message = self.call_bool_service(self.depth_fault_client, False)
+        elif kind == "map_slice_stale":
+            success, message = self.call_bool_service(
+                self.map_slice_fault_client, False
+            )
+        else:
+            # The localization recovery manager owns relocalization restoration.
+            success, message = True, "recovery manager owns restoration"
+        states = self.active_fault["guard_states"]
+        self.active_fault["guard_states"] = (
+            sorted(states) if isinstance(states, set) else []
+        )
+        self.active_fault["restored"] = success
+        self.active_fault["restore_message"] = message
+        self.active_fault["duration_s"] = (
+            time.monotonic() - float(self.active_fault["activated_wall_s"])
+        )
+        self.fault_results.append(self.active_fault)
+        self.get_logger().info(f"Restored Stage 10 fault {kind}: {message}")
+        self.active_fault = None
+
+    @staticmethod
+    def command_smoothness(samples: list[dict[str, float | str]]) -> dict[str, float]:
+        accelerations_linear: list[float] = []
+        accelerations_angular: list[float] = []
+        jerks_linear: list[float] = []
+        jerks_angular: list[float] = []
+        previous_acceleration: tuple[float, float, float] | None = None
+        for previous, current in zip(samples, samples[1:]):
+            # Emergency health/watchdog stops deliberately bypass slew
+            # limiting. Measure normal navigation smoothness only while the
+            # final Guard reports active; fault-stop latency is audited by a
+            # separate hardening check.
+            if (
+                previous.get("guard_state") != "active"
+                or current.get("guard_state") != "active"
+            ):
+                previous_acceleration = None
+                continue
+            dt = float(current["sim_time_s"]) - float(previous["sim_time_s"])
+            if dt <= 0.002 or dt > 0.10:
+                continue
+            linear = (
+                float(current["linear_x_mps"])
+                - float(previous["linear_x_mps"])
+            ) / dt
+            angular = (
+                float(current["angular_z_radps"])
+                - float(previous["angular_z_radps"])
+            ) / dt
+            accelerations_linear.append(abs(linear))
+            accelerations_angular.append(abs(angular))
+            if previous_acceleration is not None:
+                last_time, last_linear, last_angular = previous_acceleration
+                acceleration_dt = float(current["sim_time_s"]) - last_time
+                if acceleration_dt > 0.002:
+                    jerks_linear.append(abs(linear - last_linear) / acceleration_dt)
+                    jerks_angular.append(abs(angular - last_angular) / acceleration_dt)
+            previous_acceleration = (
+                float(current["sim_time_s"]),
+                linear,
+                angular,
+            )
+        return {
+            "linear_acceleration_p95_mps2": percentile(accelerations_linear, 0.95),
+            "angular_acceleration_p95_radps2": percentile(accelerations_angular, 0.95),
+            "linear_jerk_p95_mps3": percentile(jerks_linear, 0.95),
+            "angular_jerk_p95_radps3": percentile(jerks_angular, 0.95),
+        }
 
     def spin_until(self, predicate, timeout: float, label: str) -> None:
         deadline = time.monotonic() + timeout
@@ -507,9 +809,20 @@ class NavigationTestRunner(Node):
             f"commands=[{command_text}]"
         )
 
-    def execute_goal(self, x: float, y: float, heading: float) -> dict[str, object]:
+    def execute_goal(
+        self,
+        goal_index: int,
+        x: float,
+        y: float,
+        heading: float,
+        fault_kind: str | None = None,
+    ) -> dict[str, object]:
         self.latest_feedback_pose = None
         self.active_goal = (x, y, heading)
+        self.active_goal_index = goal_index
+        self.active_goal_ground_truth_start = max(0, len(self.ground_truth) - 1)
+        self.active_goal_command_start = len(self.command_trace)
+        self.active_global_plan_length = 0.0
         self.feedback_log_wall = 0.0
         self.get_logger().info(f"Sending NavigateToPose goal {self.active_goal}")
         goal = NavigateToPose.Goal()
@@ -528,8 +841,34 @@ class NavigationTestRunner(Node):
         result_future = handle.get_result_async()
         deadline = time.monotonic() + self.goal_timeout
         goal_started_wall = time.monotonic()
+        goal_start_point = self.ground_truth[-1] if self.ground_truth else None
         while not result_future.done() and time.monotonic() < deadline:
             rclpy.spin_once(self, timeout_sec=0.05)
+            travelled = (
+                math.dist(goal_start_point, self.ground_truth[-1])
+                if goal_start_point is not None and self.ground_truth
+                else 0.0
+            )
+            if (
+                fault_kind is not None
+                and self.active_fault is None
+                and not any(
+                    result.get("kind") == fault_kind for result in self.fault_results
+                )
+                and (
+                    travelled >= self.fault_injection_distance
+                    or time.monotonic() - goal_started_wall
+                    >= self.fault_injection_delay
+                )
+            ):
+                self.begin_fault(fault_kind)
+            if (
+                self.active_fault is not None
+                and time.monotonic()
+                - float(self.active_fault["activated_wall_s"])
+                >= self.fault_duration
+            ):
+                self.finish_fault()
             if (
                 self.force_relocalization
                 and not self.force_injected
@@ -554,22 +893,45 @@ class NavigationTestRunner(Node):
                 self.get_logger().info(
                     "Injected safe cuVGL relocalization during active goal"
                 )
+        if self.active_fault is not None:
+            self.finish_fault()
         wrapped = result_future.result()
         if wrapped is None:
             handle.cancel_goal_async()
             raise TimeoutError(f"NavigateToPose timed out for {(x, y, heading)}")
-        pose = self.latest_feedback_pose.pose if self.latest_feedback_pose else None
-        xy_error = math.hypot(pose.position.x - x, pose.position.y - y) if pose else math.inf
-        yaw_error = (
-            abs(angle_difference(yaw_from_quaternion(pose.orientation), heading))
-            if pose
-            else math.inf
-        )
+        # Feedback can stop just before the final controller cycle. Sample the
+        # authoritative TF chain after the action result for acceptance error.
+        settle_deadline = time.monotonic() + 0.50
+        while time.monotonic() < settle_deadline:
+            rclpy.spin_once(self, timeout_sec=0.05)
+        final_map_pose = self.current_map_base_pose()
+        if final_map_pose is not None:
+            pose_x, pose_y, pose_yaw = final_map_pose
+            pose_source = "map_to_odom_to_base_link_tf"
+        elif self.latest_feedback_pose is not None:
+            pose = self.latest_feedback_pose.pose
+            pose_x, pose_y = pose.position.x, pose.position.y
+            pose_yaw = yaw_from_quaternion(pose.orientation)
+            pose_source = "navigate_to_pose_feedback"
+        else:
+            pose_x = pose_y = pose_yaw = math.inf
+            pose_source = "unavailable"
+        xy_error = math.hypot(pose_x - x, pose_y - y)
+        yaw_error = abs(angle_difference(pose_yaw, heading))
         self.get_logger().info(
             f"NavigateToPose result goal={self.active_goal} status={wrapped.status} "
             f"error_code={wrapped.result.error_code} xy_error={xy_error:.3f} "
             f"yaw_error_deg={math.degrees(yaw_error):.2f}"
         )
+        goal_points = self.ground_truth[self.active_goal_ground_truth_start :]
+        actual_length = path_length(goal_points)
+        reference_length = self.active_global_plan_length
+        stretch = (
+            max(0.0, actual_length / reference_length - 1.0)
+            if reference_length > 0.05
+            else math.inf
+        )
+        goal_commands = self.command_trace[self.active_goal_command_start :]
         return {
             "requested": [x, y, heading],
             "status": int(wrapped.status),
@@ -577,6 +939,13 @@ class NavigationTestRunner(Node):
             "error_msg": wrapped.result.error_msg,
             "xy_error_m": xy_error,
             "yaw_error_deg": math.degrees(yaw_error),
+            "final_pose_source": pose_source,
+            "final_map_pose": [pose_x, pose_y, pose_yaw],
+            "elapsed_wall_s": time.monotonic() - goal_started_wall,
+            "actual_path_length_m": actual_length,
+            "reference_plan_length_m": reference_length,
+            "path_stretch": stretch,
+            "command_smoothness": self.command_smoothness(goal_commands),
         }
 
     def run(self) -> dict[str, object]:
@@ -605,14 +974,25 @@ class NavigationTestRunner(Node):
             f"{namespace.rstrip('/')}/{name}" if namespace != "/" else f"/{name}"
             for name, namespace in self.get_node_names_and_namespaces()
         )
-        goals = [self.execute_goal(*goal) for goal in self.goals]
+        goals = [
+            self.execute_goal(
+                index,
+                *goal,
+                fault_kind=(
+                    self.fault_sequence[index]
+                    if index < len(self.fault_sequence)
+                    else None
+                ),
+            )
+            for index, goal in enumerate(self.goals)
+        ]
+        self.active_goal = None
+        self.active_goal_index = -1
         # Allow the zero command to propagate through every safety stage after completion.
         stop_deadline = time.monotonic() + (2.0 if self.phase9_mode else 1.0)
         while time.monotonic() < stop_deadline:
             rclpy.spin_once(self, timeout_sec=0.05)
-        path_length = sum(
-            math.dist(a, b) for a, b in zip(self.ground_truth, self.ground_truth[1:])
-        )
+        ground_truth_path_length = path_length(self.ground_truth)
         required_counts = (
             "map",
             "global_costmap",
@@ -633,8 +1013,8 @@ class NavigationTestRunner(Node):
             "all_goals_succeeded": all(
                 goal["status"] == GoalStatus.STATUS_SUCCEEDED
                 and goal["error_code"] == 0
-                and goal["xy_error_m"] <= 0.25
-                and goal["yaw_error_deg"] <= 12.0
+                and goal["xy_error_m"] <= self.goal_xy_tolerance
+                and goal["yaw_error_deg"] <= self.goal_yaw_tolerance_deg
                 for goal in goals
             ),
             "critical_topics_nonempty": all(self.counts[name] > 0 for name in required_counts),
@@ -651,7 +1031,9 @@ class NavigationTestRunner(Node):
             "cuvslam_tracking": self.tracking_samples >= 20,
             "command_chain_moved": self.command_max["cmd_sim_linear"] > 0.05,
             "differential_drive_no_lateral_command": self.command_lateral_max < 1.0e-9,
-            "ground_truth_motion": path_length >= 3.0,
+            "ground_truth_motion": (
+                ground_truth_path_length >= self.minimum_ground_truth_motion
+            ),
             "guard_became_active": "active" in self.guard_states,
             "rviz_running_when_requested": not self.require_rviz or "/rviz2" in node_names,
         }
@@ -664,18 +1046,6 @@ class NavigationTestRunner(Node):
             }
             checks.update(
                 {
-                    "forced_relocalization_accepted": self.force_injected
-                    and self.force_response_success,
-                    "recovery_state_machine_completed": self.recovery_count >= 1
-                    and "camera_warmup" in self.recovery_states
-                    and "waiting_for_vgl_pose" in self.recovery_states
-                    and "waiting_for_tracking" in self.recovery_states
-                    and "navigation_ready" in self.recovery_states,
-                    "resilient_action_paused_and_resumed": (
-                        self.resilient_resume_count >= 1
-                        and "waiting_for_localization" in self.resilient_states
-                        and "succeeded" in self.resilient_states
-                    ),
                     "vgl_camera_mode_valid": (
                         (
                             required_surround <= set(self.surround_counts)
@@ -691,13 +1061,63 @@ class NavigationTestRunner(Node):
                         )
                     ),
                     "combined_slice_nonempty": self.nvblox_slice_cells > 0,
-                    "dynamic_slice_nonempty": self.dynamic_slice_cells > 0,
-                    "dynamic_esdf_nonempty": self.dynamic_esdf_points > 0,
-                    "combined_esdf_nonempty": self.combined_esdf_points > 0,
-                    "guard_stopped_during_relocalization": (
-                        self.max_command_while_unready <= 0.02
-                    ),
                 }
+            )
+            if self.require_dynamic_outputs:
+                checks.update(
+                    {
+                        "dynamic_slice_nonempty": self.dynamic_slice_cells > 0,
+                        "dynamic_esdf_nonempty": self.dynamic_esdf_points > 0,
+                        "combined_esdf_nonempty": self.combined_esdf_points > 0,
+                    }
+                )
+            recovery_required = self.force_relocalization or (
+                "relocalization" in self.fault_sequence
+            )
+            if recovery_required:
+                checks.update(
+                    {
+                        "forced_relocalization_accepted": self.force_injected
+                        and self.force_response_success,
+                        "recovery_state_machine_completed": self.recovery_count >= 1
+                        and "camera_warmup" in self.recovery_states
+                        and "waiting_for_vgl_pose" in self.recovery_states
+                        and "waiting_for_tracking" in self.recovery_states
+                        and "navigation_ready" in self.recovery_states,
+                        "resilient_action_paused_and_resumed": (
+                            self.resilient_resume_count >= 1
+                            and "waiting_for_localization" in self.resilient_states
+                            and "succeeded" in self.resilient_states
+                        ),
+                        "guard_stopped_during_relocalization": (
+                            self.max_command_while_unready
+                            <= self.maximum_command_while_fault
+                        ),
+                    }
+                )
+        if self.experiment_class.startswith("stage10"):
+            checks["path_metrics_available"] = all(
+                math.isfinite(float(goal["path_stretch"]))
+                and float(goal["reference_plan_length_m"]) > 0.05
+                for goal in goals
+            )
+        if self.fault_sequence:
+            checks["all_faults_injected_and_restored"] = (
+                len(self.fault_results) == len(self.fault_sequence)
+                and all(
+                    bool(result["injected"]) and bool(result["restored"])
+                    for result in self.fault_results
+                )
+            )
+            checks["guard_blocked_each_fault"] = all(
+                str(result["target_guard_state"])
+                in set(result.get("guard_states", []))
+                for result in self.fault_results
+            )
+            checks["commands_zero_during_faults"] = all(
+                float(result["max_command_after_grace"])
+                <= self.maximum_command_while_fault
+                for result in self.fault_results
             )
         rates = {}
         for name, count in self.counts.items():
@@ -735,25 +1155,88 @@ class NavigationTestRunner(Node):
             "resilient_states": sorted(self.resilient_states),
             "resilient_resume_count": self.resilient_resume_count,
             "force_relocalization_injected": self.force_injected,
+            "fault_results": self.fault_results,
             "max_command_while_unready_after_grace": self.max_command_while_unready,
             "command_max": dict(self.command_max),
             "command_lateral_max": self.command_lateral_max,
             "guard_states": sorted(self.guard_states),
             "collision_actions": dict(self.collision_actions),
-            "ground_truth_path_length_m": path_length,
+            "ground_truth_path_length_m": ground_truth_path_length,
+            "experiment_class": self.experiment_class,
+            "goal_tolerances": {
+                "position_m": self.goal_xy_tolerance,
+                "yaw_deg": self.goal_yaw_tolerance_deg,
+            },
             "node_names": node_names,
         }
+
+    def write_traces(self) -> None:
+        if self.trajectory_path is not None:
+            self.trajectory_path.parent.mkdir(parents=True, exist_ok=True)
+            with self.trajectory_path.open("w", newline="", encoding="utf-8") as stream:
+                fields = [
+                    "sim_time_s",
+                    "goal_index",
+                    "x_m",
+                    "y_m",
+                    "yaw_rad",
+                    "linear_x_mps",
+                    "angular_z_radps",
+                ]
+                writer = csv.DictWriter(stream, fieldnames=fields)
+                writer.writeheader()
+                writer.writerows(self.ground_truth_trace)
+        if self.command_trace_path is not None:
+            self.command_trace_path.parent.mkdir(parents=True, exist_ok=True)
+            with self.command_trace_path.open(
+                "w", newline="", encoding="utf-8"
+            ) as stream:
+                fields = [
+                    "wall_time_s",
+                    "sim_time_s",
+                    "goal_index",
+                    "linear_x_mps",
+                    "angular_z_radps",
+                    "guard_state",
+                ]
+                writer = csv.DictWriter(stream, fieldnames=fields)
+                writer.writeheader()
+                writer.writerows(self.command_trace)
 
 
 def main(args: list[str] | None = None) -> None:
     rclpy.init(args=args)
     node = NavigationTestRunner()
     try:
-        report = node.run()
+        try:
+            report = node.run()
+        except Exception as error:
+            # Preserve partial trajectories and an actionable machine-readable
+            # report even when Nav2 aborts or a goal reaches its timeout.
+            report = {
+                "status": "failed",
+                "experiment_class": node.experiment_class,
+                "error": str(error),
+                "error_type": type(error).__name__,
+                "traceback": traceback.format_exc(),
+                "message_counts": dict(node.counts),
+                "guard_states": sorted(node.guard_states),
+                "collision_actions": dict(node.collision_actions),
+                "ground_truth_path_length_m": path_length(node.ground_truth),
+            }
+            node.write_traces()
+            node.result_path.parent.mkdir(parents=True, exist_ok=True)
+            node.result_path.write_text(
+                json.dumps(report, indent=2, sort_keys=True) + "\n"
+            )
+            raise
+        node.write_traces()
         node.result_path.parent.mkdir(parents=True, exist_ok=True)
         node.result_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
         if report["status"] != "passed":
-            stage = 9 if node.phase9_mode else 8
+            stage = 10 if node.experiment_class.startswith("stage10") else (
+                9 if node.phase9_mode else 8
+            )
             raise RuntimeError(
                 f"Stage {stage} navigation acceptance failed: {report['checks']}"
             )

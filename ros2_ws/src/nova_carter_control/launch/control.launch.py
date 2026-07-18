@@ -18,6 +18,7 @@ def generate_launch_description() -> LaunchDescription:
             DeclareLaunchArgument("visual_slam_timeout", default_value="1.0"),
             DeclareLaunchArgument("depth_timeout", default_value="0.5"),
             DeclareLaunchArgument("map_slice_timeout", default_value="1.0"),
+            DeclareLaunchArgument("enable_fault_injection", default_value="false"),
             Node(
                 package="nova_carter_control",
                 executable="command_guard",
@@ -36,6 +37,9 @@ def generate_launch_description() -> LaunchDescription:
                         "depth_timeout": LaunchConfiguration("depth_timeout"),
                         "map_slice_timeout": LaunchConfiguration(
                             "map_slice_timeout"
+                        ),
+                        "enable_fault_injection": LaunchConfiguration(
+                            "enable_fault_injection"
                         ),
                     },
                 ],

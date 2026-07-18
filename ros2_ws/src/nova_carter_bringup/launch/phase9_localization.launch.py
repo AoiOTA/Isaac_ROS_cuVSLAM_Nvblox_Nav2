@@ -27,15 +27,26 @@ def generate_launch_description() -> LaunchDescription:
             DeclareLaunchArgument(
                 "vgl_params", default_value=str(share / "config/vgl.yaml")
             ),
+            DeclareLaunchArgument("visual_slam_timeout", default_value="2.0"),
+            DeclareLaunchArgument("depth_timeout", default_value="2.0"),
+            DeclareLaunchArgument("map_slice_timeout", default_value="2.0"),
+            DeclareLaunchArgument("enable_fault_injection", default_value="false"),
             include(
                 "nova_carter_control",
                 "control.launch.py",
                 {
                     "require_navigation_health": "true",
                     "map_slice_topic": "/nvblox_node/combined_map_slice",
-                    "visual_slam_timeout": "2.0",
-                    "depth_timeout": "2.0",
-                    "map_slice_timeout": "2.0",
+                    "visual_slam_timeout": LaunchConfiguration(
+                        "visual_slam_timeout"
+                    ),
+                    "depth_timeout": LaunchConfiguration("depth_timeout"),
+                    "map_slice_timeout": LaunchConfiguration(
+                        "map_slice_timeout"
+                    ),
+                    "enable_fault_injection": LaunchConfiguration(
+                        "enable_fault_injection"
+                    ),
                 },
             ),
             include(

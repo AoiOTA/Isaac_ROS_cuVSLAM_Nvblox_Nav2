@@ -111,15 +111,16 @@ that the EKF input is `/wheel/odometry`; ground truth must never appear as an
 input. cuVSLAM status remains a hard Command Guard prerequisite, so do not
 remove the visual-health gate merely because wheel-local prediction is smooth.
 
-## Stage 9 dynamic obstacle collides with a stopped robot
+## Stage 9/10 dynamic obstacle collides with a stopped robot
 
-Read `dynamic_obstacles.robot_contact_pairs` in the simulator JSON. Kinematic
-actors do not yield when Collision Monitor stops the robot, so their physical
-swept volume must stay outside the robot footprint while their nvblox/inflation
-envelope can still intersect the route. For generated USD shapes, author the
-translate op before scale; reversing them scales the waypoint and silently
-moves the obstacle into the robot. Never disable the PhysX contact assertion to
-make a run pass.
+Read both `robot_contacts.contact_pairs` and
+`dynamic_obstacles.robot_contact_pairs` in the simulator JSON. Phase 10
+kinematic actors pause before entering their configured robot safety envelope,
+remain collidable in place, and resume after the robot clears; inspect each
+obstacle's `yield_event_count`, `yielded_frames` and
+`yielded_simulation_s`. A contact still fails the trial and must never be hidden
+by disabling the assertion. For generated USD shapes, author translate before
+scale; reversing them scales the waypoint and silently moves the obstacle.
 
 ## Stage 9 guard alternates active and timeout under full RViz load
 
@@ -129,3 +130,44 @@ for front depth, cuVSLAM status and combined map slice because GPU rendering,
 dynamic nvblox and RViz share one RTX 4090. Persistent gaps longer than this
 mean the 10 Hz front stream or DDS discovery is unhealthy; verify the local
 Fast DDS server, topic rates and GPU load instead of increasing timeouts again.
+
+## Stage 10 MCAP starts but contains no messages
+
+Each trial writes a Fast DDS SUPER_CLIENT profile and exports it through
+`FASTRTPS_DEFAULT_PROFILES_FILE` before starting `ros2 bag`. This installed
+Fast DDS 2.14.6 runtime does not use a generic discovery-server environment
+shortcut for late participant discovery. Inspect `fastdds-super-client.xml`,
+`fastdds-discovery.log` and `rosbag.log`; do not fall back to recording all
+high-bandwidth image/depth topics. The compact topic list is defined in
+`config/stage10.yaml`.
+
+## Stage 10 fault injection does not block Command Guard
+
+Fault services exist only when `phase10.launch.py` enables them. Confirm the
+runner called `/control/fault_depth_stale` or
+`/control/fault_map_slice_stale`, then inspect `/control/guard_status`. The
+target states are `blocked_depth_stale` and `blocked_map_slice_stale`; raising
+the health timeout until the 2 s injection no longer trips is not an accepted
+fix. Relocalization must independently enter
+`blocked_localization_not_ready` and recover through front-stereo cuVGL.
+
+## Stage 10 reports an active simulator or an existing rosbag directory
+
+Do not remove `data/.navigation_sim.lock` or an MCAP directory while the owning
+PID is alive.  Matrix, trial and run-directory locks intentionally reject a
+duplicate command before it can write the same log offsets or start a second
+GPU workload.  Inspect the PID recorded by the simulator lock and use
+`./scripts/collect_diagnostics.sh`; only after the recorded PID no longer
+exists may a stale lock be removed.  Choose a new `--matrix-id`/`--run-id` for
+a new experiment.  The automation never treats a missing simulator report as
+a navigation failure: it stops the matrix as an infrastructure error.
+
+## Stage 10 Nav2 lifecycle activation is intermittent under GPU load
+
+The lifecycle guard checks controller, smoother, planner, behavior, velocity
+smoother, collision monitor, BT navigator and waypoint follower.  A partial
+first activation causes a complete clean relaunch, not an in-process RESET;
+the latter cannot safely redeclare `NvbloxCostmapLayer` parameters.  The trial
+waits for the final `already_active` marker before recording or sending a
+goal.  Inspect `ros.log` for `relaunching clean stack (2/3)` and the later
+`NOVA_CARTER_NAV2_LIFECYCLE` report before changing startup delays.
