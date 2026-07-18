@@ -115,12 +115,13 @@ remove the visual-health gate merely because wheel-local prediction is smooth.
 
 Read both `robot_contacts.contact_pairs` and
 `dynamic_obstacles.robot_contact_pairs` in the simulator JSON. Phase 10
-kinematic actors pause before entering their configured robot safety envelope,
-remain collidable in place, and resume after the robot clears; inspect each
-obstacle's `yield_event_count`, `yielded_frames` and
-`yielded_simulation_s`. A contact still fails the trial and must never be hidden
-by disabling the assertion. For generated USD shapes, author translate before
-scale; reversing them scales the waypoint and silently moves the obstacle.
+kinematic actors remain collidable while actively retreating from the robot;
+the crossing box moves once to its dedicated free-space refuge instead of
+freezing in the route. Inspect each obstacle's `yield_event_count`,
+`yielded_frames`, `yielded_simulation_s`, `yield_refuge_m` and final position. A
+contact still fails the trial and must never be hidden by disabling the
+assertion. For generated USD shapes, author translate before scale; reversing
+them scales the waypoint and silently moves the obstacle.
 
 ## Stage 9 guard alternates active and timeout under full RViz load
 
@@ -140,6 +141,11 @@ shortcut for late participant discovery. Inspect `fastdds-super-client.xml`,
 `fastdds-discovery.log` and `rosbag.log`; do not fall back to recording all
 high-bandwidth image/depth topics. The compact topic list is defined in
 `config/stage10.yaml`.
+
+Bag readiness intentionally depends on clock, localization/status and command
+topics, not `/plan`: the first global plan is produced only after the runner
+sends a goal. If a run ID already owns a scenario, result or rosbag directory,
+start with a new ID; the lock/error protects evidence from mixed writers.
 
 ## Stage 10 fault injection does not block Command Guard
 

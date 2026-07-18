@@ -119,7 +119,8 @@ cd /home/lyb/Workspace/Isaac_ROS_cuVSLAM_Nvblox_Nav2
 # 调参后复用已经通过的静态矩阵，仅重跑动态组并合并汇总
 ./scripts/run_phase10_preacceptance.sh --map warehouse_v2_front \
   --matrix-id phase10-dynamic-retune \
-  --reuse-static-matrix <已通过的matrix-id>
+  --reuse-static-matrix <已通过的matrix-id> \
+  --reuse-passed-dynamic-matrix <matrix-a,matrix-b>
 ```
 
 `collect_diagnostics.sh`可在失败后收集环境、GPU、ROS包、进程、磁盘、最近报告和日志尾部，默认不修改系统状态。
@@ -136,11 +137,13 @@ Jazzy的Nav2 LifecycleManager对单节点状态服务使用固定的短超时；
 
 - `build.sh`：ROS三个包构建、Isaac ROS 4.5/CUDA 13.0/TensorRT 10.13环境检查通过。
 - 自动测试：54项通过。
-- 故障硬化：3/3目标和cuVGL重定位、depth stale、map-slice stale三类故障全部恢复；1.5 s宽限后最大命令均为0，0碰撞，最大单目标路径伸长率7.65%，实时因子0.836，MCAP有效。
+- 故障硬化：3/3目标和cuVGL重定位、depth stale、map-slice stale三类故障全部恢复；1.5 s宽限后最大命令均为0，0碰撞，最大单目标路径伸长率7.65%，实时因子0.836，MCAP为9,473,572字节。三个终点位置误差为0.036/0.109/0.153 m，航向误差为7.39°/7.28°/6.13°。
 - 最终预验收矩阵`phase10-final-v9-20260718`：静态20/20、动态20/20、总计40/40通过，全部0碰撞。
 - 静态组路径伸长率P95为13.73%，最低实时因子0.839；动态组路径伸长率P95为13.08%，最低实时因子0.763。
 - 全部成功试验路径伸长率P95为13.58%，低于20%门槛。动态actor全部实际移动，Nova Carter的8个RigidBody接触监视器未记录非地面碰撞。
-- 强制生命周期首次失败回归实际看到`relaunching clean stack (2/3)`，第二个全新launch完成导航；固定seed 11016的避难点回归以0碰撞、0.57%路径伸长率通过。
+- 强制生命周期首次失败回归实际看到`relaunching clean stack (2/3)`，第二个全新launch完成导航：0碰撞、路径伸长率0.51%、实时因子0.823、MCAP为2,957,480字节。固定seed 11016的最终避难点回归以0碰撞、路径伸长率0.073%通过。
+
+最终矩阵由可恢复的矩阵执行器形成：它只复用固定seed与目标序号对应、完整且状态为passed的同配置报告，失败或缺失报告必须重跑，最终仍校验20个唯一静态轮和20个唯一动态轮。权威运行期结果为`data/reports/phase10/preacceptance/phase10-final-v9-20260718/summary.json`，latest副本为`data/reports/phase10/preacceptance-summary-latest.json`。
 
 运行产物位于忽略提交的`data/`目录；仓库提交保留脚本、配置、计算代码、测试和本页的可复现口径。
 

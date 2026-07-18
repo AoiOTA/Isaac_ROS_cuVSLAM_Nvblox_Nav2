@@ -46,7 +46,7 @@ data/reports/phase10/preacceptance-trials-latest.csv
   --record-bag --skip-build
 ```
 
-脚本会逐个检查被复用静态`result.json`的数量和passed状态，再与新动态20次一起计算最终门槛，不会用缺失或失败报告补数。`--reuse-passed-dynamic-matrix id1,id2`可仅复用相同序号且已通过的动态轮；缺失和失败轮仍会按原seed重跑。最终验证矩阵`phase10-final-v9-20260718`为静态20/20、动态20/20、0碰撞，全部成功路径伸长率P95为13.58%。
+脚本会逐个检查被复用静态`result.json`的数量和passed状态，再与新动态20次一起计算最终门槛，不会用缺失或失败报告补数。`--reuse-passed-dynamic-matrix id1,id2`可仅复用相同序号且已通过的动态轮；缺失和失败轮仍会按原seed重跑。矩阵ID、run ID和整机GPU执行都有`flock`互斥，已经生成`summary.json`的矩阵ID不可覆盖。最终验证矩阵`phase10-final-v9-20260718`为静态20/20、动态20/20、0碰撞，全部成功路径伸长率P95为13.58%。
 
 ## 结果解释
 

@@ -162,14 +162,21 @@ simulator, ROS launch, test runner, optional MCAP recorder and GPU sampler. A
 single finalizer joins navigation, simulation, contact and resource evidence;
 ground truth remains metrics-only.
 
-Kinematic obstacle actors now pause their own trajectory clock before crossing
-a configured robot safety envelope. They remain collidable, visible and fixed
-in the route while yielding, so front depth, dynamic nvblox and Nav2 still have
-to detect and avoid them. This models a responsive warehouse actor and prevents
-an unresponsive kinematic body from pushing a correctly stopped robot. All
-yield events and all PhysX contacts remain acceptance evidence.
+Kinematic obstacle actors retain collision and perception geometry while
+yielding. Ordinary actors retreat along their configured trajectory in the
+direction that increases robot clearance, then resume after release hysteresis.
+The crossing box moves once to a separately validated free-space refuge and
+parks there for the rest of the trial. This avoids both an actor ramming a
+correctly stopped robot and the old stationary-obstacle deadlock. All motion,
+yield events, final positions and PhysX contacts remain acceptance evidence.
 
 Test-only SetBool services can suppress depth or combined-map health refreshes
 when explicitly enabled by `phase10.launch.py`. Normal Phase 9 launch behavior
 is unchanged. The final Guard must enter the corresponding blocked state and
 publish zero motion before the injected fault can count as recovered.
+
+Nav2 lifecycle activation is checked once after staged startup. A partial
+activation shuts down the complete ROS launch and the wrapper starts a fresh
+stack, up to three attempts; in-process lifecycle reset is deliberately avoided
+because the nvblox costmap plugin cannot be safely reconfigured in place. Run,
+matrix and physical-GPU locks make report ownership unambiguous.

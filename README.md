@@ -191,7 +191,7 @@ cd /home/lyb/Workspace/Isaac_ROS_cuVSLAM_Nvblox_Nav2
 ./scripts/run_phase10_preacceptance.sh --map warehouse_v2_front
 ```
 
-完整回归入口`./scripts/run_phase10_tests.sh warehouse_v2_front`会执行构建、54项自动测试、真实故障硬化和静态20次/动态20次预验收。每轮都自动生成固定seed场景、启动隔离DDS和完整视觉导航栈、记录MCAP/轨迹/命令/GPU/PhysX接触、计算目标误差、路径伸长率与正常导航加速度/jerk，并只清理本轮创建的进程组。矩阵、单轮和run目录均有独占锁；Nav2只有在生命周期守卫确认8个managed node全部active后才开始试验。最终实测静态20/20、动态20/20、40轮全部0碰撞，成功轨迹伸长率P95为13.58%，最低实时因子为0.763。配置、统计口径、参数冻结和实测证据见[Phase 10 Validation](docs/phase10_validation.md)，实验产物说明见[Experiments](docs/experiments.md)。
+完整回归入口`./scripts/run_phase10_tests.sh warehouse_v2_front`会执行构建、54项自动测试、真实故障硬化和静态20次/动态20次预验收。每轮都自动生成固定seed场景、启动隔离DDS和完整视觉导航栈、记录MCAP/轨迹/命令/GPU/PhysX接触、计算目标误差、路径伸长率与正常导航加速度/jerk，并只清理本轮创建的进程组。矩阵、单轮和run目录均有独占锁；Nav2只有在生命周期守卫确认8个managed node全部active后才开始试验，部分激活会自动完整重启ROS栈。最终实测静态20/20、动态20/20、40轮全部0碰撞，静态/动态路径伸长率P95分别为13.73%/13.08%，合并P95为13.58%，最低实时因子为0.763。三目标故障硬化和强制lifecycle失败后的干净重启也已实际通过。配置、统计口径、参数冻结和实测证据见[Phase 10 Validation](docs/phase10_validation.md)，实验产物说明见[Experiments](docs/experiments.md)。
 
 ## 阶段1完整环境配置
 
