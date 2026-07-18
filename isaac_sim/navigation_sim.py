@@ -562,7 +562,11 @@ def run(args: argparse.Namespace) -> int:
 
         # Build the contact report-pair whitelist after optional session-layer
         # obstacles exist so static acceptance obstacles cannot be omitted.
-        contact_monitor = RobotContactMonitor(stage, ROBOT_PRIM_PATH)
+        contact_monitor = RobotContactMonitor(
+            stage,
+            ROBOT_PRIM_PATH,
+            support_surface_z=spawn.z - args.spawn_height,
+        )
         app.update()
 
         if args.gui and not args.disable_follow_camera:

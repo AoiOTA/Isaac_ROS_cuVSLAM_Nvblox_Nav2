@@ -13,6 +13,7 @@ from jackal_sim.articulation_runtime import (  # noqa: E402
     articulation_physics_config_from_mapping,
 )
 from jackal_sim.idle_brake import IdleBrake, IdleBrakeError, IdleBrakeState  # noqa: E402
+from jackal_sim.contact_classification import is_wheel_support_contact  # noqa: E402
 from jackal_sim.skid_steer_motion_assist import (  # noqa: E402
     SkidSteerMotionAssistError,
     SkidSteerMotionAssistState,
@@ -165,3 +166,25 @@ def test_idle_brake_reset_synchronizes_sleep_and_next_command_wakes() -> None:
     brake.state.observe(0.2, 0.0, now["value"])
     assert brake.update() is False
     assert calls[-1] == "wake"
+
+
+def test_contact_filter_only_accepts_low_vertical_wheel_support() -> None:
+    class Vector(tuple):
+        pass
+
+    class Contact:
+        def __init__(self, position: tuple[float, float, float], normal: tuple[float, float, float]):
+            self.position = Vector(position)
+            self.normal = Vector(normal)
+
+    support = [Contact((2.5, 4.6, 0.001), (0.0, 0.0, 1.0))]
+    wall = [Contact((2.5, 4.6, 0.10), (0.0, 1.0, 0.0))]
+    assert is_wheel_support_contact(
+        "/World/Jackal/front_left_wheel_link", support, 0.0
+    )
+    assert not is_wheel_support_contact(
+        "/World/Jackal/front_left_wheel_link", wall, 0.0
+    )
+    assert not is_wheel_support_contact(
+        "/World/Jackal/base_link", support, 0.0
+    )

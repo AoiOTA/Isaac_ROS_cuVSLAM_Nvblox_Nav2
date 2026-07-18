@@ -8,6 +8,8 @@ import time
 from omni.physx import get_physx_simulation_interface
 from pxr import PhysicsSchemaTools, PhysxSchema, Usd, UsdPhysics
 
+from .contact_classification import is_wheel_support_contact
+
 
 class RobotContactMonitor:
     """Count chassis contacts with non-robot, non-floor actors.
@@ -17,8 +19,15 @@ class RobotContactMonitor:
     while explicit floor/ground actor names are excluded.
     """
 
-    def __init__(self, stage: Usd.Stage, robot_root: str) -> None:
+    def __init__(
+        self,
+        stage: Usd.Stage,
+        robot_root: str,
+        *,
+        support_surface_z: float,
+    ) -> None:
         self.robot_root = robot_root
+        self.support_surface_z = float(support_surface_z)
         robot = stage.GetPrimAtPath(robot_root)
         if not robot.IsValid():
             raise RuntimeError("Jackal root is missing for contact monitoring")
@@ -57,7 +66,11 @@ class RobotContactMonitor:
         self.started_wall = time.monotonic()
         self.events = 0
         self.filtered_floor_events = 0
+        self.filtered_support_events = 0
+        self.empty_contact_events = 0
         self.pairs: Counter[tuple[str, str]] = Counter()
+        self.support_pairs: Counter[tuple[str, str]] = Counter()
+        self.collision_samples: list[dict[str, object]] = []
         self.subscription = (
             get_physx_simulation_interface().subscribe_contact_report_events(
                 self._on_contact_report
@@ -69,30 +82,61 @@ class RobotContactMonitor:
         lowered = path.lower()
         return any(token in lowered for token in ("floor", "groundplane", "ground_plane"))
 
-    def _on_contact_report(self, headers: object, _data: object) -> None:
+    def _on_contact_report(self, headers: object, data: object) -> None:
         for header in headers:
-            pair = tuple(
-                sorted(
-                    (
-                        str(PhysicsSchemaTools.intToSdfPath(header.actor0)),
-                        str(PhysicsSchemaTools.intToSdfPath(header.actor1)),
-                    )
-                )
+            actor_paths = (
+                str(PhysicsSchemaTools.intToSdfPath(header.actor0)),
+                str(PhysicsSchemaTools.intToSdfPath(header.actor1)),
             )
+            pair = tuple(sorted(actor_paths))
             robot_members = [path.startswith(self.robot_root) for path in pair]
             if not any(robot_members) or all(robot_members):
                 continue
             other = pair[0] if not robot_members[0] else pair[1]
+            robot_actor = pair[0] if robot_members[0] else pair[1]
             if self._is_floor(other):
                 self.filtered_floor_events += 1
                 continue
+            offset = int(header.contact_data_offset)
+            count = int(header.num_contact_data)
+            if count <= 0:
+                # CONTACT_LOST carries no collision sample. Counting it would
+                # double-count a completed contact and cannot classify normal.
+                self.empty_contact_events += 1
+                continue
+            records = [data[index] for index in range(offset, offset + count)]
+            if is_wheel_support_contact(
+                robot_actor,
+                records,
+                self.support_surface_z,
+            ):
+                self.filtered_support_events += 1
+                self.support_pairs[pair] += 1
+                continue
             self.events += 1
             self.pairs[pair] += 1
+            if len(self.collision_samples) < 32:
+                self.collision_samples.append(
+                    {
+                        "actors": list(pair),
+                        "contacts": [
+                            {
+                                "position": [float(value) for value in record.position],
+                                "normal": [float(value) for value in record.normal],
+                                "impulse": [float(value) for value in record.impulse],
+                                "separation": float(record.separation),
+                            }
+                            for record in records
+                        ],
+                    }
+                )
 
     def summary(self) -> dict[str, object]:
         return {
             "collision_event_count": self.events,
             "filtered_floor_event_count": self.filtered_floor_events,
+            "filtered_support_event_count": self.filtered_support_events,
+            "empty_contact_event_count": self.empty_contact_events,
             "reporter_count": len(self.reporter_paths),
             "reporter_paths": sorted(self.reporter_paths),
             "report_pair_filter": "all_non_floor_collision_prims",
@@ -101,6 +145,17 @@ class RobotContactMonitor:
                 {"actors": list(pair), "count": count}
                 for pair, count in sorted(self.pairs.items())
             ],
+            "support_contact_filter": {
+                "wheel_or_caster_only": True,
+                "support_surface_z_m": self.support_surface_z,
+                "maximum_height_above_support_m": 0.03,
+                "minimum_absolute_normal_z": 0.80,
+            },
+            "support_contact_pairs": [
+                {"actors": list(pair), "count": count}
+                for pair, count in sorted(self.support_pairs.items())
+            ],
+            "collision_samples": self.collision_samples,
             "monitor_wall_seconds": time.monotonic() - self.started_wall,
         }
 
