@@ -77,7 +77,7 @@ data/reports/phase10/preacceptance-trials-latest.csv
   --matrix-id phase11-formal-20260718 --record-bag
 ```
 
-默认身份集合不可随意替换：static seed 21000–21009、dynamic 31000–31009、heterogeneous 41000–41009，六个目标按序轮换。`summarize_stage11_acceptance.py`会比较期望和实际身份集合；复制一个通过报告、重复seed或错配目标都不能补数。
+默认身份集合不可随意替换：static seed 21000–21039、dynamic 31000–31039、heterogeneous 41000–41049，六个目标按序轮换。`summarize_stage11_acceptance.py`会比较期望和实际身份集合；复制一个通过报告、重复seed或错配目标都不能补数。
 
 中断恢复：
 

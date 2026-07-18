@@ -112,7 +112,7 @@ data/maps/warehouse_v2_front/
 
 ## 6. 阶段11正式验收
 
-完整验收固定执行静态 10 次、动态 10 次、异构动态 10 次：
+完整验收固定执行静态 40 次、动态 40 次、异构动态 50 次：
 
 ```bash
 ./scripts/run_acceptance.sh \

@@ -38,7 +38,7 @@ while (($#)); do
     --resume) RESUME="true"; shift ;;
     --infrastructure-retries) INFRASTRUCTURE_RETRIES="${2:?missing retry count}"; shift 2 ;;
     -h|--help)
-      echo "Usage: ./scripts/run_acceptance.sh [--matrix-id ID] [--resume] [--record-bag|--no-bag] [--static-trials 10 --dynamic-trials 10 --heterogeneous-trials 10]"
+      echo "Usage: ./scripts/run_acceptance.sh [--matrix-id ID] [--resume] [--record-bag|--no-bag] [--static-trials 40 --dynamic-trials 40 --heterogeneous-trials 50]"
       exit 0 ;;
     *) die "unknown argument: $1" ;;
   esac
@@ -139,7 +139,7 @@ for experiment_class in static dynamic heterogeneous; do
       fi
       [[ -f "${run_dir}/result.json" ]] || die "trial produced no result: ${run_id}"
 
-      # A seed counts as one of the formal 10/10/10 trials only after the ROS
+      # A seed counts as one of the formal 40/40/50 trials only after the ROS
       # runner actually attempted its goal.  A process interruption between
       # simulator readiness and runner startup must be retried, not disguised
       # as a navigation failure that consumes the statistical failure budget.

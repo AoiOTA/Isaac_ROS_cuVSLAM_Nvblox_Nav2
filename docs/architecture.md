@@ -209,7 +209,7 @@ ground-truth metrics-only trajectory -------------------------┤
 ROS navigation/data age/latency/smoothness -------------------┼-> trial finalizer
 PhysX contacts + actor motion + simulator graph identity ------┤
 GPU/RTF + optional compact MCAP -------------------------------┘
-                                                               -> 10/10/10 summary
+                                                               -> 40/40/50 summary
 ```
 
 Each trial owns its DDS server, simulator, ROS stack, recorder, sampler and run

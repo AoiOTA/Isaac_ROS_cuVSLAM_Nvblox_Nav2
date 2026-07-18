@@ -330,7 +330,7 @@ navigation. A trial is passed only by `tools/finalize_stage11_trial.py`, which
 joins the simulator, navigation, command, data-age, GPU, contact, theoretical
 path and optional MCAP evidence.
 
-The formal command reads the default 10/10/10 counts from
+The formal command reads the default 40/40/50 counts from
 `config/stage11.yaml`:
 
 ```bash

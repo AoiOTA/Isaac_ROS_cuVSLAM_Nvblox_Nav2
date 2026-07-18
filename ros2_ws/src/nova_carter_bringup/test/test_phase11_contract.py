@@ -9,9 +9,9 @@ ROOT = Path(__file__).resolve().parents[4]
 def test_stage11_formal_counts_and_scope() -> None:
     config = yaml.safe_load((ROOT / "config/stage11.yaml").read_text())
     assert config["acceptance"]["trial_counts"] == {
-        "static": 10,
-        "dynamic": 10,
-        "heterogeneous": 10,
+        "static": 40,
+        "dynamic": 40,
+        "heterogeneous": 50,
     }
     assert config["scope"] == {
         "front_stereo_only": True,
