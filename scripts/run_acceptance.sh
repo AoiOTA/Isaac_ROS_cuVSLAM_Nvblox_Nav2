@@ -71,11 +71,12 @@ fi
 REPORT_DIR="${PROJECT_ROOT}/data/reports/phase11/acceptance/${MATRIX_ID}"
 if [[ -f "${REPORT_DIR}/summary.json" ]]; then
   [[ "${RESUME}" == "true" ]] || die "matrix already completed: ${MATRIX_ID}"
-  status="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["status"])' "${REPORT_DIR}/summary.json")"
-  [[ "${status}" != "passed" ]] || {
+  summary_matches="$(python3 -c 'import json,sys; r=json.load(open(sys.argv[1])); expected={"static":int(sys.argv[2]),"dynamic":int(sys.argv[3]),"heterogeneous":int(sys.argv[4])}; classes=r.get("classes",{}); print(str(r.get("status")=="passed" and r.get("expected_trial_count")==sum(expected.values()) and all(classes.get(name,{}).get("expected_trial_count")==count for name,count in expected.items())).lower())' "${REPORT_DIR}/summary.json" "${STATIC_TRIALS}" "${DYNAMIC_TRIALS}" "${HETEROGENEOUS_TRIALS}")"
+  [[ "${summary_matches}" != "true" ]] || {
     info "Stage 11 matrix already passed: ${REPORT_DIR}/summary.json"
     exit 0
   }
+  info "Existing summary does not match the configured full matrix; continuing exact-identity resume"
 fi
 mkdir -p "${REPORT_DIR}"
 

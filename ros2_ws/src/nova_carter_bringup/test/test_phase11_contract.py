@@ -54,6 +54,8 @@ def test_stage11_automation_is_locked_resumable_and_records_latency() -> None:
     assert 'len(r["goals"])>0' in acceptance
     assert "Infrastructure-only empty run" in acceptance
     assert "formal Stage 11 trial counts are fixed" in acceptance
+    assert "Existing summary does not match the configured full matrix" in acceptance
+    assert 'r.get("expected_trial_count")==sum(expected.values())' in acceptance
     assert "cmd_nav_raw_to_cmd_sim_freshness" in runner
     assert "data_age_metrics" in runner
     assert "enable_surround_cameras" not in trial
