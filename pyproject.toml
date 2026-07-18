@@ -1,7 +1,7 @@
 [project]
-name = "nova-carter-visual-navigation"
+name = "kujiale-jackal-visual-navigation"
 version = "0.1.0"
-description = "Isaac Sim and ROS 2 visual navigation for Nova Carter"
+description = "Kujiale and Jackal visual navigation with eight-camera mapping"
 requires-python = ">=3.12"
 
 [tool.pytest.ini_options]

@@ -1,13 +1,29 @@
 #!/usr/bin/env python3
-"""Open the fixed USDs and verify the minimal Nova Carter asset contract."""
+"""Verify the pinned Kujiale, Jackal and Hawk USD contracts."""
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from pathlib import Path
 
 from pxr import Usd, UsdGeom
+
+
+EXPECTED_HASHES = {
+    "environment": "f76f1957e8f4cbfccb13f9670d6ce187793007c56d9b3aad8a8ee72507d658d2",
+    "robot": "be499d8ed3c83deff8a1ce43dc2976ba2b1a8cc66eae80360a19f6d8bb8720ec",
+    "hawk": "93c5708ff14d931373c2b5c512ddb277117fbe2c2fc86868f53c2156bf8fa03f",
+}
+
+
+def digest(path: Path) -> str:
+    value = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            value.update(block)
+    return value.hexdigest()
 
 
 def open_stage(path: Path) -> Usd.Stage:
@@ -18,65 +34,54 @@ def open_stage(path: Path) -> Usd.Stage:
 
 
 def main() -> int:
-    warehouse_path = Path(os.environ["WAREHOUSE_USD"])
-    robot_path = Path(os.environ["NOVA_CARTER_USD"])
-    ros_sample_path = Path(os.environ["NOVA_CARTER_ROS_SAMPLE_USD"])
-
-    for path in (warehouse_path, robot_path, ros_sample_path):
+    paths = {
+        "environment": Path(os.environ["KUJIALE_USD"]),
+        "robot": Path(os.environ["JACKAL_USD"]),
+        "hawk": Path(os.environ["HAWK_USD"]),
+    }
+    for name, path in paths.items():
         if not path.is_file():
-            raise RuntimeError(f"required asset is missing: {path}")
+            raise RuntimeError(f"required {name} asset is missing: {path}")
+        actual = digest(path)
+        if actual != EXPECTED_HASHES[name]:
+            raise RuntimeError(
+                f"{name} checksum mismatch: expected {EXPECTED_HASHES[name]}, got {actual}"
+            )
 
-    warehouse = open_stage(warehouse_path)
-    robot = open_stage(robot_path)
-
-    warehouse_default = warehouse.GetDefaultPrim().GetPath().pathString
-    robot_default = robot.GetDefaultPrim().GetPath().pathString
-    if warehouse_default != "/World":
-        raise RuntimeError(f"unexpected warehouse default prim: {warehouse_default}")
-    if robot_default != "/nova_carter":
-        raise RuntimeError(f"unexpected Nova Carter default prim: {robot_default}")
+    environment = open_stage(paths["environment"])
+    robot = open_stage(paths["robot"])
+    hawk = open_stage(paths["hawk"])
+    defaults = {
+        "environment": str(environment.GetDefaultPrim().GetPath()),
+        "robot": str(robot.GetDefaultPrim().GetPath()),
+        "hawk": str(hawk.GetDefaultPrim().GetPath()),
+    }
+    if defaults != {"environment": "/Root", "robot": "/jackal", "hawk": "/hawk"}:
+        raise RuntimeError(f"unexpected default prims: {defaults}")
 
     required_joints = [
-        "/nova_carter/joint_wheel_left",
-        "/nova_carter/joint_wheel_right",
+        f"/jackal/{position}_{side}_wheel_joint"
+        for position in ("front", "rear")
+        for side in ("left", "right")
     ]
-    missing_joints = [path for path in required_joints if not robot.GetPrimAtPath(path).IsValid()]
-    if missing_joints:
-        raise RuntimeError(f"required wheel joints are missing: {missing_joints}")
-
-    robot_prims = list(robot.Traverse())
-    camera_count = sum(1 for prim in robot_prims if prim.IsA(UsdGeom.Camera))
-    graph_prims = [
-        prim.GetPath().pathString
-        for prim in robot_prims
-        if "omnigraph" in prim.GetTypeName().lower()
-    ]
-    if camera_count < 2:
-        raise RuntimeError(f"expected stereo cameras in Nova Carter, found {camera_count}")
-    if graph_prims:
-        raise RuntimeError(f"main Nova Carter asset unexpectedly contains OmniGraph prims: {graph_prims}")
-
-    used_identifiers = [layer.identifier for layer in robot.GetUsedLayers()]
-    if any("Nova_Carter_ROS.usd" in identifier for identifier in used_identifiers):
-        raise RuntimeError("main Nova Carter asset unexpectedly references Nova_Carter_ROS.usd")
+    missing = [path for path in required_joints if not robot.GetPrimAtPath(path).IsValid()]
+    if missing:
+        raise RuntimeError(f"Jackal wheel joints are missing: {missing}")
+    hawk_cameras = [prim for prim in hawk.Traverse() if prim.IsA(UsdGeom.Camera)]
+    if len(hawk_cameras) != 2:
+        raise RuntimeError(f"Hawk must contain two cameras, found {len(hawk_cameras)}")
 
     report = {
-        "warehouse": {
-            "path": str(warehouse_path),
-            "default_prim": warehouse_default,
-            "prim_count": sum(1 for _ in warehouse.Traverse()),
-            "used_layer_count": len(warehouse.GetUsedLayers()),
+        "assets": {
+            name: {
+                "path": str(path.resolve()),
+                "sha256": EXPECTED_HASHES[name],
+                "default_prim": defaults[name],
+            }
+            for name, path in paths.items()
         },
-        "robot": {
-            "path": str(robot_path),
-            "default_prim": robot_default,
-            "prim_count": len(robot_prims),
-            "used_layer_count": len(robot.GetUsedLayers()),
-            "camera_count": camera_count,
-            "omnigraph_count": len(graph_prims),
-            "drive_joints": required_joints,
-        },
-        "ros_sample": {"path": str(ros_sample_path), "policy": "reference_only_never_load"},
+        "jackal_wheel_joints": required_joints,
+        "hawk_camera_count": len(hawk_cameras),
     }
     print(json.dumps(report, indent=2, sort_keys=True))
     return 0

@@ -1,4 +1,4 @@
-"""Smooth GUI-only third-person camera for the runtime-composed Nova Carter."""
+"""Smooth GUI-only third-person camera for the runtime-composed Jackal."""
 
 from __future__ import annotations
 

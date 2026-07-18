@@ -1,20 +1,18 @@
 stage:
-  robot_prim: /World/NovaCarter
+  robot_prim: /World/Jackal
+  environment_default_prim: /Root
   compose_in_session_layer: true
   save_composed_stage: false
   stage_open_count: 1
 
-variants:
-  Physics: physx
-  Sensors: All_Sensors
-  ROS: Disabled
-
 spawn_search:
-  preferred_xy_m: [0.0, 0.0]
+  preferred_xy_m: [2.9, -0.2]
   grid_resolution_m: 0.5
-  footprint_clearance_m: 0.15
-  height_above_floor_m: 0.03
+  footprint_clearance_m: 0.05
+  height_above_floor_m: 0.0635
   obstacle_height_m: 1.6
+  fixed_pose: true
+  yaw_deg: 180.0
 
 runtime:
   physics_hz: 120

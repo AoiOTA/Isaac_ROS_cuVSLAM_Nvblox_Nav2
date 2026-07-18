@@ -10,7 +10,7 @@ from pathlib import Path
 TEMPLATE = """<?xml version="1.0" encoding="UTF-8" ?>
 <dds>
   <profiles xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
-    <participant profile_name="nova_carter_super_client" is_default_profile="true">
+    <participant profile_name="jackal_super_client" is_default_profile="true">
       <rtps>
         <builtin>
           <discovery_config>

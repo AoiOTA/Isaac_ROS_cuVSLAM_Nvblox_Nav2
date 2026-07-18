@@ -1,42 +1,39 @@
 front_stereo:
-  left_camera_prim: /World/NovaCarter/chassis_link/sensors/front_hawk/left/camera_left
-  right_camera_prim: /World/NovaCarter/chassis_link/sensors/front_hawk/right/camera_right
-  imu_prim: /World/NovaCarter/chassis_link/sensors/front_hawk/Imu/Imu_Sensor
+  left_camera_prim: /World/Jackal/base_link/sensors/front_hawk/left/camera_left
+  right_camera_prim: /World/Jackal/base_link/sensors/front_hawk/right/camera_right
+  imu_prim: /World/Jackal/base_link/sensors/front_hawk/Imu/Imu_Sensor
   image_width: 1280
   image_height: 800
   depth_width: 640
   depth_height: 400
-  image_rate_hz: 30.0
+  image_rate_hz: 10.0
   imu_rate_hz: 120.0
   # Isaac Sim 6.0.1 publishes zero distortion in CameraInfo for the legacy
   # fisheyePolynomial Hawk projection. Render the navigation pair as pinhole
   # in the anonymous session layer so rectified_images=true is truthful.
   navigation_projection: pinhole
 
-# The three non-front Hawk pairs are authored only by the Stage 9 simulator
-# entry point.  Their render products and ROS writers are controlled by a
-# transient-local Bool so they consume GPU/DDS bandwidth only while mapping or
-# relocalizing.  All paths below were read from the local Isaac Sim 6.0.1 USD.
+# Mapping authors all four Hawk pairs. Navigation authors front/left/right and
+# deliberately creates no rear render products or ROS publishers.
 surround_stereo:
   # cuVSLAM 15 rejects a saved multicamera rig when camera resolutions differ.
-  # Use the Phase 5 validated navigation resolution for all eight inputs; the
-  # six non-front streams stay gated and therefore cost nothing while normal
-  # front-stereo VIO and navigation are running.
+  # Keep one resolution for the saved eight-camera calibration. Mapping uses
+  # all eight streams; navigation publishes front/left/right and does not even
+  # create render products for the two rear streams.
   image_width: 1280
   image_height: 800
   image_rate_hz: 10.0
   navigation_projection: pinhole
-  enable_topic: /vgl/cameras_enabled
   cameras:
     left:
-      left_camera_prim: /World/NovaCarter/chassis_link/sensors/left_hawk/left/camera_left
-      right_camera_prim: /World/NovaCarter/chassis_link/sensors/left_hawk/right/camera_right
+      left_camera_prim: /World/Jackal/base_link/sensors/left_hawk/left/camera_left
+      right_camera_prim: /World/Jackal/base_link/sensors/left_hawk/right/camera_right
     right:
-      left_camera_prim: /World/NovaCarter/chassis_link/sensors/right_hawk/left/camera_left
-      right_camera_prim: /World/NovaCarter/chassis_link/sensors/right_hawk/right/camera_right
+      left_camera_prim: /World/Jackal/base_link/sensors/right_hawk/left/camera_left
+      right_camera_prim: /World/Jackal/base_link/sensors/right_hawk/right/camera_right
     back:
-      left_camera_prim: /World/NovaCarter/chassis_link/sensors/back_hawk/left/camera_left
-      right_camera_prim: /World/NovaCarter/chassis_link/sensors/back_hawk/right/camera_right
+      left_camera_prim: /World/Jackal/base_link/sensors/back_hawk/left/camera_left
+      right_camera_prim: /World/Jackal/base_link/sensors/back_hawk/right/camera_right
 
 topics:
   left_rgb_raw: /front_stereo_camera/left/image_raw_rgb
@@ -84,18 +81,18 @@ frames:
   back_right_optical: back_stereo_camera_right_optical
 
 extrinsics:
-  camera_link_xyz_m: [0.1003, -0.000002, 0.3459]
+  camera_link_xyz_m: [0.0, 0.0, 0.42]
+  camera_link_yaw_rad: 0.0
   left_from_camera_link_xyz_m: [0.0, 0.075, 0.0]
   right_from_camera_link_xyz_m: [0.0, -0.075, 0.0]
   optical_rpy_rad: [-1.5707963267948966, 0.0, -1.5707963267948966]
-  imu_from_camera_link_xyz_m: [0.0, -0.0197, 0.0061]
-  imu_from_camera_link_rpy_rad: [0.0, 1.5707963267948966, 0.0]
+  imu_from_camera_link_xyz_m: [0.0, 0.075, 0.0]
+  imu_from_camera_link_rpy_rad: [0.0, 0.0, 0.0]
   stereo_baseline_m: 0.15
-  # Midpoints and yaw angles of the side/back Hawk baselines relative to
-  # chassis_link.  Side-specific optical joints reuse optical_rpy_rad.
-  left_camera_link_xyz_m: [-0.35543, 0.15, 0.3459]
+  # Cardinal stereo-pair midpoints relative to base_link.
+  left_camera_link_xyz_m: [0.0, 0.0, 0.42]
   left_camera_link_yaw_rad: 1.5707963267948966
-  right_camera_link_xyz_m: [-0.35544, -0.15, 0.3459]
+  right_camera_link_xyz_m: [0.0, 0.0, 0.42]
   right_camera_link_yaw_rad: -1.5707963267948966
-  back_camera_link_xyz_m: [-0.5637, 0.000002, 0.3459]
+  back_camera_link_xyz_m: [0.0, 0.0, 0.42]
   back_camera_link_yaw_rad: 3.141592653589793

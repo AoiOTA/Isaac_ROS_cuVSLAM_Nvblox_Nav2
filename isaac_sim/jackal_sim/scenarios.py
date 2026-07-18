@@ -1,4 +1,4 @@
-"""Collision-bound based spawn selection for the fixed warehouse scene."""
+"""Collision-bound based spawn selection for the fixed Kujiale scene."""
 
 from __future__ import annotations
 
@@ -111,7 +111,7 @@ def find_collision_free_spawn(
         and item.maximum[1] - item.minimum[1] >= 1.0
     ]
     if not floors:
-        raise RuntimeError("no finite horizontal collision floor was found in the warehouse")
+        raise RuntimeError("no finite horizontal collision floor was found in Kujiale")
 
     highest_floor = max(item.maximum[2] for item in floors)
     obstacles = [

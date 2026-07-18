@@ -7,7 +7,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "isaac_sim"))
 
-from nova_carter_sim.dynamic_motion import (  # noqa: E402
+from jackal_sim.dynamic_motion import (  # noqa: E402
     clearance_preserving_step,
     farthest_candidate_index,
     move_towards,

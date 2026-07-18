@@ -45,5 +45,5 @@ load_ros() {
 }
 
 info() {
-  echo "[nova-carter] $*"
+  echo "[jackal] $*"
 }

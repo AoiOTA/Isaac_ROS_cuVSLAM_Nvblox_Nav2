@@ -1,18 +1,18 @@
 asset_root: /home/lyb/isaacsim_assets/Assets/Isaac/6.0
 
-warehouse:
-  logical_path: /Isaac/Environments/Simple_Warehouse/warehouse_with_forklifts.usd
-  resolved_path: /home/lyb/isaacsim_assets/Assets/Isaac/6.0/Isaac/Environments/Simple_Warehouse/warehouse_with_forklifts.usd
-  expected_default_prim: /World
+environment:
+  resolved_path: /home/lyb/kujiale_usd_rooms_20260717/kujiale_0026/kujiale_0026_A_to_B_door_open.usd
+  expected_default_prim: /Root
+  expected_sha256: f76f1957e8f4cbfccb13f9670d6ce187793007c56d9b3aad8a8ee72507d658d2
 
 robot:
-  logical_path: /Isaac/Robots/NVIDIA/NovaCarter/nova_carter.usd
-  resolved_path: /home/lyb/isaacsim_assets/Assets/Isaac/6.0/Isaac/Robots/NVIDIA/NovaCarter/nova_carter.usd
-  expected_default_prim: /nova_carter
-  ros_variant: Disabled
-  physics_variant: physx
-  sensors_variant: All_Sensors
+  logical_path: /Isaac/Robots/Clearpath/Jackal/jackal.usd
+  resolved_path: /home/lyb/isaacsim_assets/Assets/Isaac/6.0/Isaac/Robots/Clearpath/Jackal/jackal.usd
+  expected_default_prim: /jackal
+  expected_sha256: be499d8ed3c83deff8a1ce43dc2976ba2b1a8cc66eae80360a19f6d8bb8720ec
 
-reference_only:
-  ros_sample: /home/lyb/isaacsim_assets/Assets/Isaac/6.0/Isaac/Samples/ROS2/Robots/Nova_Carter_ROS.usd
-  policy: never_load_or_reference
+stereo_sensor:
+  logical_path: /Isaac/Sensors/LeopardImaging/Hawk/hawk_v1.1_nominal.usd
+  resolved_path: /home/lyb/isaacsim_assets/Assets/Isaac/6.0/Isaac/Sensors/LeopardImaging/Hawk/hawk_v1.1_nominal.usd
+  expected_default_prim: /hawk
+  expected_sha256: 93c5708ff14d931373c2b5c512ddb277117fbe2c2fc86868f53c2156bf8fa03f

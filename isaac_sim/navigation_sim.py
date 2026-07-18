@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Isaac Sim 6.0.1 standalone entry point for the fixed warehouse and Nova Carter."""
+"""Isaac Sim 6.0.1 entry point for the Kujiale, Jackal and Hawk stack."""
 
 from __future__ import annotations
 
 import argparse
 from dataclasses import asdict
 import json
+import math
 import os
 from pathlib import Path
 import signal
@@ -15,7 +16,7 @@ import traceback
 
 import yaml
 
-from nova_carter_sim.process_lock import SimulatorAlreadyRunning, SimulatorProcessLock
+from jackal_sim.process_lock import SimulatorAlreadyRunning, SimulatorProcessLock
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -33,24 +34,18 @@ def load_config(path: Path) -> dict[str, object]:
     if not isinstance(config, dict):
         raise ValueError(f"simulation config must contain a mapping: {path}")
     stage = config.get("stage", {})
-    variants = config.get("variants", {})
-    if not isinstance(stage, dict) or not isinstance(variants, dict):
-        raise ValueError("stage and variants config entries must be mappings")
-    if stage.get("robot_prim") != "/World/NovaCarter":
-        raise ValueError("simulation config must use robot prim /World/NovaCarter")
+    if not isinstance(stage, dict):
+        raise ValueError("stage config entry must be a mapping")
+    if stage.get("robot_prim") != "/World/Jackal":
+        raise ValueError("simulation config must use robot prim /World/Jackal")
+    if stage.get("environment_default_prim") != "/Root":
+        raise ValueError("Kujiale source must use default prim /Root")
     if stage.get("compose_in_session_layer") is not True:
         raise ValueError("stage composition must remain in the session layer")
     if stage.get("save_composed_stage") is not False:
         raise ValueError("saving the composed official stage is forbidden")
     if stage.get("stage_open_count") != 1:
-        raise ValueError("the warehouse stage must be opened exactly once")
-    expected_variants = {
-        "Physics": "physx",
-        "Sensors": "All_Sensors",
-        "ROS": "Disabled",
-    }
-    if variants != expected_variants:
-        raise ValueError(f"simulation variants must remain fixed: {expected_variants}")
+        raise ValueError("the Kujiale stage must be opened exactly once")
     return config
 
 
@@ -87,7 +82,7 @@ def parse_args() -> argparse.Namespace:
         lock_path = PROJECT_ROOT / lock_path
 
     parser = argparse.ArgumentParser(
-        description="Open the official warehouse once and compose Nova Carter in memory"
+        description="Open Kujiale once and compose Jackal plus four Hawk pairs in memory"
     )
     parser.add_argument("--config", type=Path, default=pre_args.config)
     parser.add_argument(
@@ -115,12 +110,6 @@ def parse_args() -> argparse.Namespace:
         help="optional front camera rate override for deterministic map capture",
     )
     parser.add_argument(
-        "--surround-image-rate-hz",
-        type=float,
-        default=None,
-        help="optional side/back camera rate override for deterministic map capture",
-    )
-    parser.add_argument(
         "--reliable-sensor-qos",
         action="store_true",
         help="use reliable sensor writers while recording calibration maps",
@@ -132,19 +121,38 @@ def parse_args() -> argparse.Namespace:
     mode.add_argument("--headless", action="store_true")
     mode.add_argument("--gui", action="store_true")
     parser.add_argument(
-        "--warehouse-usd", type=Path, default=Path(os.environ.get("WAREHOUSE_USD", ""))
+        "--environment-usd", type=Path, default=Path(os.environ.get("KUJIALE_USD", ""))
     )
     parser.add_argument(
-        "--robot-usd", type=Path, default=Path(os.environ.get("NOVA_CARTER_USD", ""))
+        "--robot-usd", type=Path, default=Path(os.environ.get("JACKAL_USD", ""))
     )
     parser.add_argument(
-        "--forbidden-ros-sample-usd",
+        "--hawk-usd",
         type=Path,
-        default=Path(os.environ.get("NOVA_CARTER_ROS_SAMPLE_USD", "")),
+        default=Path(os.environ.get("HAWK_USD", "")),
     )
     parser.add_argument(
         "--duration", type=float, default=0.0, help="wall seconds; 0 runs until stopped"
     )
+    parser.add_argument(
+        "--benchmark-performance",
+        action="store_true",
+        help="run adaptive wall-time performance sampling with Isaac's official recorders",
+    )
+    parser.add_argument(
+        "--performance-start-file",
+        type=Path,
+        default=None,
+        help="start adaptive warmup only after the external ROS workload creates this file",
+    )
+    parser.add_argument("--performance-min-warmup-s", type=float, default=10.0)
+    parser.add_argument("--performance-max-warmup-s", type=float, default=90.0)
+    parser.add_argument("--performance-window-s", type=float, default=5.0)
+    parser.add_argument("--performance-stable-windows", type=int, default=3)
+    parser.add_argument("--performance-max-mean-change", type=float, default=0.03)
+    parser.add_argument("--performance-max-cv", type=float, default=0.10)
+    parser.add_argument("--performance-min-sample-s", type=float, default=30.0)
+    parser.add_argument("--performance-max-sample-s", type=float, default=180.0)
     parser.add_argument(
         "--stop-file",
         type=Path,
@@ -158,7 +166,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--spawn-x", type=float, default=None)
     parser.add_argument("--spawn-y", type=float, default=None)
-    parser.add_argument("--spawn-yaw", type=float, default=0.0, help="initial yaw in radians")
+    parser.add_argument(
+        "--spawn-yaw",
+        type=float,
+        default=math.radians(float(spawn.get("yaw_deg", 180.0))),
+        help="initial yaw in radians",
+    )
     parser.add_argument("--width", type=int, default=int(resolution[0]))
     parser.add_argument("--height", type=int, default=int(resolution[1]))
     parser.add_argument(
@@ -175,9 +188,10 @@ def parse_args() -> argparse.Namespace:
         help="run without the Phase 4 front stereo, depth, and IMU graphs",
     )
     parser.add_argument(
-        "--enable-surround-cameras",
-        action="store_true",
-        help="author the Stage 9 left/right/back on-demand stereo graphs",
+        "--camera-profile",
+        choices=("mapping_8cam", "navigation_6cam"),
+        default="navigation_6cam",
+        help="mapping publishes all four stereo pairs; navigation omits the rear pair",
     )
     parser.add_argument(
         "--dynamic-profile",
@@ -206,6 +220,8 @@ def parse_args() -> argparse.Namespace:
     args = parser.parse_args()
     if args.duration < 0.0:
         parser.error("--duration must be non-negative")
+    if args.benchmark_performance and args.duration != 0.0:
+        parser.error("adaptive performance sampling requires --duration 0")
     if args.lock_wait_seconds < 0.0:
         parser.error("--lock-wait-seconds must be non-negative")
     if args.physics_hz <= 0 or args.update_hz <= 0.0:
@@ -220,9 +236,9 @@ def parse_args() -> argparse.Namespace:
     if args.spawn_x is not None:
         args.spawn_preferred_xy = (args.spawn_x, args.spawn_y)
     for label, path in (
-        ("warehouse", args.warehouse_usd),
-        ("Nova Carter", args.robot_usd),
-        ("forbidden ROS sample", args.forbidden_ros_sample_usd),
+        ("Kujiale", args.environment_usd),
+        ("Jackal", args.robot_usd),
+        ("Hawk", args.hawk_usd),
     ):
         if not path.is_file():
             parser.error(f"{label} USD does not exist: {path}")
@@ -255,24 +271,21 @@ def parse_args() -> argparse.Namespace:
             if args.front_image_rate_hz <= 0.0:
                 raise ValueError("front image rate must be positive")
             args.sensor["front_stereo"]["image_rate_hz"] = args.front_image_rate_hz
-        if args.surround_image_rate_hz is not None:
-            if args.surround_image_rate_hz <= 0.0:
-                raise ValueError("surround image rate must be positive")
-            args.sensor["surround_stereo"]["image_rate_hz"] = (
-                args.surround_image_rate_hz
-            )
+        args.sensor["front_stereo"]["image_rate_hz"] = 10.0
+        args.sensor["surround_stereo"]["image_rate_hz"] = 10.0
         args.sensor["qos_reliability"] = (
             "reliable" if args.reliable_sensor_qos else "bestEffort"
         )
     except (OSError, ValueError, yaml.YAMLError) as exc:
         parser.error(str(exc))
-    if args.dynamic_profile or args.static_profile:
+    if args.dynamic_profile:
+        parser.error("dynamic obstacle profiles are not supported by the Kujiale static scope")
+    if args.static_profile:
         if not args.scenario_config.is_file():
             parser.error(f"scenario config does not exist: {args.scenario_config}")
         try:
             scenarios = load_mapping(args.scenario_config, "scenario config")
             static_profiles = scenarios.get("static_profiles", {})
-            profiles = scenarios.get("dynamic_profiles", {})
             if args.static_profile and (
                 not isinstance(static_profiles, dict)
                 or args.static_profile not in static_profiles
@@ -280,16 +293,10 @@ def parse_args() -> argparse.Namespace:
                 raise ValueError(
                     f"static profile {args.static_profile!r} is not configured"
                 )
-            if args.dynamic_profile and (
-                not isinstance(profiles, dict) or args.dynamic_profile not in profiles
-            ):
-                raise ValueError(
-                    f"dynamic profile {args.dynamic_profile!r} is not configured"
-                )
             args.static_scenario = (
                 static_profiles[args.static_profile] if args.static_profile else None
             )
-            args.dynamic_scenario = profiles[args.dynamic_profile] if args.dynamic_profile else None
+            args.dynamic_scenario = None
             if args.static_scenario is not None and not isinstance(args.static_scenario, dict):
                 raise ValueError("selected static profile must be a mapping")
             if args.dynamic_scenario is not None and not isinstance(args.dynamic_scenario, dict):
@@ -327,22 +334,28 @@ def run(args: argparse.Namespace) -> int:
 
     from isaacsim.core.utils.extensions import enable_extension
 
-    from nova_carter_sim.graphs import create_control_graphs
-    from nova_carter_sim.contact_monitor import RobotContactMonitor
-    from nova_carter_sim.follow_camera import FollowCamera, activate_viewport_camera
-    from nova_carter_sim.dynamic_obstacles import DynamicObstacleManager
-    from nova_carter_sim.static_obstacles import StaticObstacleManager
-    from nova_carter_sim.sensors import create_sensor_graphs
-    from nova_carter_sim.runtime import (
+    from jackal_sim.graphs import create_control_graphs
+    from jackal_sim.contact_monitor import RobotContactMonitor
+    from jackal_sim.follow_camera import FollowCamera, activate_viewport_camera
+    from jackal_sim.dynamic_obstacles import DynamicObstacleManager
+    from jackal_sim.static_obstacles import StaticObstacleManager
+    from jackal_sim.articulation_runtime import (
+        ArticulationRuntime,
+        articulation_physics_config_from_mapping,
+    )
+    from jackal_sim.idle_brake import IdleBrake
+    from jackal_sim.skid_steer_motion_assist import SkidSteerMotionAssist
+    from jackal_sim.sensors import create_sensor_graphs
+    from jackal_sim.runtime import (
         stage_identity,
         unexpected_robot_overlaps,
         world_translation,
     )
-    from nova_carter_sim.stage import (
+    from jackal_sim.stage import (
         ROBOT_PRIM_PATH,
         compose_robot,
         fingerprint,
-        open_warehouse_once,
+        open_environment_once,
     )
 
     timeline = None
@@ -351,6 +364,14 @@ def run(args: argparse.Namespace) -> int:
     static_obstacles = None
     follow_camera_bindings = 0
     contact_monitor = None
+    performance_benchmark = None
+    ros_runtime_node = None
+    rclpy_module = None
+    owns_rclpy_context = False
+    idle_brake = None
+    motion_assist = None
+    idle_brake_updates = 0
+    motion_assist_updates = 0
     report: dict[str, object] = {
         "status": "failed",
         "mode": "headless" if args.headless else "gui",
@@ -358,11 +379,13 @@ def run(args: argparse.Namespace) -> int:
         "stage_open_count": 0,
         "config": str(args.config.resolve()),
     }
-    warehouse_before = fingerprint(args.warehouse_usd)
+    environment_before = fingerprint(args.environment_usd)
     robot_before = fingerprint(args.robot_usd)
+    hawk_before = fingerprint(args.hawk_usd)
     report["assets_before"] = {
-        "warehouse": asdict(warehouse_before),
+        "environment": asdict(environment_before),
         "robot": asdict(robot_before),
+        "hawk": asdict(hawk_before),
     }
     started_wall = time.monotonic()
     try:
@@ -375,14 +398,17 @@ def run(args: argparse.Namespace) -> int:
             enable_extension("isaacsim.robot.wheeled_robots")
             enable_extension("isaacsim.sensors.physics.nodes")
             enable_extension("isaacsim.sensors.camera")
+            if args.benchmark_performance:
+                enable_extension("isaacsim.benchmark.services")
             app.update()
-        stage = open_warehouse_once(app, args.warehouse_usd)
+        stage = open_environment_once(app, args.environment_usd)
         report["stage_open_count"] = 1
         active_stage_identity = stage_identity()
         _, spawn, composition = compose_robot(
             stage,
             args.robot_usd,
-            args.forbidden_ros_sample_usd,
+            args.hawk_usd,
+            args.control,
             physics_hz=args.physics_hz,
             spawn_clearance=args.spawn_clearance,
             spawn_grid_resolution=args.spawn_grid_resolution,
@@ -391,9 +417,18 @@ def run(args: argparse.Namespace) -> int:
             spawn_preferred_xy=args.spawn_preferred_xy,
             spawn_yaw=args.spawn_yaw,
         )
+        report.update(
+            {
+                "composition": composition,
+                "camera_profile": args.camera_profile,
+                "active_image_streams": (
+                    8 if args.camera_profile == "mapping_8cam" else 6
+                ),
+            }
+        )
         app.update()
         if stage_identity() != active_stage_identity:
-            raise RuntimeError("active stage changed after Nova Carter composition")
+            raise RuntimeError("active stage changed after Jackal composition")
         contact_monitor = RobotContactMonitor(stage, ROBOT_PRIM_PATH)
 
         if args.disable_ros_control:
@@ -415,8 +450,7 @@ def run(args: argparse.Namespace) -> int:
             sensor_summary = create_sensor_graphs(
                 stage,
                 args.sensor,
-                include_surround=args.enable_surround_cameras,
-                update_app=app.update,
+                camera_profile=args.camera_profile,
             )
             app.update()
             report["sensor_graphs"] = {
@@ -452,7 +486,7 @@ def run(args: argparse.Namespace) -> int:
             report["dynamic_obstacles"] = {"enabled": False}
 
         if args.gui and not args.disable_follow_camera:
-            follow_camera = FollowCamera(stage, f"{ROBOT_PRIM_PATH}/chassis_link")
+            follow_camera = FollowCamera(stage, f"{ROBOT_PRIM_PATH}/base_link")
             app.update()
             activate_viewport_camera()
             report["follow_camera"] = {
@@ -470,17 +504,92 @@ def run(args: argparse.Namespace) -> int:
             }
 
         timeline = omni.timeline.get_timeline_interface()
+        # Imported static USD stages have no authored time range, so Kit's
+        # default timeline is [0, 0] with looping enabled.  Playing that range
+        # repeatedly resets simulation time and every time-stamped ROS topic.
+        timeline.set_start_time(0.0)
+        timeline.set_end_time(86_400.0)
+        timeline.set_looping(False)
         timeline.set_time_codes_per_second(float(args.physics_hz))
+        timeline.set_target_framerate(float(args.update_hz))
+        timeline.commit()
+        report["timeline"] = {
+            "start_time_s": float(timeline.get_start_time()),
+            "end_time_s": float(timeline.get_end_time()),
+            "looping": bool(timeline.is_looping()),
+            "time_codes_per_second": float(
+                timeline.get_time_codes_per_seconds()
+            ),
+            "target_framerate_hz": float(args.update_hz),
+        }
         timeline.play()
         for _ in range(10):
             app.update()
+
+        if not args.disable_ros_control:
+            import rclpy
+            from isaacsim.core.simulation_manager import SimulationManager
+
+            rclpy_module = rclpy
+            if not rclpy.ok():
+                rclpy.init(args=[])
+                owns_rclpy_context = True
+            ros_runtime_node = rclpy.create_node("jackal_sim_runtime")
+            articulation_settings = articulation_physics_config_from_mapping(
+                args.control
+            )
+            robot_runtime = ArticulationRuntime(
+                ROBOT_PRIM_PATH,
+                f"{ROBOT_PRIM_PATH}/base_link",
+                app,
+            )
+            robot_runtime.initialize()
+            robot_runtime.configure_stability(articulation_settings)
+            command_topic = str(args.control["topics"]["command_to_sim"])
+            simulation_clock = lambda: float(  # noqa: E731 - injected callback
+                SimulationManager.get_simulation_time()
+            )
+            idle_brake = IdleBrake(
+                ros_runtime_node,
+                robot_runtime,
+                articulation_settings,
+                topic_name=command_topic,
+                clock=simulation_clock,
+            )
+            motion_assist = SkidSteerMotionAssist(
+                ros_runtime_node,
+                robot_runtime,
+                articulation_settings,
+                physics_dt=1.0 / float(args.physics_hz),
+                topic_name=command_topic,
+                clock=simulation_clock,
+            )
+            report["skid_steer_runtime"] = {
+                "enabled": True,
+                "command_topic": command_topic,
+                "dof_names": robot_runtime.get_dof_names(),
+                "idle_brake_timeout_s": (
+                    articulation_settings.idle_brake_command_timeout_sec
+                ),
+                "motion_assist_enabled": articulation_settings.motion_assist_enabled,
+                "motion_assist_timeout_s": (
+                    articulation_settings.motion_assist_command_timeout_sec
+                ),
+                "effective_wheel_separation_m": float(
+                    args.control["kinematics"]["wheel_separation_m"]
+                ),
+            }
+        else:
+            report["skid_steer_runtime"] = {"enabled": False}
+
         if follow_camera is not None:
             activate_viewport_camera()
             follow_camera_bindings += 1
 
         start_simulation_time = float(timeline.get_current_time())
         last_simulation_time = start_simulation_time
-        start_pose = world_translation(stage, f"{ROBOT_PRIM_PATH}/chassis_link")
+        maximum_simulation_time = start_simulation_time
+        start_pose = world_translation(stage, f"{ROBOT_PRIM_PATH}/base_link")
         initial_overlaps = unexpected_robot_overlaps(
             robot_prim_path=ROBOT_PRIM_PATH,
             footprint_aabb=spawn.footprint_aabb,
@@ -490,18 +599,54 @@ def run(args: argparse.Namespace) -> int:
             raise RuntimeError(f"PhysX found initial obstacle overlap: {initial_overlaps}")
         ready_fields = (
             f"mode={report['mode']} spawn=({spawn.x:.3f},{spawn.y:.3f},{spawn.z:.3f}) "
-            f"control={not args.disable_ros_control} sensors={not args.disable_sensors}"
+            f"control={not args.disable_ros_control} sensors={not args.disable_sensors} "
+            f"camera_profile={args.camera_profile} streams={8 if args.camera_profile == 'mapping_8cam' else 6}"
         )
-        print(f"NOVA_CARTER_CONTROL_READY {ready_fields}", flush=True)
-        print(f"NOVA_CARTER_SENSORS_READY {ready_fields}", flush=True)
+        print(f"JACKAL_CONTROL_READY {ready_fields}", flush=True)
+        print(f"JACKAL_SENSORS_READY {ready_fields}", flush=True)
+
+        if args.benchmark_performance:
+            from jackal_sim.performance import (
+                AdaptiveOfficialBenchmark,
+                AdaptiveSamplingConfig,
+            )
+
+            performance_benchmark = AdaptiveOfficialBenchmark(
+                AdaptiveSamplingConfig(
+                    minimum_warmup_s=args.performance_min_warmup_s,
+                    maximum_warmup_s=args.performance_max_warmup_s,
+                    stability_window_s=args.performance_window_s,
+                    stable_windows_required=args.performance_stable_windows,
+                    maximum_mean_change_ratio=args.performance_max_mean_change,
+                    maximum_coefficient_of_variation=args.performance_max_cv,
+                    minimum_sample_s=args.performance_min_sample_s,
+                    maximum_sample_s=args.performance_max_sample_s,
+                ),
+                camera_profile=args.camera_profile,
+                start_file=args.performance_start_file,
+            )
+            print(
+                "JACKAL_PERFORMANCE_READY "
+                f"profile={args.camera_profile} fixed_frames=none",
+                flush=True,
+            )
 
         run_started = time.monotonic()
         deadline = run_started + args.duration if args.duration > 0.0 else None
         frames = 0
-        time_regressions = 0
+        sampled_time_regressions = 0
+        significant_time_regressions = 0
+        maximum_time_regression_s = 0.0
+        time_regression_tolerance_s = 1.5 / float(args.physics_hz)
         while app.is_running() and not STOP_REQUESTED:
             frame_started = time.monotonic()
             app.update()
+            if ros_runtime_node is not None:
+                rclpy_module.spin_once(ros_runtime_node, timeout_sec=0.0)
+                if idle_brake.update():
+                    idle_brake_updates += 1
+                elif motion_assist.update():
+                    motion_assist_updates += 1
             if dynamic_obstacles is not None:
                 dynamic_obstacles.update(float(timeline.get_current_time()))
             if follow_camera is not None:
@@ -512,8 +657,13 @@ def run(args: argparse.Namespace) -> int:
             frames += 1
             current_simulation_time = float(timeline.get_current_time())
             if current_simulation_time + 1.0e-9 < last_simulation_time:
-                time_regressions += 1
+                sampled_time_regressions += 1
+                regression_s = last_simulation_time - current_simulation_time
+                maximum_time_regression_s = max(maximum_time_regression_s, regression_s)
+                if regression_s > time_regression_tolerance_s:
+                    significant_time_regressions += 1
             last_simulation_time = current_simulation_time
+            maximum_simulation_time = max(maximum_simulation_time, current_simulation_time)
             if not timeline.is_playing():
                 raise RuntimeError("timeline stopped before shutdown was requested")
             if stage_identity() != active_stage_identity:
@@ -522,6 +672,10 @@ def run(args: argparse.Namespace) -> int:
                 break
             if args.stop_file is not None and args.stop_file.exists():
                 break
+            if performance_benchmark is not None:
+                performance_benchmark.tick()
+                if performance_benchmark.completed:
+                    break
             remaining = 1.0 / args.update_hz - (time.monotonic() - frame_started)
             if remaining > 0.0:
                 time.sleep(remaining)
@@ -540,12 +694,16 @@ def run(args: argparse.Namespace) -> int:
                 f"application stopped before the requested duration: "
                 f"requested={args.duration:.3f}s actual={elapsed_run_wall:.3f}s"
             )
-        if last_simulation_time <= start_simulation_time:
+        if maximum_simulation_time <= start_simulation_time:
             raise RuntimeError("simulation time did not advance")
-        if time_regressions:
-            raise RuntimeError(f"simulation time regressed on {time_regressions} frames")
+        if significant_time_regressions:
+            raise RuntimeError(
+                "simulation time regressed by more than "
+                f"{time_regression_tolerance_s:.6f}s on "
+                f"{significant_time_regressions} frames"
+            )
 
-        final_pose = world_translation(stage, f"{ROBOT_PRIM_PATH}/chassis_link")
+        final_pose = world_translation(stage, f"{ROBOT_PRIM_PATH}/base_link")
         final_overlaps = unexpected_robot_overlaps(
             robot_prim_path=ROBOT_PRIM_PATH,
             footprint_aabb=spawn.footprint_aabb,
@@ -560,14 +718,17 @@ def run(args: argparse.Namespace) -> int:
         report.update(
             {
                 "status": "passed",
-                "composition": composition,
                 "runtime": {
                     "frames": frames,
                     "wall_seconds": elapsed_run_wall,
                     "simulation_time_start": start_simulation_time,
-                    "simulation_time_end": last_simulation_time,
-                    "simulation_time_delta": last_simulation_time - start_simulation_time,
-                    "time_regressions": time_regressions,
+                    "simulation_time_end": maximum_simulation_time,
+                    "simulation_time_last_sample": last_simulation_time,
+                    "simulation_time_delta": maximum_simulation_time - start_simulation_time,
+                    "sampled_time_regressions": sampled_time_regressions,
+                    "significant_time_regressions": significant_time_regressions,
+                    "maximum_time_regression_s": maximum_time_regression_s,
+                    "time_regression_tolerance_s": time_regression_tolerance_s,
                     "timeline_playing_during_probe": True,
                     "start_chassis_translation": start_pose,
                     "final_chassis_translation": final_pose,
@@ -576,6 +737,12 @@ def run(args: argparse.Namespace) -> int:
                 },
             }
         )
+        if performance_benchmark is not None:
+            if not performance_benchmark.completed:
+                performance_benchmark.stop_incomplete()
+            report["performance"] = performance_benchmark.report()
+            if not report["performance"]["completed"]:
+                raise RuntimeError("adaptive performance sample did not complete")
         if follow_camera is not None:
             report["follow_camera"].update(
                 {
@@ -583,21 +750,47 @@ def run(args: argparse.Namespace) -> int:
                     **follow_camera.state(),
                 }
             )
+        if report["skid_steer_runtime"]["enabled"]:
+            report["skid_steer_runtime"].update(
+                {
+                    "idle_brake_updates": idle_brake_updates,
+                    "motion_assist_updates": motion_assist_updates,
+                }
+            )
         print(
-            "NOVA_CARTER_SIM_COMPLETED "
+            "JACKAL_SIM_COMPLETED "
             f"mode={report['mode']} spawn=({spawn.x:.3f},{spawn.y:.3f},{spawn.z:.3f}) "
             f"control={not args.disable_ros_control} sensors={not args.disable_sensors} "
             f"frames={frames} "
-            f"sim_delta={last_simulation_time - start_simulation_time:.3f}",
+            f"sim_delta={maximum_simulation_time - start_simulation_time:.3f}",
             flush=True,
         )
         return 0
     except Exception as exc:  # noqa: BLE001 - persist complete standalone diagnostics
+        report["status"] = "failed"
+        if performance_benchmark is not None and "performance" not in report:
+            performance_benchmark.stop_incomplete()
+            report["performance"] = performance_benchmark.report()
         report["error"] = str(exc)
         report["traceback"] = traceback.format_exc()
         print(report["traceback"], file=sys.stderr, flush=True)
         return 1
     finally:
+        if report.get("skid_steer_runtime", {}).get("enabled"):
+            report["skid_steer_runtime"].update(
+                {
+                    "idle_brake_updates": idle_brake_updates,
+                    "motion_assist_updates": motion_assist_updates,
+                }
+            )
+        if ros_runtime_node is not None:
+            ros_runtime_node.destroy_node()
+        if (
+            owns_rclpy_context
+            and rclpy_module is not None
+            and rclpy_module.ok()
+        ):
+            rclpy_module.shutdown()
         if dynamic_obstacles is not None:
             report["dynamic_obstacles"] = dynamic_obstacles.summary()
             dynamic_obstacles.close()
@@ -608,14 +801,18 @@ def run(args: argparse.Namespace) -> int:
             timeline.stop()
             app.update()
             report["timeline_stopped_on_exit"] = not timeline.is_playing()
-        warehouse_after = fingerprint(args.warehouse_usd)
+        environment_after = fingerprint(args.environment_usd)
         robot_after = fingerprint(args.robot_usd)
+        hawk_after = fingerprint(args.hawk_usd)
         report["assets_after"] = {
-            "warehouse": asdict(warehouse_after),
+            "environment": asdict(environment_after),
             "robot": asdict(robot_after),
+            "hawk": asdict(hawk_after),
         }
         report["official_assets_unchanged"] = (
-            warehouse_before == warehouse_after and robot_before == robot_after
+            environment_before == environment_after
+            and robot_before == robot_after
+            and hawk_before == hawk_after
         )
         report["total_wall_seconds"] = time.monotonic() - started_wall
         if not report["official_assets_unchanged"]:

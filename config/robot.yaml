@@ -3,21 +3,21 @@ map_frame: map
 odom_frame: odom
 
 differential_drive:
-  wheel_radius_m: 0.14
-  wheel_separation_m: 0.4132
-  left_joint: joint_wheel_left
-  right_joint: joint_wheel_right
+  wheel_radius_m: 0.098
+  wheel_separation_m: 0.800
+  left_joints: [front_left_wheel_joint, rear_left_wheel_joint]
+  right_joints: [front_right_wheel_joint, rear_right_wheel_joint]
   command_topic: /cmd_vel_sim
   command_timeout_s: 0.25
-  hard_max_linear_velocity_mps: 1.2
-  hard_max_angular_velocity_rps: 1.6
-  navigation_max_linear_velocity_mps: 1.1
-  navigation_max_angular_velocity_rps: 1.4
+  hard_max_linear_velocity_mps: 1.0
+  hard_max_angular_velocity_rps: 1.5
+  navigation_max_linear_velocity_mps: 0.75
+  navigation_max_angular_velocity_rps: 1.2
 
 footprint:
   points:
-    - [0.14, 0.25]
-    - [0.14, -0.25]
-    - [-0.607, -0.25]
-    - [-0.607, 0.25]
-  padding_m: 0.03
+    - [0.255, 0.210]
+    - [0.255, -0.210]
+    - [-0.230, -0.210]
+    - [-0.230, 0.210]
+  padding_m: 0.005

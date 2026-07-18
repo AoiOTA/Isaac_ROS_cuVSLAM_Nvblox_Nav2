@@ -1,16 +1,42 @@
 kinematics:
-  wheel_radius_m: 0.14
-  wheel_separation_m: 0.4132
-  left_wheel_joint: joint_wheel_left
-  right_wheel_joint: joint_wheel_right
+  wheel_radius_m: 0.098
+  wheel_separation_m: 0.800
+  left_wheel_joints: [front_left_wheel_joint, rear_left_wheel_joint]
+  right_wheel_joints: [front_right_wheel_joint, rear_right_wheel_joint]
 
 limits:
-  max_linear_speed_mps: 1.2
-  max_angular_speed_radps: 1.6
-  max_linear_acceleration_mps2: 1.6
-  max_linear_deceleration_mps2: 2.0
-  max_angular_acceleration_radps2: 3.2
+  # Isaac's inner controller is a hard safety envelope. Normal navigation is
+  # limited more tightly by Nav2, the velocity smoother and Command Guard.
+  max_linear_speed_mps: 1.0
+  max_angular_speed_radps: 1.5
+  max_wheel_speed_radps: 15.0
+  max_linear_acceleration_mps2: 2.0
+  max_linear_deceleration_mps2: 3.0
+  max_angular_acceleration_radps2: 6.0
   command_timeout_s: 0.25
+
+physics:
+  environment_static_friction: 0.80
+  environment_dynamic_friction: 0.70
+  wheel_static_friction: 0.20
+  wheel_dynamic_friction: 0.20
+  wheel_drive_damping: 0.872664626
+  wheel_drive_max_force: 7.0
+  wheel_drive_max_velocity_deg_s: 859.436693
+  solver_position_iterations: 32
+  solver_velocity_iterations: 4
+  sleep_threshold: 0.005
+  stabilization_threshold: 0.001
+  # Joint friction is distinct from wheel-to-floor contact friction above.
+  wheel_static_friction_effort: 0.0
+  wheel_dynamic_friction_effort: 0.0
+  wheel_viscous_friction_coefficient: 0.0
+  idle_brake_command_timeout_sec: 0.25
+  idle_brake_command_deadband: 0.001
+  motion_assist_enabled: true
+  motion_assist_command_timeout_sec: 0.25
+  motion_assist_max_linear_acceleration_mps2: 6.0
+  motion_assist_max_angular_acceleration_radps2: 30.0
 
 topics:
   command_input: /cmd_vel_safe

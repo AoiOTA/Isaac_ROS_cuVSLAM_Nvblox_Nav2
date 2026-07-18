@@ -40,8 +40,9 @@ def main() -> int:
 
     ros_setup = require_path("ROS_SETUP")
     isaac_python = require_path("ISAAC_SIM_PYTHON", executable=True)
-    warehouse_usd = require_path("WAREHOUSE_USD")
-    robot_usd = require_path("NOVA_CARTER_USD")
+    environment_usd = require_path("KUJIALE_USD")
+    robot_usd = require_path("JACKAL_USD")
+    hawk_usd = require_path("HAWK_USD")
 
     gpu_fields = run(
         [
@@ -91,7 +92,11 @@ def main() -> int:
             "driver": driver_version,
             "memory_mib": int(memory_mib),
         },
-        "assets": {"warehouse": warehouse_usd, "robot": robot_usd},
+        "assets": {
+            "environment": environment_usd,
+            "robot": robot_usd,
+            "hawk": hawk_usd,
+        },
         "isaac_ros_installed": installed_isaac_ros,
         "phase1_environment_ready": all(installed_isaac_ros.values()),
     }

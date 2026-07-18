@@ -130,9 +130,9 @@ class DynamicObstacleManager:
                 if not isinstance(spec_value, dict):
                     raise ValueError("dynamic obstacle entries must be mappings")
                 self.obstacles.append(self._create(spec_value, spawn_xyz))
-            robot = stage.GetPrimAtPath("/World/NovaCarter/chassis_link")
+            robot = stage.GetPrimAtPath("/World/Jackal/base_link")
             if not robot.IsValid():
-                raise RuntimeError("Nova Carter chassis is missing for contact reporting")
+                raise RuntimeError("Jackal chassis is missing for contact reporting")
             PhysxSchema.PhysxContactReportAPI.Apply(robot).CreateThresholdAttr().Set(0.0)
         self.robot_prim = robot
         self.managed_paths = {item.prim_path for item in self.obstacles}
@@ -318,7 +318,7 @@ class DynamicObstacleManager:
             actor0 = str(PhysicsSchemaTools.intToSdfPath(header.actor0))
             actor1 = str(PhysicsSchemaTools.intToSdfPath(header.actor1))
             pair = (actor0, actor1)
-            has_robot = any(path.startswith("/World/NovaCarter") for path in pair)
+            has_robot = any(path.startswith("/World/Jackal") for path in pair)
             has_obstacle = any(
                 path.startswith(OBSTACLE_ROOT)
                 or any(path.startswith(managed) for managed in self.managed_paths)

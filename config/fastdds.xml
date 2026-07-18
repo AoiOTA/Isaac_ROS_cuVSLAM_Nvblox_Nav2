@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!-- ROS_LOCALHOST_ONLY=1 provides process isolation for the initial local-only workflow. -->
 <profiles xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
-  <participant profile_name="nova_carter_local" is_default_profile="true">
+  <participant profile_name="jackal_local" is_default_profile="true">
     <rtps>
-      <name>nova_carter_local_participant</name>
+      <name>jackal_local_participant</name>
       <useBuiltinTransports>true</useBuiltinTransports>
     </rtps>
   </participant>

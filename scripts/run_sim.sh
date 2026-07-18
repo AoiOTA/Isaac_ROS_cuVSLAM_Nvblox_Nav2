@@ -31,9 +31,9 @@ case "$1" in
 esac
 
 require_executable "${ISAAC_SIM_PYTHON}"
-require_file "${WAREHOUSE_USD}"
-require_file "${NOVA_CARTER_USD}"
-require_file "${NOVA_CARTER_ROS_SAMPLE_USD}"
+require_file "${KUJIALE_USD}"
+require_file "${JACKAL_USD}"
+require_file "${HAWK_USD}"
 
 RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)"
 LOG_DIR="${PROJECT_ROOT}/data/logs/stage4"
@@ -41,7 +41,7 @@ REPORT="${LOG_DIR}/run-${RUN_ID}.json"
 LOG_FILE="${LOG_DIR}/run-${RUN_ID}.log"
 mkdir -p "${LOG_DIR}"
 
-info "Starting standalone simulator with Phase 4 runtime control and sensor graphs"
+info "Starting Kujiale/Jackal simulator with the selected camera profile"
 info "Report: ${REPORT}"
 info "Log: ${LOG_FILE}"
 set +e

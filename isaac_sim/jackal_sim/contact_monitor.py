@@ -21,10 +21,10 @@ class RobotContactMonitor:
         self.robot_root = robot_root
         robot = stage.GetPrimAtPath(robot_root)
         if not robot.IsValid():
-            raise RuntimeError("Nova Carter root is missing for contact monitoring")
-        chassis = stage.GetPrimAtPath(f"{robot_root}/chassis_link")
+            raise RuntimeError("Jackal root is missing for contact monitoring")
+        chassis = stage.GetPrimAtPath(f"{robot_root}/base_link")
         if not chassis.IsValid():
-            raise RuntimeError("Nova Carter chassis is missing for contact monitoring")
+            raise RuntimeError("Jackal base_link is missing for contact monitoring")
         self.reporter_paths: list[str] = []
         for prim in Usd.PrimRange(robot):
             if not prim.HasAPI(UsdPhysics.RigidBodyAPI):

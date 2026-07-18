@@ -1,4 +1,4 @@
-"""Runtime-only ROS 2 control and state OmniGraphs for Nova Carter."""
+"""Runtime-only ROS 2 control and state OmniGraphs for Jackal."""
 
 from __future__ import annotations
 
@@ -9,9 +9,14 @@ import usdrt.Sdf
 
 
 GRAPH_ROOT = "/World/Graphs"
-ARTICULATION_ROOT = "/World/NovaCarter/chassis_link"
-LEFT_WHEEL_JOINT_PATH = "/World/NovaCarter/joint_wheel_left"
-RIGHT_WHEEL_JOINT_PATH = "/World/NovaCarter/joint_wheel_right"
+ARTICULATION_ROOT = "/World/Jackal"
+BASE_LINK_PRIM = "/World/Jackal/base_link"
+WHEEL_JOINT_PATHS = (
+    "/World/Jackal/front_left_wheel_joint",
+    "/World/Jackal/front_right_wheel_joint",
+    "/World/Jackal/rear_left_wheel_joint",
+    "/World/Jackal/rear_right_wheel_joint",
+)
 
 
 @dataclass(frozen=True)
@@ -22,7 +27,7 @@ class ControlGraphSummary:
     joint_state_topic: str
     ground_truth_topic: str
     articulation_root: str
-    commanded_joints: tuple[str, str]
+    commanded_joints: tuple[str, str, str, str]
     wheel_radius_m: float
     wheel_separation_m: float
 
@@ -34,10 +39,10 @@ class ControlGraphSummary:
 
 
 def _require_robot_prims(stage: object) -> None:
-    required = (ARTICULATION_ROOT, LEFT_WHEEL_JOINT_PATH, RIGHT_WHEEL_JOINT_PATH)
+    required = (ARTICULATION_ROOT, BASE_LINK_PRIM, *WHEEL_JOINT_PATHS)
     missing = [path for path in required if not stage.GetPrimAtPath(path).IsValid()]
     if missing:
-        raise RuntimeError(f"Nova Carter control prims are missing: {missing}")
+        raise RuntimeError(f"Jackal control prims are missing: {missing}")
 
 
 def _create_clock_graph(topic: str) -> str:
@@ -75,13 +80,15 @@ def _create_differential_drive_graph(control: dict[str, object]) -> str:
     kinematics = control["kinematics"]
     limits = control["limits"]
     topics = control["topics"]
-    left_joint = str(kinematics["left_wheel_joint"])
-    right_joint = str(kinematics["right_wheel_joint"])
+    left_joints = [str(value) for value in kinematics["left_wheel_joints"]]
+    right_joints = [str(value) for value in kinematics["right_wheel_joints"]]
+    if len(left_joints) != 2 or len(right_joints) != 2:
+        raise RuntimeError("Jackal control requires two left and two right wheel joints")
     og.Controller.edit(
         {"graph_path": path, "evaluator_name": "execution"},
         {
             keys.CREATE_NODES: [
-                ("OnPlaybackTick", "omni.graph.action.OnPlaybackTick"),
+                ("OnPhysicsStep", "isaacsim.core.nodes.OnPhysicsStep"),
                 ("Context", "isaacsim.ros2.bridge.ROS2Context"),
                 ("SubscribeTwist", "isaacsim.ros2.bridge.ROS2SubscribeTwist"),
                 ("BreakLinear", "omni.graph.nodes.BreakVector3"),
@@ -90,7 +97,15 @@ def _create_differential_drive_graph(control: dict[str, object]) -> str:
                     "DifferentialController",
                     "isaacsim.robot.wheeled_robots.DifferentialController",
                 ),
+                ("LeftWheelCommand", "omni.graph.nodes.ArrayIndex"),
+                ("RightWheelCommand", "omni.graph.nodes.ArrayIndex"),
+                ("FourWheelCommand", "omni.graph.nodes.ConstructArray"),
                 ("ArticulationController", "isaacsim.core.nodes.IsaacArticulationController"),
+            ],
+            keys.CREATE_ATTRIBUTES: [
+                ("FourWheelCommand.inputs:input1", "double"),
+                ("FourWheelCommand.inputs:input2", "double"),
+                ("FourWheelCommand.inputs:input3", "double"),
             ],
             keys.SET_VALUES: [
                 ("SubscribeTwist.inputs:topicName", str(topics["command_to_sim"])),
@@ -111,6 +126,10 @@ def _create_differential_drive_graph(control: dict[str, object]) -> str:
                     float(limits["max_angular_speed_radps"]),
                 ),
                 (
+                    "DifferentialController.inputs:maxWheelSpeed",
+                    float(limits["max_wheel_speed_radps"]),
+                ),
+                (
                     "DifferentialController.inputs:maxAcceleration",
                     float(limits["max_linear_acceleration_mps2"]),
                 ),
@@ -122,24 +141,46 @@ def _create_differential_drive_graph(control: dict[str, object]) -> str:
                     "DifferentialController.inputs:maxAngularAcceleration",
                     float(limits["max_angular_acceleration_radps2"]),
                 ),
-                ("ArticulationController.inputs:jointNames", [left_joint, right_joint]),
+                ("LeftWheelCommand.inputs:index", 0),
+                ("RightWheelCommand.inputs:index", 1),
+                ("FourWheelCommand.inputs:arrayType", "double[]"),
+                ("FourWheelCommand.inputs:arraySize", 4),
+                (
+                    "ArticulationController.inputs:jointNames",
+                    [left_joints[0], right_joints[0], left_joints[1], right_joints[1]],
+                ),
                 (
                     "ArticulationController.inputs:targetPrim",
                     [usdrt.Sdf.Path(ARTICULATION_ROOT)],
                 ),
             ],
             keys.CONNECT: [
-                ("OnPlaybackTick.outputs:tick", "SubscribeTwist.inputs:execIn"),
+                ("OnPhysicsStep.outputs:step", "SubscribeTwist.inputs:execIn"),
                 ("Context.outputs:context", "SubscribeTwist.inputs:context"),
                 ("SubscribeTwist.outputs:linearVelocity", "BreakLinear.inputs:tuple"),
                 ("SubscribeTwist.outputs:angularVelocity", "BreakAngular.inputs:tuple"),
-                ("OnPlaybackTick.outputs:tick", "DifferentialController.inputs:execIn"),
-                ("OnPlaybackTick.outputs:deltaSeconds", "DifferentialController.inputs:dt"),
+                ("OnPhysicsStep.outputs:step", "DifferentialController.inputs:execIn"),
+                (
+                    "OnPhysicsStep.outputs:deltaSimulationTime",
+                    "DifferentialController.inputs:dt",
+                ),
                 ("BreakLinear.outputs:x", "DifferentialController.inputs:linearVelocity"),
                 ("BreakAngular.outputs:z", "DifferentialController.inputs:angularVelocity"),
-                ("OnPlaybackTick.outputs:tick", "ArticulationController.inputs:execIn"),
                 (
                     "DifferentialController.outputs:velocityCommand",
+                    "LeftWheelCommand.inputs:array",
+                ),
+                (
+                    "DifferentialController.outputs:velocityCommand",
+                    "RightWheelCommand.inputs:array",
+                ),
+                ("LeftWheelCommand.outputs:value", "FourWheelCommand.inputs:input0"),
+                ("RightWheelCommand.outputs:value", "FourWheelCommand.inputs:input1"),
+                ("LeftWheelCommand.outputs:value", "FourWheelCommand.inputs:input2"),
+                ("RightWheelCommand.outputs:value", "FourWheelCommand.inputs:input3"),
+                ("OnPhysicsStep.outputs:step", "ArticulationController.inputs:execIn"),
+                (
+                    "FourWheelCommand.outputs:array",
                     "ArticulationController.inputs:velocityCommand",
                 ),
             ],
@@ -222,7 +263,7 @@ def _create_ground_truth_graph(topic: str, world_frame: str, base_frame: str) ->
                 ("SimulationTime.inputs:resetOnStop", False),
                 (
                     "ComputeOdometry.inputs:chassisPrim",
-                    [usdrt.Sdf.Path(ARTICULATION_ROOT)],
+                    [usdrt.Sdf.Path(BASE_LINK_PRIM)],
                 ),
                 ("PublishOdometry.inputs:topicName", topic),
                 ("PublishOdometry.inputs:odomFrameId", world_frame),
@@ -280,8 +321,10 @@ def create_control_graphs(stage: object, control: dict[str, object]) -> ControlG
         ground_truth_topic=str(topics["ground_truth_odometry"]),
         articulation_root=ARTICULATION_ROOT,
         commanded_joints=(
-            str(kinematics["left_wheel_joint"]),
-            str(kinematics["right_wheel_joint"]),
+            str(kinematics["left_wheel_joints"][0]),
+            str(kinematics["right_wheel_joints"][0]),
+            str(kinematics["left_wheel_joints"][1]),
+            str(kinematics["right_wheel_joints"][1]),
         ),
         wheel_radius_m=float(kinematics["wheel_radius_m"]),
         wheel_separation_m=float(kinematics["wheel_separation_m"]),

@@ -24,7 +24,7 @@ def main() -> int:
     if report.get("status") != "passed":
         raise SystemExit(f"simulator report did not pass: {report.get('error')}")
     if report.get("stage_open_count") != 1:
-        raise SystemExit("warehouse stage was not opened exactly once")
+        raise SystemExit("Kujiale stage was not opened exactly once")
     if report.get("official_assets_unchanged") is not True:
         raise SystemExit("official asset fingerprints changed")
     control = report.get("control_graphs", {})
@@ -32,8 +32,14 @@ def main() -> int:
         raise SystemExit("runtime control graphs were not enabled")
     if set(control.get("graph_paths", [])) != EXPECTED_GRAPHS:
         raise SystemExit(f"unexpected runtime graphs: {control.get('graph_paths')}")
-    if control.get("commanded_joints") != ["joint_wheel_left", "joint_wheel_right"]:
-        raise SystemExit("articulation command contains joints other than the two active wheels")
+    expected_joints = [
+        "front_left_wheel_joint",
+        "front_right_wheel_joint",
+        "rear_left_wheel_joint",
+        "rear_right_wheel_joint",
+    ]
+    if control.get("commanded_joints") != expected_joints:
+        raise SystemExit("articulation command does not target all four Jackal wheels")
     if control.get("official_ros_sample_loaded") is not False:
         raise SystemExit("official ROS sample graph must remain unloaded")
     print(
