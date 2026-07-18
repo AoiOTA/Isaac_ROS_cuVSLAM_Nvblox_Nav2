@@ -2,7 +2,7 @@
 
 本仓库用于在 Ubuntu 24.04、ROS 2 Jazzy、Isaac Sim 6.0.1 和 RTX 4090 上构建 Nova Carter 视觉导航系统。目标组件包括 Isaac Sim Standalone Python、Isaac ROS cuVSLAM、nvblox、Visual Global Localization 和 Nav2。
 
-当前状态：**阶段0至阶段11的代码、配置和自动化已经完成；阶段10已正式提交，阶段11的130轮正式矩阵正在本机执行。** 已安装CUDA Toolkit 13.0.3、TensorRT 10.13.3.9和Isaac ROS 4.5.0；Standalone程序直接打开官方Warehouse，在匿名session layer中引用Nova Carter主USD，并在运行时自建控制、前向双目、深度和IMU OmniGraph。当前项目决策固定只使用前向Hawk双目，不启动侧向或后向相机；cuVSLAM连续跟踪、前向cuVGL全局重定位、dynamic nvblox、Nav2 MPPI DiffDrive、Velocity Smoother、Collision Monitor、Command Guard、自动暂停/恢复导航和阶段11验收自动化已组成完整动态导航闭环。
+当前状态：**阶段0至阶段11的代码、配置和自动化已经完成；阶段10已正式提交，阶段11的30轮正式矩阵正在本机执行。** 已安装CUDA Toolkit 13.0.3、TensorRT 10.13.3.9和Isaac ROS 4.5.0；Standalone程序直接打开官方Warehouse，在匿名session layer中引用Nova Carter主USD，并在运行时自建控制、前向双目、深度和IMU OmniGraph。当前项目决策固定只使用前向Hawk双目，不启动侧向或后向相机；cuVSLAM连续跟踪、前向cuVGL全局重定位、dynamic nvblox、Nav2 MPPI DiffDrive、Velocity Smoother、Collision Monitor、Command Guard、自动暂停/恢复导航和阶段11验收自动化已组成完整动态导航闭环。
 
 第一次运行请看[用户操作手册](docs/user_manual.md)，查找代码和配置职责请看[项目重要文件索引](docs/file_index.md)，完整数据链和TF所有权见[架构说明](docs/architecture.md)。
 
@@ -205,7 +205,7 @@ cd /home/lyb/Workspace/Isaac_ROS_cuVSLAM_Nvblox_Nav2
 - 三个短距离目标和三个9.5–12.3 m理论长度的跨区域长距离目标；
 - 静态、3 actor动态和6 actor叉车/box/capsule异构动态场景；
 - 单轮目标、碰撞、路径、定位安全、实时因子、频率、数据年龄、命令时延、加速度/jerk和GPU全项判定；
-- 静态40次、动态40次、异构50次的固定seed正式矩阵与安全断点续跑。
+- 静态10次、动态10次、异构10次的固定seed正式矩阵与安全断点续跑。
 
 先生成USD理论基准，再运行单轮或正式矩阵：
 
@@ -228,7 +228,7 @@ cd /home/lyb/Workspace/Isaac_ROS_cuVSLAM_Nvblox_Nav2
   --resume --skip-build --record-bag
 ```
 
-最终代码已完成61项自动测试。实际代表性长距离运行中，静态目标完成12.50 m且路径伸长1.88%，异构动态目标完成11.68 m且路径伸长0.68%；两轮均为0碰撞，终点位置误差分别为3.2 cm和4.7 cm，实时因子为0.862/0.837，raw-to-sim命令新鲜度P95为47.0/54.7 ms，nvblox为7.10/7.18 Hz。正式130轮结果完成后记录在[Phase 11 Validation](docs/phase11_validation.md)及`data/reports/phase11/acceptance-summary-latest.json`。
+最终代码已完成61项自动测试。实际代表性长距离运行中，静态目标完成12.50 m且路径伸长1.88%，异构动态目标完成11.68 m且路径伸长0.68%；两轮均为0碰撞，终点位置误差分别为3.2 cm和4.7 cm，实时因子为0.862/0.837，raw-to-sim命令新鲜度P95为47.0/54.7 ms，nvblox为7.10/7.18 Hz。正式30轮结果完成后记录在[Phase 11 Validation](docs/phase11_validation.md)及`data/reports/phase11/acceptance-summary-latest.json`。
 
 ## 阶段1完整环境配置
 

@@ -229,6 +229,11 @@ manually copy another result. If a live matrix owns the lock, inspect `ps` and
 wait for it or stop that foreground command normally—never delete locks held by
 a live process.
 
+An empty run that has a simulator report but no nonempty
+`navigation.json/goals` is classified as infrastructure-only and retried up to
+`--infrastructure-retries` (default 2). Once a goal has actually been attempted,
+its failure is statistical evidence and is never auto-retried by this rule.
+
 ## Stage 11 reference generation cannot find a path
 
 First confirm `config/assets.yaml` still points at the actual Isaac Sim 6.0

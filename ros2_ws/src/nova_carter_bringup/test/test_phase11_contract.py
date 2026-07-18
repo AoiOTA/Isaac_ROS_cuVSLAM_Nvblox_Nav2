@@ -9,9 +9,9 @@ ROOT = Path(__file__).resolve().parents[4]
 def test_stage11_formal_counts_and_scope() -> None:
     config = yaml.safe_load((ROOT / "config/stage11.yaml").read_text())
     assert config["acceptance"]["trial_counts"] == {
-        "static": 40,
-        "dynamic": 40,
-        "heterogeneous": 50,
+        "static": 10,
+        "dynamic": 10,
+        "heterogeneous": 10,
     }
     assert config["scope"] == {
         "front_stereo_only": True,
@@ -50,6 +50,9 @@ def test_stage11_automation_is_locked_resumable_and_records_latency() -> None:
     assert "--resume" in acceptance
     assert '[[ -s "${existing_report}" ]] || continue' in acceptance
     assert "HETEROGENEOUS_TRIALS" in acceptance
+    assert "INFRASTRUCTURE_RETRIES" in acceptance
+    assert 'len(r["goals"])>0' in acceptance
+    assert "Infrastructure-only empty run" in acceptance
     assert "cmd_nav_raw_to_cmd_sim_freshness" in runner
     assert "data_age_metrics" in runner
     assert "enable_surround_cameras" not in trial

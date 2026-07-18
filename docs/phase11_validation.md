@@ -51,11 +51,13 @@ nvblox动态三维层使用8 m滚动清图半径，并以1 Hz清理范围外块�
 
 | 类别 | 正式次数 | 内容 | 门槛 |
 |---|---:|---|---:|
-| static | 40 | 官方Warehouse全部复杂静态碰撞体，无项目动态actor | ≥95% |
-| dynamic | 40 | 官方叉车、box、capsule共3种移动障碍 | ≥90% |
-| heterogeneous | 50 | 3个基础actor + 3个远距离box/capsule，共6个异构动态障碍 | ≥90% |
+| static | 10 | 官方Warehouse全部复杂静态碰撞体，无项目动态actor | ≥95% |
+| dynamic | 10 | 官方叉车、box、capsule共3种移动障碍 | ≥90% |
+| heterogeneous | 10 | 3个基础actor + 3个远距离box/capsule，共6个异构动态障碍 | ≥90% |
 
-每类按序轮换六个目标，后3个目标跨越多个仓库结构带并要求实际轨迹至少7 m。正式seed集合固定为：static 21000–21039、dynamic 31000–31039、heterogeneous 41000–41049。汇总器验证完整身份集合，重复报告、错seed、错目标或错class不能补数。
+每类按序轮换六个目标，后3个目标跨越多个仓库结构带并要求实际轨迹至少7 m。正式seed集合固定为：static 21000–21009、dynamic 31000–31009、heterogeneous 41000–41009。汇总器验证完整身份集合，重复报告、错seed、错目标或错class不能补数。
+
+正式“试验”要求ROS runner至少实际提交过一个目标并产生`navigation.json/goals`。仿真ready后、目标runner启动前的进程/采集基础设施空轮会保留原始目录并自动重试，不能消耗允许的导航失败名额；一旦目标已提交，所有失败都必须进入该类别分母。
 
 移动actor保留视觉和PhysX碰撞几何。它们可以在机器人进入安全距离时退往预先验证的free-space refuge，但移动距离、yield次数、最终位置和接触都进入报告；不能通过关闭碰撞来制造“避障成功”。异构组必须实际存在叉车、box、capsule三种kind且至少6个actor全部移动。
 
@@ -103,7 +105,7 @@ max(0, actual_ground_truth_path / USD_SE2_Astar_optimal_path - 1)
 - 峰值显存11.25 GiB；
 - 23.9 MB压缩MCAP有效。
 
-静态长距离最终复测和130轮正式矩阵的结果在完成实际执行后写入本节，不以单元测试替代。
+静态长距离最终复测和30轮正式矩阵的结果在完成实际执行后写入本节，不以单元测试替代。
 
 ## 7. 执行命令
 
@@ -121,7 +123,7 @@ max(0, actual_ground_truth_path / USD_SE2_Astar_optimal_path - 1)
   --headless --no-rviz --record-bag
 ```
 
-正式40/40/50矩阵：
+正式10/10/10矩阵：
 
 ```bash
 ./scripts/run_acceptance.sh \

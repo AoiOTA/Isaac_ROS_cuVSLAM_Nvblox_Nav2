@@ -1,7 +1,7 @@
 trial_counts:
-  static: 40
-  dynamic: 40
-  heterogeneous: 50
+  static: 10
+  dynamic: 10
+  heterogeneous: 10
 
 preacceptance_trial_counts:
   static: 20

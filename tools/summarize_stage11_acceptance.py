@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Summarize the formal 40/40/50 Stage 11 acceptance matrix."""
+"""Summarize the formal 10/10/10 Stage 11 acceptance matrix."""
 
 from __future__ import annotations
 

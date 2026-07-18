@@ -43,6 +43,15 @@ cd /home/lyb/Workspace/Isaac_ROS_cuVSLAM_Nvblox_Nav2
 
 该入口会依次启动本项目专属 Fast DDS discovery server、Isaac Sim Standalone、前向传感器、cuVSLAM/cuVGL、dynamic nvblox、Nav2 和自动目标执行器；结束时只清理自己创建的进程组。`Ctrl-C` 可以安全停止整套系统。不要使用 `killall` 或全局 `pkill`，机器上可能还有其他项目。
 
+不改代码而执行一个或多个自定义 `map` 坐标目标，可传入扁平的 `x,y,yaw` 三元组：
+
+```bash
+PHASE9_GOAL_POSES='[2.0,0.0,0.0,1.8,10.5,1.570796327]' \
+  ./scripts/run_phase9.sh --map warehouse_v2_front --headless --no-rviz
+```
+
+脚本仍会自动全局重定位、逐个发送目标并验证数据链。目标必须位于当前occupancy map的连通自由空间；yaw单位为弧度。需要正式可比较的结果时不要自定义目标，使用阶段11固定六目标和固定seed。
+
 阶段11的单目标、固定 seed、完整指标运行更适合复现实验：
 
 ```bash
@@ -103,7 +112,7 @@ data/maps/warehouse_v2_front/
 
 ## 6. 阶段11正式验收
 
-完整验收固定执行静态 40 次、动态 40 次、异构动态 50 次：
+完整验收固定执行静态 10 次、动态 10 次、异构动态 10 次：
 
 ```bash
 ./scripts/run_acceptance.sh \
@@ -118,6 +127,8 @@ data/maps/warehouse_v2_front/
   --matrix-id phase11-final-v1-20260718 \
   --resume --skip-build --record-bag
 ```
+
+如果仿真ready之后、ROS目标运行器启动之前发生进程级瞬时中断，该空轮没有`navigation.json/goals`，不会占用正式成功率的失败预算；脚本默认最多自动重试2次。只要目标已经实际发出，后续任何导航、碰撞、定位或性能失败都照常计入分母，不能靠重试隐藏。
 
 正式输出：
 

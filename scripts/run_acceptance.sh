@@ -20,6 +20,7 @@ MATRIX_ID="$(date -u +%Y%m%dT%H%M%S)-stage11-$$"
 RECORD_BAG="true"
 BUILD="true"
 RESUME="false"
+INFRASTRUCTURE_RETRIES="2"
 while (($#)); do
   case "$1" in
     --static-trials) STATIC_TRIALS="${2:?missing count}"; shift 2 ;;
@@ -32,13 +33,14 @@ while (($#)); do
     --no-bag) RECORD_BAG="false"; shift ;;
     --skip-build) BUILD="false"; shift ;;
     --resume) RESUME="true"; shift ;;
+    --infrastructure-retries) INFRASTRUCTURE_RETRIES="${2:?missing retry count}"; shift 2 ;;
     -h|--help)
-      echo "Usage: ./scripts/run_acceptance.sh [--matrix-id ID] [--resume] [--record-bag|--no-bag] [--static-trials 40 --dynamic-trials 40 --heterogeneous-trials 50]"
+      echo "Usage: ./scripts/run_acceptance.sh [--matrix-id ID] [--resume] [--record-bag|--no-bag] [--static-trials 10 --dynamic-trials 10 --heterogeneous-trials 10]"
       exit 0 ;;
     *) die "unknown argument: $1" ;;
   esac
 done
-for value in "${STATIC_TRIALS}" "${DYNAMIC_TRIALS}" "${HETEROGENEOUS_TRIALS}" "${SEED_BASE}"; do
+for value in "${STATIC_TRIALS}" "${DYNAMIC_TRIALS}" "${HETEROGENEOUS_TRIALS}" "${SEED_BASE}" "${INFRASTRUCTURE_RETRIES}"; do
   [[ "${value}" =~ ^[0-9]+$ ]] || die "trial counts and seed must be non-negative integers"
 done
 (( STATIC_TRIALS > 0 && DYNAMIC_TRIALS > 0 && HETEROGENEOUS_TRIALS > 0 )) || \
@@ -102,33 +104,54 @@ for experiment_class in static dynamic heterogeneous; do
       done
     fi
     [[ "${reused}" == "true" ]] && continue
-    run_id="${base_id}"
-    run_dir="${base_dir}"
-    if [[ -e "${run_dir}/scenario.yaml" ]]; then
-      retry=1
-      while [[ -e "${base_dir}-retry${retry}/scenario.yaml" ]]; do retry=$((retry + 1)); done
-      run_id="${base_id}-retry${retry}"
-      run_dir="${PROJECT_ROOT}/data/runs/${run_id}"
-    fi
-    domain=$((100 + (trial_serial % 120)))
-    port=$((12900 + trial_serial))
-    bag_arg="--record-bag"
-    [[ "${RECORD_BAG}" == "true" ]] || bag_arg="--no-bag"
-    info "Stage 11 ${experiment_class} $((index + 1))/${count}: seed=${seed}, goal=${goal_index}"
-    set +e
-    PHASE11_ROS_DOMAIN_ID="${domain}" PHASE11_DISCOVERY_PORT="${port}" \
-      "${PROJECT_ROOT}/scripts/run_stage11_trial.sh" \
-      --class "${experiment_class}" --seed "${seed}" --goal-index "${goal_index}" \
-      --map "${MAP_NAME}" --headless --no-rviz "${bag_arg}" \
-      --run-id "${run_id}" --run-dir "${run_dir}"
-    trial_status=$?
-    set -e
-    (( trial_status == 0 )) || failures=$((failures + 1))
-    if [[ ! -s "${run_dir}/simulator.json" ]]; then
-      die "infrastructure failure: simulator produced no report for ${run_id}"
-    fi
-    [[ -f "${run_dir}/result.json" ]] || die "trial produced no result: ${run_id}"
-    reports+=("${run_dir}/result.json")
+    infrastructure_attempt=0
+    while true; do
+      run_id="${base_id}"
+      run_dir="${base_dir}"
+      if [[ -e "${run_dir}/scenario.yaml" ]]; then
+        retry=1
+        while [[ -e "${base_dir}-retry${retry}/scenario.yaml" ]]; do retry=$((retry + 1)); done
+        run_id="${base_id}-retry${retry}"
+        run_dir="${PROJECT_ROOT}/data/runs/${run_id}"
+      fi
+      domain=$((100 + (trial_serial % 120)))
+      port=$((12900 + trial_serial))
+      bag_arg="--record-bag"
+      [[ "${RECORD_BAG}" == "true" ]] || bag_arg="--no-bag"
+      info "Stage 11 ${experiment_class} $((index + 1))/${count}: seed=${seed}, goal=${goal_index}"
+      set +e
+      PHASE11_ROS_DOMAIN_ID="${domain}" PHASE11_DISCOVERY_PORT="${port}" \
+        "${PROJECT_ROOT}/scripts/run_stage11_trial.sh" \
+        --class "${experiment_class}" --seed "${seed}" --goal-index "${goal_index}" \
+        --map "${MAP_NAME}" --headless --no-rviz "${bag_arg}" \
+        --run-id "${run_id}" --run-dir "${run_dir}"
+      trial_status=$?
+      set -e
+      if [[ ! -s "${run_dir}/simulator.json" ]]; then
+        die "infrastructure failure: simulator produced no report for ${run_id}"
+      fi
+      [[ -f "${run_dir}/result.json" ]] || die "trial produced no result: ${run_id}"
+
+      # A seed counts as one of the formal 10/10/10 trials only after the ROS
+      # runner actually attempted its goal.  A process interruption between
+      # simulator readiness and runner startup must be retried, not disguised
+      # as a navigation failure that consumes the statistical failure budget.
+      navigation_attempted="$(python3 -c 'import json,sys; p=sys.argv[1];
+try:
+ r=json.load(open(p)); print(str(isinstance(r.get("goals"),list) and len(r["goals"])>0).lower())
+except Exception:
+ print("false")' "${run_dir}/navigation.json")"
+      if [[ "${navigation_attempted}" == "true" ]]; then
+        (( trial_status == 0 )) || failures=$((failures + 1))
+        reports+=("${run_dir}/result.json")
+        break
+      fi
+      infrastructure_attempt=$((infrastructure_attempt + 1))
+      if (( infrastructure_attempt > INFRASTRUCTURE_RETRIES )); then
+        die "infrastructure failure: no navigation goal attempt after $((INFRASTRUCTURE_RETRIES + 1)) runs for ${base_id}"
+      fi
+      info "Infrastructure-only empty run for ${base_id}; retrying ($((infrastructure_attempt + 1))/$((INFRASTRUCTURE_RETRIES + 1)))"
+    done
   done
 done
 

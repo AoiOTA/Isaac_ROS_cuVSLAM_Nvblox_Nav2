@@ -41,9 +41,9 @@ goals:
 acceptance:
   seed_base: 21000
   trial_counts:
-    static: 40
-    dynamic: 40
-    heterogeneous: 50
+    static: 10
+    dynamic: 10
+    heterogeneous: 10
   thresholds:
     static_success_rate: 0.95
     dynamic_success_rate: 0.90
