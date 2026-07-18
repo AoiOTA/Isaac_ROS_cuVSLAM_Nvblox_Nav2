@@ -1,0 +1,123 @@
+{
+  "artifact_groups": {
+    "config": {
+      "bytes": 20662,
+      "file_count": 12,
+      "sha256_tree": "961bc500786896ff1b194b1867a7c8bb2d08baac14645fb25da6c9b254aba048"
+    },
+    "cuvgl": {
+      "bytes": 6654185833,
+      "file_count": 4570,
+      "sha256_tree": "008b64cf195301f4836439a926b04791ec2c34289b9bd0d49ca5165d9980b6f6"
+    },
+    "cuvslam": {
+      "bytes": 286304649,
+      "file_count": 3,
+      "sha256_tree": "4767d7a4f4f74df3f41f3917b01fcba50395b81b0080a1c562060f2b9de93810"
+    },
+    "mesh": {
+      "bytes": 26810481,
+      "file_count": 1,
+      "sha256_tree": "904163b39eec525919d7306f16606f8d4da65f9514cf02581136db51562c0e09"
+    },
+    "nvblox": {
+      "bytes": 77519318,
+      "file_count": 5,
+      "sha256_tree": "82eb56014910932582d85184538c92d661698feed3d47926890ec593d9037dc7"
+    },
+    "occupancy": {
+      "bytes": 102841,
+      "file_count": 3,
+      "sha256_tree": "f3adcd13797ca488dce3da33f68ace61f63ebae65dad0a1ad7bae3cd544d0229"
+    }
+  },
+  "capture": {
+    "mapping_image_message_counts": {
+      "/back_stereo_camera/left/image_raw": 2761,
+      "/back_stereo_camera/right/image_raw": 2744,
+      "/front_stereo_camera/left/image_raw": 2568,
+      "/front_stereo_camera/right/image_raw": 2685,
+      "/left_stereo_camera/left/image_raw": 2707,
+      "/left_stereo_camera/right/image_raw": 2718,
+      "/right_stereo_camera/left/image_raw": 2771,
+      "/right_stereo_camera/right/image_raw": 2724
+    },
+    "message_count": 93132,
+    "retained_in_repository": false,
+    "storage_identifier": "mcap"
+  },
+  "created_unix_s": 1784395923.855107,
+  "generation_command": "./scripts/run_mapping.sh --map kujiale_jackal_8cam --auto --headless",
+  "git_lfs_required": true,
+  "map_frame": "map",
+  "map_name": "kujiale_jackal_8cam",
+  "mapping_profile": {
+    "active_rgb_streams": 8,
+    "active_stereo_pairs": [
+      "front",
+      "left",
+      "right",
+      "back"
+    ],
+    "name": "mapping_8cam",
+    "native_depth_min_range_m": 0.4,
+    "native_depth_source": "front_hawk_left",
+    "nominal_rate_hz": 10.0,
+    "resolution": [
+      1280,
+      800
+    ],
+    "static_reconstruction_frame": "map"
+  },
+  "navigation_profile": {
+    "active_rgb_streams": 6,
+    "active_stereo_pairs": [
+      "front",
+      "left",
+      "right"
+    ],
+    "disabled_stereo_pairs": [
+      "back"
+    ],
+    "name": "navigation_6cam",
+    "rear_render_products_created": false
+  },
+  "robot": {
+    "name": "Clearpath Jackal",
+    "spawn_usd_xyz_m": [
+      2.9,
+      -0.2,
+      0.0635
+    ],
+    "spawn_yaw_deg": 180.0
+  },
+  "run_id": "20260718T171751Z",
+  "schema_version": 1,
+  "software": {
+    "isaac_ros_release": "4.5",
+    "isaac_sim_version": "6.0.1",
+    "ros_distro": "jazzy"
+  },
+  "source_assets": {
+    "environment": {
+      "default_prim": "/Root",
+      "path": "/home/lyb/kujiale_usd_rooms_20260717/kujiale_0026/kujiale_0026_A_to_B_door_open.usd",
+      "sha256": "f76f1957e8f4cbfccb13f9670d6ce187793007c56d9b3aad8a8ee72507d658d2"
+    },
+    "hawk": {
+      "default_prim": "/hawk",
+      "path": "/home/lyb/isaacsim_assets/Assets/Isaac/6.0/Isaac/Sensors/LeopardImaging/Hawk/hawk_v1.1_nominal.usd",
+      "sha256": "93c5708ff14d931373c2b5c512ddb277117fbe2c2fc86868f53c2156bf8fa03f"
+    },
+    "robot": {
+      "default_prim": "/jackal",
+      "path": "/home/lyb/isaacsim_assets/Assets/Isaac/6.0/Isaac/Robots/Clearpath/Jackal/jackal.usd",
+      "sha256": "be499d8ed3c83deff8a1ce43dc2976ba2b1a8cc66eae80360a19f6d8bb8720ec"
+    }
+  },
+  "validation": {
+    "mapping_artifacts_complete": true,
+    "navigation_6cam_smoke_passed": false,
+    "static_avoidance_acceptance_passed": false
+  }
+}

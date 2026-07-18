@@ -1,0 +1,42 @@
+I20260719 01:29:40.002956 1699110 keyframe_cacher.cc:68] No cache will be used!
+I20260719 01:29:40.003072 1699110 keyframe_metadata.cc:103] Loading frames meta file: /home/lyb/Workspace/Isaac_ROS_cuVSLAM_Nvblox_Nav2/data/bags/.vgl-work.MC8snX/cuvgl_map/keyframes/frames_meta.json
+I20260719 01:29:40.029982 1699110 camera_projector_factory.cc:18] Creating pinhole camera projector
+I20260719 01:29:40.030007 1699110 keyframe_cacher.cc:83] Keyframe manager init success with /home/lyb/Workspace/Isaac_ROS_cuVSLAM_Nvblox_Nav2/data/bags/.vgl-work.MC8snX/cuvgl_map/keyframes/frames_meta.json
+I20260719 01:29:40.030092 1699110 generate_bow_vocabulary_main.cc:79] total frame number: 4561
+I20260719 01:29:40.030095 1699110 generate_bow_vocabulary_main.cc:94] Creating a new vocabulary
+I20260719 01:29:40.030128 1699110 visual_vocabulary.cc:1109] total segment number:1
+I20260719 01:29:40.030129 1699110 visual_vocabulary.cc:1112] build for segment: 0
+I20260719 01:29:40.030929 1699110 visual_vocabulary.cc:935] Processed frames:0/4561
+I20260719 01:29:40.320628 1699110 visual_vocabulary.cc:935] Processed frames:500/4561
+I20260719 01:29:40.588762 1699110 visual_vocabulary.cc:935] Processed frames:1000/4561
+I20260719 01:29:40.850147 1699110 visual_vocabulary.cc:935] Processed frames:1500/4561
+I20260719 01:29:41.132284 1699110 visual_vocabulary.cc:935] Processed frames:2000/4561
+I20260719 01:29:41.410590 1699110 visual_vocabulary.cc:935] Processed frames:2500/4561
+I20260719 01:29:41.688665 1699110 visual_vocabulary.cc:935] Processed frames:3000/4561
+I20260719 01:29:41.966420 1699110 visual_vocabulary.cc:935] Processed frames:3500/4561
+I20260719 01:29:42.251299 1699110 visual_vocabulary.cc:935] Processed frames:4000/4561
+I20260719 01:29:42.527382 1699110 visual_vocabulary.cc:935] Processed frames:4500/4561
+I20260719 01:29:42.560858 1699110 visual_vocabulary.cc:956] Using multi-threaded vocabulary builder
+I20260719 01:29:42.689273 1699110 multi_thread_kmeans_builder.cc:63] Total feature number: 9340924
+I20260719 01:29:42.689292 1699110 multi_thread_kmeans_builder.cc:70] Expected node number: 5380840
+I20260719 01:29:42.700105 1699110 multi_thread_kmeans_builder.cc:83] start clustering....
+I20260719 01:31:10.497218 1699110 multi_thread_kmeans_builder.cc:109] finish clustering....
+I20260719 01:31:10.498219 1699110 visual_vocabulary.cc:963] finished node size:5380840
+I20260719 01:31:10.868602 1699110 visual_vocabulary.cc:47] total leaf number:2630662
+I20260719 01:31:10.868979 1699110 visual_vocabulary.cc:813] set weight for total_word_number:2630662
+I20260719 01:31:10.869799 1699110 visual_vocabulary.cc:825] Processed frames:0/4561
+I20260719 01:31:13.769348 1699110 visual_vocabulary.cc:825] Processed frames:1/4561
+I20260719 01:31:16.505039 1699110 visual_vocabulary.cc:825] Processed frames:2/4561
+I20260719 01:31:17.355679 1699110 visual_vocabulary.cc:899] total node and leaf:5380840,2630662
+E20260719 01:31:17.355708 1699110 visual_vocabulary.cc:730] The built vocabulary contains too few visual words, maybe not mature, occupied ratio:0.550006,less than 0.7
+I20260719 01:31:17.356307 1699110 visual_vocabulary.cc:216] Saving vocabulary proto at directory: /home/lyb/Workspace/Isaac_ROS_cuVSLAM_Nvblox_Nav2/data/bags/.vgl-work.MC8snX/cuvgl_map/vocabulary
+I20260719 01:31:17.356312 1699110 visual_vocabulary.cc:599] NodeSizeInByte:608
+I20260719 01:31:17.356413 1699110 visual_vocabulary.cc:625] Saving incremental vocabulary proto file: /home/lyb/Workspace/Isaac_ROS_cuVSLAM_Nvblox_Nav2/data/bags/.vgl-work.MC8snX/cuvgl_map/vocabulary/bow_vocabulary.pb.txt
+I20260719 01:31:18.741168 1699110 generate_bow_vocabulary_main.cc:129] Total time used: 98.7385s
+==========================================================================
+Profile Timers:
+    KeyframeCacher::LoadFrame, average time used:   0.393034 ms,       9122 event(s), total time used:    3.58526 secs
+KeyframeCacher::ProtoToStruct, average time used:    0.15328 ms,       9122 event(s), total time used:    1.39822 secs
+                         main, average time used:    99014.6 ms,          1 event(s), total time used:    99.0146 secs
+                    voc::Save, average time used:    1384.89 ms,          1 event(s), total time used:    1.38489 secs
+==========================================================================

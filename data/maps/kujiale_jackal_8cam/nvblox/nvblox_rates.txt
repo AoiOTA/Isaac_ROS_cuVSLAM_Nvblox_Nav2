@@ -1,0 +1,11 @@
+
+NVBlox Rates (in Hz)
+namespace/tag - NumSamples (Window Length) - Mean 
+-----------
+ros/color               	100    	1.5
+ros/update_esdf         	100    	8.2
+ros/depth               	100    	3.3
+ros/depth_image_callback	100    	5.2
+ros/color_image_callback	100    	2.7
+ros/tick                	100    	68.2
+-----------

@@ -1,0 +1,37 @@
+I20260719 01:31:19.243351 1699970 keyframe_metadata.cc:103] Loading frames meta file: /home/lyb/Workspace/Isaac_ROS_cuVSLAM_Nvblox_Nav2/data/bags/.vgl-work.MC8snX/cuvgl_map/keyframes/frames_meta.json
+I20260719 01:31:19.270491 1699970 camera_projector_factory.cc:18] Creating pinhole camera projector
+I20260719 01:31:19.270515 1699970 keyframe_cacher.cc:83] Keyframe manager init success with /home/lyb/Workspace/Isaac_ROS_cuVSLAM_Nvblox_Nav2/data/bags/.vgl-work.MC8snX/cuvgl_map/keyframes/frames_meta.json
+I20260719 01:31:19.270820 1699970 visual_vocabulary.cc:231] Reading vocabulary proto file: /home/lyb/Workspace/Isaac_ROS_cuVSLAM_Nvblox_Nav2/data/bags/.vgl-work.MC8snX/cuvgl_map/vocabulary
+I20260719 01:31:19.270823 1699970 visual_vocabulary.cc:663] Reading vocabulary proto file: /home/lyb/Workspace/Isaac_ROS_cuVSLAM_Nvblox_Nav2/data/bags/.vgl-work.MC8snX/cuvgl_map/vocabulary/bow_vocabulary.pb.txt
+I20260719 01:31:21.663283 1699970 visual_vocabulary.cc:716] load 5380840,free_nodes:2329691
+I20260719 01:31:21.689065 1699970 visual_vocabulary.cc:47] total leaf number:2630662
+I20260719 01:31:21.706969 1699970 generate_bow_index_main.cc:86] add:1/4561
+I20260719 01:31:23.106699 1699970 generate_bow_index_main.cc:86] add:201/4561
+I20260719 01:31:24.558430 1699970 generate_bow_index_main.cc:86] add:401/4561
+I20260719 01:31:26.025199 1699970 generate_bow_index_main.cc:86] add:601/4561
+I20260719 01:31:27.443923 1699970 generate_bow_index_main.cc:86] add:801/4561
+I20260719 01:31:28.757134 1699970 generate_bow_index_main.cc:86] add:1001/4561
+I20260719 01:31:30.053953 1699970 generate_bow_index_main.cc:86] add:1201/4561
+I20260719 01:31:31.425069 1699970 generate_bow_index_main.cc:86] add:1401/4561
+I20260719 01:31:32.863238 1699970 generate_bow_index_main.cc:86] add:1601/4561
+I20260719 01:31:34.318852 1699970 generate_bow_index_main.cc:86] add:1801/4561
+I20260719 01:31:35.677685 1699970 generate_bow_index_main.cc:86] add:2001/4561
+I20260719 01:31:37.153383 1699970 generate_bow_index_main.cc:86] add:2201/4561
+I20260719 01:31:38.615633 1699970 generate_bow_index_main.cc:86] add:2401/4561
+I20260719 01:31:40.097749 1699970 generate_bow_index_main.cc:86] add:2601/4561
+I20260719 01:31:41.611596 1699970 generate_bow_index_main.cc:86] add:2801/4561
+I20260719 01:31:43.089963 1699970 generate_bow_index_main.cc:86] add:3001/4561
+I20260719 01:31:44.602509 1699970 generate_bow_index_main.cc:86] add:3201/4561
+I20260719 01:31:46.187813 1699970 generate_bow_index_main.cc:86] add:3401/4561
+I20260719 01:31:47.669922 1699970 generate_bow_index_main.cc:86] add:3601/4561
+I20260719 01:31:49.115163 1699970 generate_bow_index_main.cc:86] add:3801/4561
+I20260719 01:31:50.421289 1699970 generate_bow_index_main.cc:86] add:4001/4561
+I20260719 01:31:51.962356 1699970 generate_bow_index_main.cc:86] add:4201/4561
+I20260719 01:31:53.634286 1699970 generate_bow_index_main.cc:86] add:4401/4561
+I20260719 01:31:55.758932 1699970 generate_bow_index_main.cc:96] Total time used: 36.516s
+==========================================================================
+Profile Timers:
+    KeyframeCacher::LoadFrame, average time used:    1.02354 ms,       4561 event(s), total time used:    4.66835 secs
+KeyframeCacher::ProtoToStruct, average time used:   0.126159 ms,       4561 event(s), total time used:    0.57541 secs
+  KeyframeCacher::RemoveFrame, average time used:   0.994852 ms,       2561 event(s), total time used:    2.54782 secs
+==========================================================================

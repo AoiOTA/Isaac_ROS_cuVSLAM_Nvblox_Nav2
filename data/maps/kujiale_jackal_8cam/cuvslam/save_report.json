@@ -1,0 +1,38 @@
+{
+  "checks": {
+    "closed_loop": true,
+    "database_nonempty": true,
+    "expected_path_length": true,
+    "map_frame_semantics": true,
+    "map_service_succeeded": true,
+    "optimized_pose_count": true,
+    "planar_path_geometry": true,
+    "planar_vertical_range": true,
+    "trajectory_duration": true
+  },
+  "created_unix_s": 1784395554.096902,
+  "expected_path_length_m": 38.128625009,
+  "failure_reasons": [],
+  "output_dir": "/home/lyb/Workspace/Isaac_ROS_cuVSLAM_Nvblox_Nav2/data/maps/kujiale_jackal_8cam/cuvslam",
+  "path_length_ratio": 1.0023595725704673,
+  "pose_frame_policy": "isaac_ros_4_5_get_all_poses_empty_frame_is_global_slam_map",
+  "schema_version": 1,
+  "status": "passed",
+  "trajectory": {
+    "closure_error_m": 0.05540854379039547,
+    "duration_s": 320.09999999999997,
+    "first_timestamp_s": 3.1,
+    "frame_ids": [
+      ""
+    ],
+    "last_timestamp_s": 323.2,
+    "path_length_3d_m": 38.24393806818554,
+    "path_length_3d_to_planar_ratio": 1.0006631798808234,
+    "planar_path_length_m": 38.21859226672086,
+    "pose_count": 2375,
+    "vertical_max_m": 0.003732076846063137,
+    "vertical_min_m": -0.023230694234371185,
+    "vertical_range_m": 0.026962771080434322,
+    "vertical_stddev_m": 0.0017124908949560304
+  }
+}
