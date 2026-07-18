@@ -81,6 +81,7 @@ PROFILE_ROS_PID=""
 PROFILE_METRICS_PID=""
 PROFILE_DRIVER_PID=""
 PROFILE_BAG_PID=""
+PROFILE_DISCOVERY_PID=""
 PROFILE_SIM_STOP=""
 PROFILE_METRICS_STOP=""
 PROFILE_DRIVER_STOP=""
@@ -118,11 +119,13 @@ cleanup_profile() {
     [[ -z "${PROFILE_SIM_STOP}" ]] || touch "${PROFILE_SIM_STOP}" 2>/dev/null || true
   fi
   stop_group "${PROFILE_SIM_PID}"
+  stop_group "${PROFILE_DISCOVERY_PID}"
   PROFILE_SIM_PID=""
   PROFILE_ROS_PID=""
   PROFILE_METRICS_PID=""
   PROFILE_DRIVER_PID=""
   PROFILE_BAG_PID=""
+  PROFILE_DISCOVERY_PID=""
   remove_profile_bag
 }
 trap cleanup_profile EXIT INT TERM
@@ -131,6 +134,14 @@ BRINGUP_SHARE="$(ros2 pkg prefix jackal_bringup --share)"
 STARTUP_TIMEOUT="$(python3 -c 'import sys,yaml; print(float(yaml.safe_load(open(sys.argv[1]))["trials"]["startup_timeout_s"]))' "${ACCEPTANCE_CONFIG}")"
 STARTUP_POLLS="$(python3 -c 'import math,sys; print(math.ceil(float(sys.argv[1])*2))' "${STARTUP_TIMEOUT}")"
 PERFORMANCE_GOALS="$(python3 -c 'import sys,yaml; d=yaml.safe_load(open(sys.argv[1])); print("["+",".join(str(v) for g in d["goals"] for v in g["pose"])+"]")' "${ACCEPTANCE_CONFIG}")"
+PERFORMANCE_GOAL_TIMEOUT="$(python3 -c 'import sys,yaml; print(float(yaml.safe_load(open(sys.argv[1]))["trials"]["goal_timeout_s"]))' "${ACCEPTANCE_CONFIG}")"
+DISCOVERY_PORT_BASE="${PERFORMANCE_DISCOVERY_PORT_BASE:-13230}"
+[[ "${DISCOVERY_PORT_BASE}" =~ ^[0-9]+$ ]] || \
+  die "PERFORMANCE_DISCOVERY_PORT_BASE must be an integer"
+DISCOVERY_PORT_BASE="$((10#${DISCOVERY_PORT_BASE}))"
+(( DISCOVERY_PORT_BASE >= 1024 && DISCOVERY_PORT_BASE <= 65534 )) || \
+  die "PERFORMANCE_DISCOVERY_PORT_BASE must be in 1024..65534"
+command -v fastdds >/dev/null || die "fastdds discovery executable not found"
 
 run_profile() {
   local camera_profile="$1"
@@ -143,7 +154,9 @@ run_profile() {
   local normalized="${profile_dir}/performance.json"
   local workload_report="${profile_dir}/workload.json"
   local capture_report="${profile_dir}/mapping-capture.json"
+  local super_client_xml="${profile_dir}/fastdds-super-client.xml"
   local bag_dir=""
+  local discovery_port="$((DISCOVERY_PORT_BASE + domain_id - 130))"
   mkdir -p "${profile_dir}"
   rm -f "${ready_file}"
   PROFILE_SIM_STOP="${profile_dir}/stop-simulator"
@@ -151,6 +164,27 @@ run_profile() {
   PROFILE_DRIVER_STOP="${profile_dir}/stop-workload"
   rm -f "${PROFILE_SIM_STOP}" "${PROFILE_METRICS_STOP}" "${PROFILE_DRIVER_STOP}"
   export ROS_DOMAIN_ID="${domain_id}"
+  if ss -H -lun "sport = :${discovery_port}" 2>/dev/null | grep -q .; then
+    die "Fast DDS discovery port ${discovery_port} is already in use"
+  fi
+  export ROS_DISCOVERY_SERVER="127.0.0.1:${discovery_port}"
+  # The local-only flag forces SIMPLE discovery in this Jazzy/Fast DDS build.
+  # The explicit server remains bound to loopback, including late rosbag and
+  # workload participants started after the simulator publishers.
+  unset ROS_LOCALHOST_ONLY
+  python3 "${PROJECT_ROOT}/tools/write_fastdds_super_client.py" \
+    --port "${discovery_port}" --output "${super_client_xml}"
+  info "Starting ${camera_profile} Fast DDS discovery server on ${ROS_DISCOVERY_SERVER}"
+  setsid fastdds discovery -i 0 -l 127.0.0.1 -p "${discovery_port}" \
+    >"${profile_dir}/fastdds-discovery.log" 2>&1 & PROFILE_DISCOVERY_PID=$!
+  for _ in {1..30}; do
+    ss -H -lun "sport = :${discovery_port}" 2>/dev/null | grep -q . && break
+    process_alive "${PROFILE_DISCOVERY_PID}" || \
+      die "Fast DDS discovery server exited; see ${profile_dir}/fastdds-discovery.log"
+    sleep 0.1
+  done
+  ss -H -lun "sport = :${discovery_port}" 2>/dev/null | grep -q . || \
+    die "Fast DDS discovery server did not bind UDP port ${discovery_port}"
 
   sim_args=("${SIM_MODE}" --duration 0 --camera-profile "${camera_profile}"
     --benchmark-performance --performance-start-file "${ready_file}"
@@ -197,7 +231,9 @@ run_profile() {
     ros2 topic echo --no-daemon --once --timeout "${STARTUP_TIMEOUT}" \
       --qos-durability transient_local --filter 'm.data' \
       /localization/ready std_msgs/msg/Bool >/dev/null
-    topic_list="$(ros2 topic list --no-daemon --spin-time 3)"
+    topic_list="$(env -u ROS_DISCOVERY_SERVER \
+      FASTRTPS_DEFAULT_PROFILES_FILE="${super_client_xml}" \
+      ros2 topic list --no-daemon --spin-time 3)"
     if grep -Fq '/back_stereo_camera/' <<<"${topic_list}"; then
       die "rear camera topics are present in navigation_6cam"
     fi
@@ -208,9 +244,25 @@ run_profile() {
   ros2 topic echo --no-daemon --once --timeout "${STARTUP_TIMEOUT}" \
     /nvblox_node/static_map_slice nvblox_msgs/msg/DistanceMapSlice >/dev/null
   if [[ "${workload}" == "navigation" ]]; then
+    nav2_active="false"
+    for ((poll=0; poll<STARTUP_POLLS; poll++)); do
+      if rg -q 'lifecycle_manager_navigation.*Managed nodes are active' \
+        "${profile_dir}/ros.log"; then
+        nav2_active="true"
+        break
+      fi
+      process_alive "${PROFILE_ROS_PID}" || \
+        die "navigation workload exited before lifecycle activation"
+      sleep 0.5
+    done
+    [[ "${nav2_active}" == "true" ]] || die "Nav2 lifecycle activation timeout"
+
     action_ready="false"
     for ((poll=0; poll<STARTUP_POLLS; poll++)); do
-      if ros2 action list 2>/dev/null | grep -Fxq /navigate_to_pose; then
+      action_topics="$(env -u ROS_DISCOVERY_SERVER \
+        FASTRTPS_DEFAULT_PROFILES_FILE="${super_client_xml}" \
+        ros2 topic list --no-daemon --spin-time 3 --include-hidden-topics)"
+      if grep -Fxq /navigate_to_pose/_action/status <<<"${action_topics}"; then
         action_ready="true"
         break
       fi
@@ -231,8 +283,13 @@ run_profile() {
       done
     done
     mapping_topics+=(/front_stereo_imu/imu /tf /tf_static /clock)
-    setsid ros2 bag record --storage mcap --storage-preset-profile fastwrite \
-      --disable-keyboard-controls --output "${bag_dir}" --topics "${mapping_topics[@]}" \
+    # rosbag joins after every image publisher. Fast DDS 2.14.6 needs a
+    # SUPER_CLIENT profile to discover those existing server participants;
+    # ROS_DISCOVERY_SERVER alone can leave a healthy recorder with zero topics.
+    setsid env -u ROS_DISCOVERY_SERVER \
+      FASTRTPS_DEFAULT_PROFILES_FILE="${super_client_xml}" ros2 bag record \
+      --storage mcap --storage-preset-profile fastwrite --disable-keyboard-controls \
+      --output "${bag_dir}" --topics "${mapping_topics[@]}" \
       >"${profile_dir}/rosbag.log" 2>&1 & PROFILE_BAG_PID=$!
     sleep 2
     process_alive "${PROFILE_BAG_PID}" || die "mapping performance MCAP recorder exited"
@@ -242,14 +299,16 @@ run_profile() {
     -p ready_file:="${ready_file}" -p stop_file:="${PROFILE_DRIVER_STOP}"
     -p report_path:="${workload_report}")
   if [[ "${workload}" == "navigation" ]]; then
-    driver_args+=(-p "goal_poses:=${PERFORMANCE_GOALS}")
+    driver_args+=(-p "goal_poses:=${PERFORMANCE_GOALS}"
+      -p goal_timeout_s:="${PERFORMANCE_GOAL_TIMEOUT}")
   fi
   setsid ros2 run jackal_experiments performance_workload_driver "${driver_args[@]}" \
     >"${profile_dir}/workload.log" 2>&1 & PROFILE_DRIVER_PID=$!
 
   metrics_args=(--output "${telemetry}" --stop-file "${PROFILE_METRICS_STOP}"
     --period "${TELEMETRY_PERIOD}" --pid "${PROFILE_SIM_PID}"
-    --pid "${PROFILE_ROS_PID}" --pid "${PROFILE_DRIVER_PID}")
+    --pid "${PROFILE_ROS_PID}" --pid "${PROFILE_DRIVER_PID}"
+    --pid "${PROFILE_DISCOVERY_PID}")
   [[ -z "${PROFILE_BAG_PID}" ]] || metrics_args+=(--pid "${PROFILE_BAG_PID}")
   setsid python3 "${PROJECT_ROOT}/tools/record_performance_metrics.py" \
     "${metrics_args[@]}" >"${profile_dir}/telemetry.log" 2>&1 & PROFILE_METRICS_PID=$!
@@ -308,6 +367,7 @@ run_profile() {
   python3 "${PROJECT_ROOT}/tools/summarize_performance.py" \
     "${summary_args[@]}" \
     >"${profile_dir}/summary.log"
+  stop_group "${PROFILE_DISCOVERY_PID}"; PROFILE_DISCOVERY_PID=""
   profile_reports+=("${normalized}")
   info "Recorded ${camera_profile}: ${normalized}"
 }

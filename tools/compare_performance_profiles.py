@@ -31,16 +31,22 @@ def main() -> int:
         "",
         "This report uses adaptive wall-time sampling after the live workload stabilizes. It has no 600-frame baseline and no pass/fail comparison with documentation example output.",
         "",
-        "| Workload | Image streams | Mean FPS | RTF | App mean ms | Physics mean ms | GPU mean % | GPU memory mean MiB |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|",
+        "| Workload | Mode | Image streams | Preview | Mean FPS | RTF | App mean ms | Physics mean ms | GPU mean % | GPU memory mean MiB |",
+        "|---|---|---:|---|---:|---:|---:|---:|---:|---:|",
     ]
     for profile in profiles:
         official = profile["official_isaac_sim_6_0_1"]
         telemetry = profile["whole_workload_telemetry"]
+        contract = profile["simulator_contract"]
+        rendering = contract["rendering"]
         lines.append(
-            "| {workload} | {cameras} | {fps} | {rtf} | {app:.3f} | {physics:.3f} | {gpu:.2f} | {memory:.1f} |".format(
+            "| {workload} | {mode} | {cameras} | {width}x{height}, reduced={reduced} | {fps} | {rtf} | {app:.3f} | {physics:.3f} | {gpu:.2f} | {memory:.1f} |".format(
                 workload=profile["workload"],
+                mode=contract["mode"],
                 cameras=8 if profile["camera_profile"] == "mapping_8cam" else 6,
+                width=rendering["resolution"][0],
+                height=rendering["resolution"][1],
+                reduced=str(rendering["preview_resolution_reduced"]).lower(),
                 fps=official["mean_fps"],
                 rtf=official["real_time_factor"],
                 app=float(official["app_update_frametime_ms"]["mean"]),

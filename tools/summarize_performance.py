@@ -135,6 +135,23 @@ def main() -> int:
     performance = simulator.get("performance", {})
     if not isinstance(performance, dict) or performance.get("completed") is not True:
         raise RuntimeError("simulator report does not contain a completed adaptive sample")
+    expected_profile = "mapping_8cam" if args.workload == "mapping" else "navigation_6cam"
+    expected_streams = 8 if args.workload == "mapping" else 6
+    expected_rear = args.workload == "mapping"
+    rendering = simulator.get("rendering", {})
+    sensor_graphs = simulator.get("sensor_graphs", {})
+    if (
+        simulator.get("camera_profile") != expected_profile
+        or performance.get("camera_profile") != expected_profile
+        or int(simulator.get("active_image_streams", -1)) != expected_streams
+        or not isinstance(rendering, dict)
+        or rendering.get("preview_resolution_reduced") is not False
+        or rendering.get("resolution") != [1280, 720]
+        or not isinstance(sensor_graphs, dict)
+        or sensor_graphs.get("lidar_enabled") is not False
+        or sensor_graphs.get("rear_render_products_created") is not expected_rear
+    ):
+        raise RuntimeError("simulator camera/rendering contract does not match workload")
     sample = performance["sample"]
     start = float(sample["start_unix_s"])
     end = float(sample["end_unix_s"])
@@ -172,6 +189,16 @@ def main() -> int:
             "fixed_frame_count": None,
             "fixed_kpi_thresholds": None,
             "pass_fail_comparison_to_documentation_example": False,
+        },
+        "simulator_contract": {
+            "mode": simulator.get("mode"),
+            "camera_profile": expected_profile,
+            "active_image_streams": expected_streams,
+            "rear_render_products_created": sensor_graphs.get(
+                "rear_render_products_created"
+            ),
+            "lidar_enabled": sensor_graphs.get("lidar_enabled"),
+            "rendering": rendering,
         },
         "sampling": {
             "parameters": performance.get("parameters"),
