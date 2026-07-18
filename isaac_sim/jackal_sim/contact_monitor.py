@@ -25,14 +25,34 @@ class RobotContactMonitor:
         chassis = stage.GetPrimAtPath(f"{robot_root}/base_link")
         if not chassis.IsValid():
             raise RuntimeError("Jackal base_link is missing for contact monitoring")
+        # PhysX can restrict contact reports to explicit counterpart prims.
+        # Without this relationship, every wheel/floor contact is decoded and
+        # the imported Kujiale triangle mesh emits three invalid material-face
+        # warnings per report.  Targeting every non-floor collider preserves
+        # obstacle collision evidence without changing contact/friction physics
+        # or hiding unrelated PhysX warnings.
+        report_pair_paths = sorted(
+            prim.GetPath()
+            for prim in stage.TraverseAll()
+            if prim.HasAPI(UsdPhysics.CollisionAPI)
+            and not str(prim.GetPath()).startswith(robot_root)
+            and not self._is_floor(str(prim.GetPath()))
+        )
+        if not report_pair_paths:
+            raise RuntimeError("no non-floor colliders are available for contact monitoring")
+        self.report_pair_paths = [str(path) for path in report_pair_paths]
         self.reporter_paths: list[str] = []
         for prim in Usd.PrimRange(robot):
             if not prim.HasAPI(UsdPhysics.RigidBodyAPI):
                 continue
-            PhysxSchema.PhysxContactReportAPI.Apply(prim).CreateThresholdAttr().Set(0.0)
+            reporter = PhysxSchema.PhysxContactReportAPI.Apply(prim)
+            reporter.CreateThresholdAttr().Set(0.0)
+            reporter.CreateReportPairsRel().SetTargets(report_pair_paths)
             self.reporter_paths.append(str(prim.GetPath()))
         if str(chassis.GetPath()) not in self.reporter_paths:
-            PhysxSchema.PhysxContactReportAPI.Apply(chassis).CreateThresholdAttr().Set(0.0)
+            reporter = PhysxSchema.PhysxContactReportAPI.Apply(chassis)
+            reporter.CreateThresholdAttr().Set(0.0)
+            reporter.CreateReportPairsRel().SetTargets(report_pair_paths)
             self.reporter_paths.append(str(chassis.GetPath()))
         self.started_wall = time.monotonic()
         self.events = 0
@@ -75,6 +95,8 @@ class RobotContactMonitor:
             "filtered_floor_event_count": self.filtered_floor_events,
             "reporter_count": len(self.reporter_paths),
             "reporter_paths": sorted(self.reporter_paths),
+            "report_pair_filter": "all_non_floor_collision_prims",
+            "report_pair_count": len(self.report_pair_paths),
             "contact_pairs": [
                 {"actors": list(pair), "count": count}
                 for pair, count in sorted(self.pairs.items())

@@ -152,6 +152,8 @@ def test_contact_monitor_covers_every_jackal_rigid_body() -> None:
     assert "Usd.PrimRange(robot)" in monitor
     assert "prim.HasAPI(UsdPhysics.RigidBodyAPI)" in monitor
     assert '"collision_event_count"' in monitor
+    assert "CreateReportPairsRel().SetTargets" in monitor
+    assert '"all_non_floor_collision_prims"' in monitor
     assert '"filtered_floor_event_count"' in monitor
 
 

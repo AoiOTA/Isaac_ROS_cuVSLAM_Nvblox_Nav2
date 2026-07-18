@@ -43,6 +43,12 @@ def main() -> int:
     if control.get("official_ros_sample_loaded") is not False:
         raise SystemExit("official ROS sample graph must remain unloaded")
     contacts = report.get("robot_contacts", {})
+    if contacts.get("report_pair_filter") != "all_non_floor_collision_prims":
+        raise SystemExit("contact monitor did not use the non-floor PhysX report-pair filter")
+    if int(contacts.get("report_pair_count", 0)) <= 0:
+        raise SystemExit("contact monitor report-pair filter is empty")
+    if int(contacts.get("filtered_floor_event_count", -1)) != 0:
+        raise SystemExit("floor contacts leaked through the PhysX report-pair filter")
     collision_count = int(contacts.get("collision_event_count", 0))
     if collision_count != 0:
         pairs = contacts.get("collision_pairs", [])

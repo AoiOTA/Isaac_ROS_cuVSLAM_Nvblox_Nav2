@@ -463,7 +463,6 @@ def run(args: argparse.Namespace) -> int:
         app.update()
         if stage_identity() != active_stage_identity:
             raise RuntimeError("active stage changed after Jackal composition")
-        contact_monitor = RobotContactMonitor(stage, ROBOT_PRIM_PATH)
 
         if args.disable_ros_control:
             report["control_graphs"] = {"enabled": False}
@@ -518,6 +517,11 @@ def run(args: argparse.Namespace) -> int:
             report["dynamic_obstacles"] = dynamic_obstacles.summary()
         else:
             report["dynamic_obstacles"] = {"enabled": False}
+
+        # Build the contact report-pair whitelist after optional session-layer
+        # obstacles exist so static acceptance obstacles cannot be omitted.
+        contact_monitor = RobotContactMonitor(stage, ROBOT_PRIM_PATH)
+        app.update()
 
         if args.gui and not args.disable_follow_camera:
             follow_camera = FollowCamera(stage, f"{ROBOT_PRIM_PATH}/base_link")
