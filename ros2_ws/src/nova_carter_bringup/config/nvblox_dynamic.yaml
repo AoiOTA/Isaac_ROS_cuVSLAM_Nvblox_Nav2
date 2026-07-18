@@ -8,6 +8,12 @@ nvblox_node:
     integrate_color_rate_hz: 2.0
     maximum_input_queue_length: 10
     decay_dynamic_occupancy_rate_hz: 10.0
+    # Navigation needs only a bounded rolling 3D reconstruction; the fixed
+    # global occupancy map remains owned by MapServer.  Without clearing, a
+    # 10+ m run continually enlarges combined_map_slice and drops its rate
+    # below the low-latency contract even on an RTX 4090.
+    clear_map_outside_radius_rate_hz: 1.0
+    map_clearing_radius_m: 8.0
     publish_layer_rate_hz: 5.0
     publish_debug_vis_rate_hz: 2.0
     layer_streamer_bandwidth_limit_mbps: -1.0

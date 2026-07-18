@@ -1,4 +1,4 @@
-"""Run Stage 8-10 navigation goals and verify every critical data-flow edge."""
+"""Run Stage 8-11 navigation goals and verify every critical data-flow edge."""
 
 from __future__ import annotations
 
@@ -200,6 +200,9 @@ class NavigationTestRunner(Node):
         self.fault_results: list[dict[str, object]] = []
         self.command_max = defaultdict(float)
         self.command_latest: dict[str, tuple[float, float]] = {}
+        self.command_receive_wall: dict[str, float] = {}
+        self.command_latency_ms: defaultdict[str, list[float]] = defaultdict(list)
+        self.data_age_ms: defaultdict[str, list[float]] = defaultdict(list)
         self.command_lateral_max = 0.0
         self.latest_guard_state = "unseen"
         self.latest_collision_action = -1
@@ -393,6 +396,18 @@ class NavigationTestRunner(Node):
         self.first_wall.setdefault(name, now)
         self.last_wall[name] = now
 
+    def record_message_age(self, name: str, message: object) -> None:
+        """Record source-stamp age in simulation time when a header exists."""
+
+        header = getattr(message, "header", None)
+        stamp = getattr(header, "stamp", None)
+        if stamp is None:
+            return
+        stamp_ns = int(stamp.sec) * 1_000_000_000 + int(stamp.nanosec)
+        age_ns = self.get_clock().now().nanoseconds - stamp_ns
+        if 0 <= age_ns <= 5_000_000_000:
+            self.data_age_ms[name].append(age_ns * 1.0e-6)
+
     def on_ready(self, message: Bool) -> None:
         self.record("localization_ready")
         was_ready = self.localization_ready
@@ -439,6 +454,7 @@ class NavigationTestRunner(Node):
 
     def on_status(self, message: VisualSlamStatus) -> None:
         self.record("visual_slam_status")
+        self.record_message_age("visual_slam_status", message)
         if int(message.vo_state) == 1:
             self.tracking_samples += 1
 
@@ -483,6 +499,7 @@ class NavigationTestRunner(Node):
 
     def on_scan(self, message: LaserScan) -> None:
         self.record("depth_scan")
+        self.record_message_age("front_depth", message)
         stamp_ns = (
             int(message.header.stamp.sec) * 1_000_000_000
             + int(message.header.stamp.nanosec)
@@ -497,6 +514,7 @@ class NavigationTestRunner(Node):
 
     def on_safety_scan(self, message: LaserScan) -> None:
         self.record("safety_scan_raw")
+        self.record_message_age("front_depth_raw", message)
         self.safety_scan_finite += sum(
             math.isfinite(value) and message.range_min <= value <= message.range_max
             for value in message.ranges
@@ -504,12 +522,14 @@ class NavigationTestRunner(Node):
 
     def on_nvblox_slice(self, message: DistanceMapSlice) -> None:
         self.record("nvblox_slice")
+        self.record_message_age("nvblox_slice", message)
         expected = int(message.width) * int(message.height)
         if expected > 0 and len(message.data) == expected:
             self.nvblox_slice_cells = max(self.nvblox_slice_cells, expected)
 
     def on_dynamic_slice(self, message: DistanceMapSlice) -> None:
         self.record("dynamic_slice")
+        self.record_message_age("dynamic_slice", message)
         expected = int(message.width) * int(message.height)
         if expected > 0 and len(message.data) == expected:
             self.dynamic_slice_cells = max(self.dynamic_slice_cells, expected)
@@ -534,6 +554,7 @@ class NavigationTestRunner(Node):
 
     def on_depth_cloud(self, message: PointCloud2) -> None:
         self.record("depth_cloud")
+        self.record_message_age("depth_cloud", message)
         if message.header.frame_id == "odom":
             self.depth_cloud_points = max(self.depth_cloud_points, int(message.width))
 
@@ -556,6 +577,25 @@ class NavigationTestRunner(Node):
 
     def on_command(self, name: str, message: Twist) -> None:
         self.record(name)
+        now_wall = time.monotonic()
+        predecessor = {
+            "cmd_smoothed": "cmd_nav_raw",
+            "cmd_safe": "cmd_smoothed",
+            "cmd_sim": "cmd_safe",
+        }.get(name)
+        if predecessor in self.command_receive_wall:
+            latency_ms = (now_wall - self.command_receive_wall[predecessor]) * 1000.0
+            if 0.0 <= latency_ms <= 250.0:
+                self.command_latency_ms[f"{predecessor}_to_{name}"].append(
+                    latency_ms
+                )
+        if name == "cmd_sim" and "cmd_nav_raw" in self.command_receive_wall:
+            freshness_ms = (now_wall - self.command_receive_wall["cmd_nav_raw"]) * 1000.0
+            if self.active_goal is not None and 0.0 <= freshness_ms <= 250.0:
+                self.command_latency_ms["cmd_nav_raw_to_cmd_sim_freshness"].append(
+                    freshness_ms
+                )
+        self.command_receive_wall[name] = now_wall
         self.command_latest[name] = (float(message.linear.x), float(message.angular.z))
         self.command_max[f"{name}_linear"] = max(
             self.command_max[f"{name}_linear"], abs(message.linear.x)
@@ -576,7 +616,6 @@ class NavigationTestRunner(Node):
                 abs(message.angular.z),
             )
         if name == "cmd_sim":
-            now_wall = time.monotonic()
             self.command_trace.append(
                 {
                     "wall_time_s": now_wall,
@@ -1126,6 +1165,24 @@ class NavigationTestRunner(Node):
                 continue
             span = self.last_wall[name] - self.first_wall[name]
             rates[name] = count / span if count > 1 and span > 0.0 else 0.0
+        latency_metrics = {
+            name: {
+                "sample_count": len(values),
+                "p50_ms": percentile(values, 0.50),
+                "p95_ms": percentile(values, 0.95),
+                "maximum_ms": max(values, default=0.0),
+            }
+            for name, values in sorted(self.command_latency_ms.items())
+        }
+        data_age_metrics = {
+            name: {
+                "sample_count": len(values),
+                "p50_ms": percentile(values, 0.50),
+                "p95_ms": percentile(values, 0.95),
+                "maximum_ms": max(values, default=0.0),
+            }
+            for name, values in sorted(self.data_age_ms.items())
+        }
         return {
             "status": "passed" if all(checks.values()) else "failed",
             "checks": checks,
@@ -1133,6 +1190,8 @@ class NavigationTestRunner(Node):
             "lifecycle_states": states,
             "message_counts": dict(self.counts),
             "observed_rates_hz": rates,
+            "command_latency_metrics": latency_metrics,
+            "data_age_metrics": data_age_metrics,
             "tf_edges": sorted([list(edge) for edge in self.tf_edges]),
             "scan_finite_ranges": self.scan_finite,
             "safety_scan_finite_ranges": self.safety_scan_finite,
@@ -1163,6 +1222,10 @@ class NavigationTestRunner(Node):
             "collision_actions": dict(self.collision_actions),
             "ground_truth_path_length_m": ground_truth_path_length,
             "experiment_class": self.experiment_class,
+            "automation": {
+                "goal_dispatch": "navigation_test_runner",
+                "manual_intervention": False,
+            },
             "goal_tolerances": {
                 "position_m": self.goal_xy_tolerance,
                 "yaw_deg": self.goal_yaw_tolerance_deg,
@@ -1216,6 +1279,10 @@ def main(args: list[str] | None = None) -> None:
             report = {
                 "status": "failed",
                 "experiment_class": node.experiment_class,
+                "automation": {
+                    "goal_dispatch": "navigation_test_runner",
+                    "manual_intervention": False,
+                },
                 "error": str(error),
                 "error_type": type(error).__name__,
                 "traceback": traceback.format_exc(),
@@ -1234,8 +1301,14 @@ def main(args: list[str] | None = None) -> None:
         node.result_path.parent.mkdir(parents=True, exist_ok=True)
         node.result_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
         if report["status"] != "passed":
-            stage = 10 if node.experiment_class.startswith("stage10") else (
-                9 if node.phase9_mode else 8
+            stage = (
+                11
+                if node.experiment_class.startswith("stage11")
+                else 10
+                if node.experiment_class.startswith("stage10")
+                else 9
+                if node.phase9_mode
+                else 8
             )
             raise RuntimeError(
                 f"Stage {stage} navigation acceptance failed: {report['checks']}"

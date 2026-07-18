@@ -50,8 +50,8 @@ def test_costmap_and_visual_safety_sources_are_wired() -> None:
     assert local["plugins"] == ["nvblox_layer", "obstacle_layer", "inflation_layer"]
     assert local["nvblox_layer"]["plugin"] == "nvblox::nav2::NvbloxCostmapLayer"
     assert local["nvblox_layer"]["nvblox_map_slice_topic"] == "/nvblox_node/static_map_slice"
-    assert local["obstacle_layer"]["depth_cloud"]["topic"] == "/front_depth/points_odom"
-    assert local["obstacle_layer"]["depth_cloud"]["data_type"] == "PointCloud2"
+    assert local["obstacle_layer"]["depth_scan"]["topic"] == "/front_depth/scan"
+    assert local["obstacle_layer"]["depth_scan"]["data_type"] == "LaserScan"
     assert global_map["global_frame"] == "map"
     assert global_map["plugins"] == ["static_layer", "inflation_layer"]
 

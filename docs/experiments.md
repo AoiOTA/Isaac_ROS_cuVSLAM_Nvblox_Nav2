@@ -1,6 +1,6 @@
 # Experiments
 
-阶段10实验由脚本端到端执行，不要求在Isaac Sim、RViz或终端中手动发送目标。当前实验范围固定为前向双目，并关闭光照与颜色随机化。
+阶段10和阶段11实验均由脚本端到端执行，不要求在Isaac Sim、RViz或终端中手动发送目标。当前实验范围固定为前向双目，并关闭光照与颜色随机化。
 
 ## 单轮实验
 
@@ -58,3 +58,35 @@ data/reports/phase10/preacceptance-trials-latest.csv
 - `path.stretch`超限：同时检查参考global plan、actual ground-truth轨迹、MPPI绕行和动态障碍yield记录。
 
 完整口径、冻结参数和实测证据见[phase10_validation.md](phase10_validation.md)。运行产物默认被Git忽略，不应提交大体积bag、地图或日志。
+
+## 阶段11单轮与正式矩阵
+
+阶段11把阶段10的三目标预验收扩展为六个目标，其中三个为跨仓库长距离目标；同时新增异构动态组和独立的USD理论路径基准。生成基准和执行单轮：
+
+```bash
+./scripts/prepare_stage11_reference.sh --map warehouse_v2_front
+./scripts/run_stage11_trial.sh \
+  --class heterogeneous --seed 41000 --goal-index 5 \
+  --record-bag
+```
+
+正式矩阵：
+
+```bash
+./scripts/run_acceptance.sh \
+  --matrix-id phase11-formal-20260718 --record-bag
+```
+
+默认身份集合不可随意替换：static seed 21000–21039、dynamic 31000–31039、heterogeneous 41000–41049，六个目标按序轮换。`summarize_stage11_acceptance.py`会比较期望和实际身份集合；复制一个通过报告、重复seed或错配目标都不能补数。
+
+中断恢复：
+
+```bash
+./scripts/run_acceptance.sh \
+  --matrix-id phase11-formal-20260718 \
+  --resume --skip-build --record-bag
+```
+
+每轮`result.json`首先要求该轮目标到达且无碰撞，并要求所有实时、低延迟、视觉健康、数据年龄、平滑性和场景有效性门通过。最终避障成功率按“无碰撞且到达并通过安全数据流检查的轮数 / 该类别全部正式轮数”计算；成功轨迹使用实际USD碰撞几何SE(2)最优路径统计P95伸长率。失败轮不会被从分母删除。
+
+`heterogeneous`组必须同时包含叉车、box和capsule，至少6个actor都实际移动。actor允许为了避免主动撞击已经安全停车的机器人而进入free-space refuge，但碰撞几何不会关闭，运动距离和yield次数保存在`simulator.json`。完整口径见[phase11_validation.md](phase11_validation.md)。

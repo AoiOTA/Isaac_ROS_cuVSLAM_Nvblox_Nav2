@@ -2,7 +2,9 @@
 
 本仓库用于在 Ubuntu 24.04、ROS 2 Jazzy、Isaac Sim 6.0.1 和 RTX 4090 上构建 Nova Carter 视觉导航系统。目标组件包括 Isaac Sim Standalone Python、Isaac ROS cuVSLAM、nvblox、Visual Global Localization 和 Nav2。
 
-当前状态：**阶段0至阶段10已完成并在本机实测通过。** 已安装CUDA Toolkit 13.0.3、TensorRT 10.13.3.9和Isaac ROS 4.5.0；Standalone程序直接打开官方Warehouse，在匿名session layer中引用Nova Carter主USD，并在运行时自建控制、前向双目、深度和IMU OmniGraph。当前项目决策固定只使用前向Hawk双目，不启动侧向或后向相机；cuVSLAM连续跟踪、前向cuVGL全局重定位、dynamic nvblox、Nav2 MPPI DiffDrive、Velocity Smoother、Collision Monitor、Command Guard、自动暂停/恢复导航和阶段10实验自动化已组成完整动态导航闭环。
+当前状态：**阶段0至阶段11的代码、配置和自动化已经完成；阶段10已正式提交，阶段11的130轮正式矩阵正在本机执行。** 已安装CUDA Toolkit 13.0.3、TensorRT 10.13.3.9和Isaac ROS 4.5.0；Standalone程序直接打开官方Warehouse，在匿名session layer中引用Nova Carter主USD，并在运行时自建控制、前向双目、深度和IMU OmniGraph。当前项目决策固定只使用前向Hawk双目，不启动侧向或后向相机；cuVSLAM连续跟踪、前向cuVGL全局重定位、dynamic nvblox、Nav2 MPPI DiffDrive、Velocity Smoother、Collision Monitor、Command Guard、自动暂停/恢复导航和阶段11验收自动化已组成完整动态导航闭环。
+
+第一次运行请看[用户操作手册](docs/user_manual.md)，查找代码和配置职责请看[项目重要文件索引](docs/file_index.md)，完整数据链和TF所有权见[架构说明](docs/architecture.md)。
 
 ## 固定资产
 
@@ -193,6 +195,41 @@ cd /home/lyb/Workspace/Isaac_ROS_cuVSLAM_Nvblox_Nav2
 
 完整回归入口`./scripts/run_phase10_tests.sh warehouse_v2_front`会执行构建、54项自动测试、真实故障硬化和静态20次/动态20次预验收。每轮都自动生成固定seed场景、启动隔离DDS和完整视觉导航栈、记录MCAP/轨迹/命令/GPU/PhysX接触、计算目标误差、路径伸长率与正常导航加速度/jerk，并只清理本轮创建的进程组。矩阵、单轮和run目录均有独占锁；Nav2只有在生命周期守卫确认8个managed node全部active后才开始试验，部分激活会自动完整重启ROS栈。最终实测静态20/20、动态20/20、40轮全部0碰撞，静态/动态路径伸长率P95分别为13.73%/13.08%，合并P95为13.58%，最低实时因子为0.763。三目标故障硬化和强制lifecycle失败后的干净重启也已实际通过。配置、统计口径、参数冻结和实测证据见[Phase 10 Validation](docs/phase10_validation.md)，实验产物说明见[Experiments](docs/experiments.md)。
 
+## 阶段11 正式复杂场景与长距离验收
+
+阶段11继续冻结为前向双目视觉系统，不启用lidar或四向相机；按本轮要求不执行光照和颜色随机化。新增能力包括：
+
+- 从实际官方Warehouse `UsdPhysics.CollisionAPI`提取430个有效碰撞体；
+- 按Nova Carter不对称footprint和0.03 m padding建立5 cm栅格；
+- 以8航向SE(2) A*生成六个目标的独立理论最优路径；
+- 三个短距离目标和三个9.5–12.3 m理论长度的跨区域长距离目标；
+- 静态、3 actor动态和6 actor叉车/box/capsule异构动态场景；
+- 单轮目标、碰撞、路径、定位安全、实时因子、频率、数据年龄、命令时延、加速度/jerk和GPU全项判定；
+- 静态40次、动态40次、异构50次的固定seed正式矩阵与安全断点续跑。
+
+先生成USD理论基准，再运行单轮或正式矩阵：
+
+```bash
+./scripts/prepare_stage11_reference.sh --map warehouse_v2_front
+
+./scripts/run_stage11_trial.sh \
+  --class heterogeneous --seed 41000 --goal-index 5 \
+  --headless --no-rviz --record-bag
+
+./scripts/run_acceptance.sh \
+  --matrix-id phase11-formal-20260718 --record-bag
+```
+
+中断后使用相同ID继续：
+
+```bash
+./scripts/run_acceptance.sh \
+  --matrix-id phase11-formal-20260718 \
+  --resume --skip-build --record-bag
+```
+
+最终代码已完成61项自动测试。实际代表性长距离运行中，静态目标完成12.50 m且路径伸长1.88%，异构动态目标完成11.68 m且路径伸长0.68%；两轮均为0碰撞，终点位置误差分别为3.2 cm和4.7 cm，实时因子为0.862/0.837，raw-to-sim命令新鲜度P95为47.0/54.7 ms，nvblox为7.10/7.18 Hz。正式130轮结果完成后记录在[Phase 11 Validation](docs/phase11_validation.md)及`data/reports/phase11/acceptance-summary-latest.json`。
+
 ## 阶段1完整环境配置
 
 另一台电脑需要重新配置环境时，以[阶段1裸机环境完整配置手册](docs/installation.md)为准。该文档把操作拆分为独立步骤，包含每条命令的目的、预期结果、安全门和失败恢复，不要求先运行本仓库的安装脚本。
@@ -219,7 +256,7 @@ python3 tools/check_stage1.py
 ```
 
 安装脚本不修改 `~/.bashrc`，不卸载系统OpenCV，并在APT模拟出现任何待删除包时自动停止。
-不同光照/颜色实验按本轮用户决策不属于阶段10；阶段11再根据最终验收范围处理。当前公开的阶段0至阶段10命令均为实际可执行入口。
+不同光照/颜色实验按本轮用户决策不属于阶段10和阶段11正式范围。当前公开的阶段0至阶段11命令均为实际可执行入口。
 
 本机阶段1验收已确认：
 

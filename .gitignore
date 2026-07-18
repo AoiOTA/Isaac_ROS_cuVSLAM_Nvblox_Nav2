@@ -30,6 +30,8 @@ data/logs/*
 !data/logs/.gitkeep
 data/reports/*
 !data/reports/.gitkeep
+data/reference/*
+!data/reference/.gitkeep
 data/locks/*
 !data/locks/.gitkeep
 

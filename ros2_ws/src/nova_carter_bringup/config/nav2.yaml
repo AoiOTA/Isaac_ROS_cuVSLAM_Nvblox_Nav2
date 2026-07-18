@@ -160,10 +160,15 @@ local_costmap:
       obstacle_layer:
         plugin: nav2_costmap_2d::ObstacleLayer
         enabled: true
-        observation_sources: depth_cloud
-        depth_cloud:
-          topic: /front_depth/points_odom
-          data_type: PointCloud2
+        # Keep the observation in its real optical sensor frame so Nav2 can
+        # transform both the points and the ray-tracing origin with TF.  A
+        # PointCloud2 pre-transformed into odom has no sensor-origin field;
+        # treating odom (0,0) as the origin works near startup but breaks
+        # clearing after long-distance motion.
+        observation_sources: depth_scan
+        depth_scan:
+          topic: /front_depth/scan
+          data_type: LaserScan
           clearing: true
           marking: true
           observation_persistence: 0.25

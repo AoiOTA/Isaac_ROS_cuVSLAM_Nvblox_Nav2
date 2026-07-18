@@ -180,3 +180,39 @@ activation shuts down the complete ROS launch and the wrapper starts a fresh
 stack, up to three attempts; in-process lifecycle reset is deliberately avoided
 because the nvblox costmap plugin cannot be safely reconfigured in place. Run,
 matrix and physical-GPU locks make report ownership unambiguous.
+
+## Implemented Phase 11 long-distance and formal-acceptance boundary
+
+Stage 11 retains the front-stereo-only runtime and makes the global-path
+reference independent of Nav2. The reference extractor opens the fixed
+official Warehouse USD with Isaac Sim's USD runtime and selects actual
+`UsdPhysics.CollisionAPI` geometry in the robot vertical band. An eight-heading
+SE(2) A* evaluates the padded asymmetric Nova Carter footprint at 5 cm
+resolution. Ground-truth poses are used only after a run to measure the actual
+path; neither the USD reference nor ground truth is sent to Nav2.
+
+The local ObstacleLayer consumes `/front_depth/scan` in the true optical sensor
+frame. This is essential beyond the startup neighborhood: a PointCloud2 that
+has already been transformed into `odom` contains no separate raytrace origin,
+so Nav2 otherwise treats `odom (0,0)` as the sensor and eventually places the
+origin outside the rolling costmap. `/front_depth/points_odom` remains a
+visualization and metrics product, not an ObstacleLayer input.
+
+Dynamic nvblox uses a rolling 8 m map-clearing radius at 1 Hz. MapServer owns
+the fixed global occupancy map, while nvblox owns only the bounded local 3D
+TSDF/ESDF and combined slice. This keeps long-distance slice publication above
+the safety contract without discarding global static structure.
+
+```text
+actual USD CollisionAPI -> padded-footprint SE(2) reference ─┐
+ground-truth metrics-only trajectory -------------------------┤
+ROS navigation/data age/latency/smoothness -------------------┼-> trial finalizer
+PhysX contacts + actor motion + simulator graph identity ------┤
+GPU/RTF + optional compact MCAP -------------------------------┘
+                                                               -> 40/40/50 summary
+```
+
+Each trial owns its DDS server, simulator, ROS stack, recorder, sampler and run
+directory. The final matrix validates the complete class/seed/goal identity set
+before computing static, dynamic, heterogeneous and long-distance success
+rates. Lighting and color remain unchanged by explicit Stage 11 scope.

@@ -1,6 +1,6 @@
 # Operation
 
-Available through Phase 10:
+Available through Phase 11:
 
 ```bash
 ./scripts/build.sh
@@ -32,6 +32,11 @@ python3 tools/check_stage1.py
 ./scripts/run_phase10_hardening.sh warehouse_v2_front
 ./scripts/run_phase10_preacceptance.sh --map warehouse_v2_front
 ./scripts/run_phase10_tests.sh warehouse_v2_front
+./scripts/prepare_stage11_reference.sh --map warehouse_v2_front
+./scripts/run_stage11_trial.sh --class heterogeneous --seed 41000 --goal-index 5 --record-bag
+./scripts/run_stage11_smoke.sh warehouse_v2_front
+./scripts/run_stage11_tests.sh warehouse_v2_front
+./scripts/run_acceptance.sh --matrix-id phase11-formal-20260718 --record-bag
 ```
 
 `smoke_ros_bridge.sh` starts only its own Isaac Sim process group, receives real `/clock`, image, and CameraInfo messages, and then terminates that process group. It never uses `killall` or `pkill`.
@@ -94,7 +99,7 @@ Use the automated suite for acceptance instead of judging motion by eye:
 
 The suite starts the simulator and ROS nodes in process groups it owns, uses ROS domain 43 by default for test isolation, records JSON and logs, and shuts down through a simulator stop sentinel. Override only the temporary test domain with `PHASE3_TEST_ROS_DOMAIN_ID`; the public project domain remains 42.
 
-Mapping, relocalization, static navigation, and front-stereo dynamic navigation now have verified public entries through Stage 9. Lighting/color experiments and statistical final acceptance remain reserved for Stages 10 and 11.
+Mapping, relocalization, static/dynamic navigation, experiment hardening and formal front-stereo acceptance now have public entries through Stage 11. Lighting and color randomization are intentionally outside the accepted Stage 11 scope.
 
 ## Phase 4 visual sensor data flow
 
@@ -293,3 +298,57 @@ hardening and the complete matrix. See
 [`docs/phase10_validation.md`](phase10_validation.md) for thresholds, frozen
 parameters and measured evidence, and [`docs/experiments.md`](experiments.md)
 for artifact handling and retune workflows.
+
+## Stage 11 formal acceptance
+
+Generate the independent path reference from the actual official USD before a
+new matrix:
+
+```bash
+./scripts/prepare_stage11_reference.sh --map warehouse_v2_front
+```
+
+The extractor reads authored `UsdPhysics.CollisionAPI` geometry with the Isaac
+Sim 6.0.1 USD runtime. The planner then applies the padded asymmetric Nova
+Carter footprint and runs an eight-heading SE(2) A* at 5 cm resolution. The
+result is stored under `data/reference/warehouse_usd_005/`; no official USD is
+saved or edited.
+
+Run one completely automated trial with one of six fixed goals:
+
+```bash
+./scripts/run_stage11_trial.sh \
+  --class static --seed 21000 --goal-index 3 --no-bag
+
+./scripts/run_stage11_trial.sh \
+  --class heterogeneous --seed 41000 --goal-index 5 --record-bag
+```
+
+`static`, `dynamic`, and `heterogeneous` respectively require zero, three, and
+at least six moving actors. Goal indices 3–5 exercise long-distance warehouse
+navigation. A trial is passed only by `tools/finalize_stage11_trial.py`, which
+joins the simulator, navigation, command, data-age, GPU, contact, theoretical
+path and optional MCAP evidence.
+
+The formal command reads the default 40/40/50 counts from
+`config/stage11.yaml`:
+
+```bash
+./scripts/run_acceptance.sh \
+  --matrix-id phase11-formal-20260718 --record-bag
+```
+
+If the host or terminal is interrupted, do not delete completed runs. Resume
+the exact identity set with:
+
+```bash
+./scripts/run_acceptance.sh \
+  --matrix-id phase11-formal-20260718 \
+  --resume --skip-build --record-bag
+```
+
+The resume path accepts only a passed report whose class, seed, goal index and
+Stage number match the expected trial. The final machine report is
+`data/reports/phase11/acceptance/<matrix-id>/summary.json`; see
+[`docs/phase11_validation.md`](phase11_validation.md) for the complete metric
+definitions and [`docs/user_manual.md`](user_manual.md) for day-to-day use.

@@ -1,0 +1,146 @@
+version: phase11_front_stereo_acceptance_v1
+
+scope:
+  front_stereo_only: true
+  lidar_enabled: false
+  lighting_randomization: false
+  color_randomization: false
+
+runtime:
+  map_name: warehouse_v2_front
+  simulator_update_hz: 120
+  front_image_rate_hz: 10
+  short_goal_timeout_s: 180
+  long_goal_timeout_s: 300
+  startup_timeout_s: 180
+  record_compact_mcap: true
+  gpu_sample_period_s: 1.0
+
+# All poses are in the cuVSLAM map frame. The final three goals exceed 8 m
+# straight-line distance and cross multiple warehouse structural bands.
+goals:
+  - name: east_lane
+    pose: [2.0, 0.0, 0.0]
+    long_distance: false
+  - name: north_east
+    pose: [2.0, 1.5, 1.570796327]
+    long_distance: false
+  - name: north_west
+    pose: [0.5, 1.5, 3.141592654]
+    long_distance: false
+  - name: far_north
+    pose: [0.65, 12.0, 1.570796327]
+    long_distance: true
+  - name: far_north_east
+    pose: [2.65, 8.45, 1.570796327]
+    long_distance: true
+  - name: far_mid_aisle
+    pose: [1.8, 10.5, 1.570796327]
+    long_distance: true
+
+acceptance:
+  seed_base: 21000
+  trial_counts:
+    static: 40
+    dynamic: 40
+    heterogeneous: 50
+  thresholds:
+    static_success_rate: 0.95
+    dynamic_success_rate: 0.90
+    heterogeneous_success_rate: 0.90
+    long_distance_success_rate: 0.90
+    path_stretch_p95: 0.20
+    goal_position_tolerance_m: 0.25
+    goal_yaw_tolerance_deg: 10.0
+    collision_count: 0
+    minimum_realtime_factor: 0.70
+    minimum_long_distance_path_m: 7.0
+    normal_linear_acceleration_p95_mps2: 1.60
+    normal_angular_acceleration_p95_radps2: 3.00
+    normal_linear_jerk_p95_mps3: 5.50
+    normal_angular_jerk_p95_radps3: 11.00
+    command_raw_to_sim_freshness_p95_ms: 100.0
+    front_depth_age_p95_ms: 250.0
+    minimum_cmd_nav_rate_hz: 18.0
+    minimum_visual_slam_status_rate_hz: 7.0
+    minimum_front_depth_rate_hz: 3.5
+    minimum_nvblox_slice_rate_hz: 4.5
+    maximum_command_while_localization_unready: 0.02
+
+reference_path:
+  resolution_m: 0.05
+  robot_vertical_band_m: [0.05, 1.20]
+  orientation_bins: 8
+  footprint:
+    - [0.14, 0.25]
+    - [0.14, -0.25]
+    - [-0.607, -0.25]
+    - [-0.607, 0.25]
+  footprint_padding_m: 0.03
+
+# Added to the three Stage 10 crossing actors for the heterogeneous class.
+# Coordinates are relative to the fixed spawn, which equals map coordinates
+# for x/y. Every actor keeps a physical collider while yielding to a refuge.
+heterogeneous_extra_obstacles:
+  - name: corridor_box_mid
+    kind: box
+    size_m: [0.30, 0.30, 0.55]
+    color_rgb: [0.88, 0.55, 0.08]
+    waypoints_relative_spawn_m:
+      - [-0.50, 5.80, 0.275]
+      - [1.50, 5.80, 0.275]
+    yield_refuge_relative_spawn_m: [3.40, 5.80, 0.275]
+    period_s: 11.0
+    phase: 0.10
+    yield_distance_m: 0.85
+    yield_release_margin_m: 0.30
+    yield_speed_mps: 0.85
+  - name: corridor_capsule_far
+    kind: capsule
+    radius_m: 0.18
+    height_m: 0.65
+    color_rgb: [0.20, 0.75, 0.30]
+    waypoints_relative_spawn_m:
+      - [-0.50, 8.50, 0.49]
+      - [1.50, 8.50, 0.49]
+    yield_refuge_relative_spawn_m: [3.40, 8.50, 0.49]
+    period_s: 13.0
+    phase: 0.35
+    yield_distance_m: 0.90
+    yield_release_margin_m: 0.30
+    yield_speed_mps: 0.90
+  - name: corridor_box_long
+    kind: box
+    size_m: [0.24, 0.34, 0.62]
+    color_rgb: [0.55, 0.20, 0.85]
+    waypoints_relative_spawn_m:
+      - [-0.50, 11.00, 0.31]
+      - [1.50, 11.00, 0.31]
+    yield_refuge_relative_spawn_m: [3.40, 11.00, 0.31]
+    period_s: 15.0
+    phase: 0.60
+    yield_distance_m: 0.90
+    yield_release_margin_m: 0.30
+    yield_speed_mps: 0.90
+
+record_topics:
+  - /clock
+  - /tf
+  - /tf_static
+  - /ground_truth/odometry
+  - /visual_slam/status
+  - /visual_slam/tracking/odometry
+  - /visual_localization/pose
+  - /localization/ready
+  - /localization/recovery_state
+  - /navigation/resilient_status
+  - /control/guard_status
+  - /collision_monitor/state
+  - /front_depth/scan_raw
+  - /nvblox_node/combined_map_slice
+  - /plan
+  - /transformed_global_plan
+  - /cmd_vel_nav_raw
+  - /cmd_vel_smoothed
+  - /cmd_vel_safe
+  - /cmd_vel_sim

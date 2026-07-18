@@ -177,3 +177,64 @@ the latter cannot safely redeclare `NvbloxCostmapLayer` parameters.  The trial
 waits for the final `already_active` marker before recording or sending a
 goal.  Inspect `ros.log` for `relaunching clean stack (2/3)` and the later
 `NOVA_CARTER_NAV2_LIFECYCLE` report before changing startup delays.
+
+## Stage 11 prints `Sensor origin ... out of map bounds` after long travel
+
+Confirm the local ObstacleLayer uses `/front_depth/scan` with
+`data_type: LaserScan`. Do not feed the already transformed
+`/front_depth/points_odom` PointCloud2 into this layer: it has points in odom
+but no independent sensor-origin field, so Nav2 assumes odom `(0,0)` and cannot
+raytrace after the rolling window moves away. Collision Monitor may still use
+the raw scan, and the odom cloud may remain enabled for RViz/metrics.
+
+After correcting the source, rerun a goal index 3–5 Stage11 trial and require
+both no repeated sensor-origin warning and a current local costmap.
+
+## Stage 11 nvblox slice rate falls during a 10+ m goal
+
+Verify `nvblox_dynamic.yaml` contains
+`clear_map_outside_radius_rate_hz: 1.0` and `map_clearing_radius_m: 8.0`.
+The global occupancy map is retained by MapServer; dynamic nvblox is a bounded
+local reconstruction and should not accumulate the entire warehouse in GPU
+hash layers. Also check `gpu.csv` for an unrelated simulator consuming memory.
+Do not lower the Stage11 nvblox rate threshold before testing the rolling map.
+
+## Stage 11 trial fails one metric after Nav2 says `Goal succeeded`
+
+`Goal succeeded` is necessary but not sufficient. Read only the false entries:
+
+```bash
+jq '.checks | to_entries[] | select(.value == false)' \
+  data/runs/<run-id>/result.json
+```
+
+Then inspect `navigation.json` for rate/age/latency/smoothness, `simulator.json`
+for graph identity/actor motion/contact and `gpu.csv` for real-time load. A
+trial is intentionally failed if it arrived while localization was unready,
+if depth/map data were stale, if an actor did not really move, or if the final
+command chain was too slow.
+
+## Stage 11 formal matrix was interrupted
+
+Keep the existing run directories and use the same matrix ID:
+
+```bash
+./scripts/run_acceptance.sh \
+  --matrix-id <same-id> --resume --skip-build --record-bag
+```
+
+The resume code reuses only exact passed identities. A failed or partial run is
+preserved and a `-retryN` directory is created; do not overwrite its MCAP or
+manually copy another result. If a live matrix owns the lock, inspect `ps` and
+wait for it or stop that foreground command normally—never delete locks held by
+a live process.
+
+## Stage 11 reference generation cannot find a path
+
+First confirm `config/assets.yaml` still points at the actual Isaac Sim 6.0
+Warehouse and that the USD opens with no unresolved layers. Then inspect
+`data/reference/warehouse_usd_005/geometry.json` and
+`collision_grid.pgm`. A changed goal may be inside an inflated collider or a
+different free-space component. Do not substitute Nav2's own global plan as the
+"optimal" reference; either select a reachable acceptance goal or fix the USD
+collision extraction/footprint model and regenerate all paths.
