@@ -81,6 +81,23 @@ def _set_pose(prim: Usd.Prim, xyz: tuple[float, float, float], yaw: float) -> No
     orient.Set(Gf.Quatd(math.cos(yaw * 0.5), Gf.Vec3d(0.0, 0.0, math.sin(yaw * 0.5))))
 
 
+def _get_or_add_xform_op(
+    xformable: UsdGeom.Xformable,
+    name: str,
+    factory,
+) -> UsdGeom.XformOp:
+    """Return an inherited/local transform op without authoring a duplicate."""
+
+    operations = {
+        operation.GetOpName(): operation
+        for operation in xformable.GetOrderedXformOps()
+    }
+    operation = operations.get(name)
+    if operation is not None:
+        return operation
+    return factory()
+
+
 def _configure_physics(stage: Usd.Stage, physics_hz: int) -> str:
     scenes = [prim for prim in stage.TraverseAll() if prim.IsA(UsdPhysics.Scene)]
     if not scenes:
@@ -134,27 +151,11 @@ def _repair_environment(
                 attribute.Set(Sdf.AssetPath(str(target)))
                 repaired_assets.append(f"{prim.GetPath()}.{attribute.GetName()}")
 
-    # Kujiale assigns visual MDL materials to collision meshes, but provides no
-    # physics-purpose material.  PhysX consequently tries to resolve visual
-    # per-face indices during every wheel contact and emits an invalid-face
-    # warning.  A physics-only inherited binding leaves rendering untouched.
-    physics = control["physics"]
-    material_path = "/World/PhysicsMaterials/KujialeEnvironment"
-    material_prim = stage.DefinePrim(material_path, "Material")
-    material_api = UsdPhysics.MaterialAPI.Apply(material_prim)
-    material_api.CreateStaticFrictionAttr().Set(
-        float(physics["environment_static_friction"])
-    )
-    material_api.CreateDynamicFrictionAttr().Set(
-        float(physics["environment_dynamic_friction"])
-    )
-    material_api.CreateRestitutionAttr().Set(0.0)
-    root = stage.GetPrimAtPath("/Root")
-    UsdShade.MaterialBindingAPI.Apply(root).Bind(
-        UsdShade.Material(material_prim),
-        UsdShade.Tokens.strongerThanDescendants,
-        "physics",
-    )
+    # Preserve the source environment's contact properties.  The proven
+    # Kujiale reference branch repairs malformed asset paths and makes local
+    # meshes double-sided, but deliberately does not impose a strong inherited
+    # physics material on /Root.  Such a binding changes skid-steer contact
+    # friction for every floor and obstacle in the room.
     collision_prim_count = sum(
         prim.HasAPI(UsdPhysics.CollisionAPI) for prim in stage.TraverseAll()
     )
@@ -162,8 +163,8 @@ def _repair_environment(
         "double_sided_mesh_count": len(double_sided),
         "repaired_asset_path_count": len(repaired_assets),
         "repaired_asset_paths": repaired_assets,
-        "physics_material": material_path,
-        "physics_material_binding_root": "/Root",
+        "source_physics_material_preserved": True,
+        "physics_material_binding_root": None,
         "collision_prim_count": collision_prim_count,
     }
 
@@ -204,10 +205,27 @@ def _configure_wheel_overlay(stage: Usd.Stage, control: dict[str, object]) -> No
         UsdPhysics.CollisionAPI.Apply(collider.GetPrim()).CreateCollisionEnabledAttr().Set(True)
         UsdShade.MaterialBindingAPI.Apply(collider.GetPrim()).Bind(UsdShade.Material(material_prim))
         xform = UsdGeom.Xformable(collider.GetPrim())
-        xform.AddTranslateOp().Set(Gf.Vec3d(0.0, 0.0, 0.0))
-        xform.AddOrientOp().Set(
-            Gf.Quatf(0.70710677, Gf.Vec3f(0.70710677, 0.0, 0.0))
+        _get_or_add_xform_op(
+            xform,
+            "xformOp:translate",
+            xform.AddTranslateOp,
+        ).Set(Gf.Vec3d(0.0, 0.0, 0.0))
+        orient_operation = _get_or_add_xform_op(
+            xform,
+            "xformOp:orient",
+            xform.AddOrientOp,
         )
+        if orient_operation.GetPrecision() == UsdGeom.XformOp.PrecisionDouble:
+            orient_value = Gf.Quatd(
+                0.7071067811865476,
+                Gf.Vec3d(0.7071067811865476, 0.0, 0.0),
+            )
+        else:
+            orient_value = Gf.Quatf(
+                0.70710677,
+                Gf.Vec3f(0.70710677, 0.0, 0.0),
+            )
+        orient_operation.Set(orient_value)
 
         joint = stage.GetPrimAtPath(f"{ROBOT_PRIM_PATH}/{name}_wheel_joint")
         if not joint.IsValid():

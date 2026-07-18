@@ -64,6 +64,9 @@ info "Phase 3 test domain: ${ROS_DOMAIN_ID}"
 info "Starting isolated Standalone simulator"
 setsid "${ISAAC_SIM_PYTHON}" "${PROJECT_ROOT}/isaac_sim/navigation_sim.py" \
   --headless \
+  --disable-sensors \
+  --physics-hz 60 \
+  --update-hz 60 \
   --duration 150 \
   --stop-file "${SIM_STOP_FILE}" \
   --report "${SIM_REPORT}" >"${SIM_LOG}" 2>&1 &

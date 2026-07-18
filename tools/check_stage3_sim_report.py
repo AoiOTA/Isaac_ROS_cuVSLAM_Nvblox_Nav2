@@ -42,9 +42,17 @@ def main() -> int:
         raise SystemExit("articulation command does not target all four Jackal wheels")
     if control.get("official_ros_sample_loaded") is not False:
         raise SystemExit("official ROS sample graph must remain unloaded")
+    contacts = report.get("robot_contacts", {})
+    collision_count = int(contacts.get("collision_event_count", 0))
+    if collision_count != 0:
+        pairs = contacts.get("collision_pairs", [])
+        raise SystemExit(
+            f"motion path collided with non-floor geometry {collision_count} time(s): {pairs}"
+        )
     print(
         "stage3_sim_report=passed "
-        f"graphs={len(EXPECTED_GRAPHS)} joints={','.join(control['commanded_joints'])}"
+        f"graphs={len(EXPECTED_GRAPHS)} joints={','.join(control['commanded_joints'])} "
+        "collisions=0"
     )
     return 0
 

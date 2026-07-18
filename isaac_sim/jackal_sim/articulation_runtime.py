@@ -166,6 +166,18 @@ class ArticulationRuntime:
         orientation = tuple(float(value) for value in orientations.numpy()[0])
         return position, orientation  # type: ignore[return-value]
 
+    def set_world_pose(
+        self,
+        position: Sequence[float],
+        orientation_wxyz: Sequence[float],
+    ) -> None:
+        """Set the floating articulation root through the physics tensor API."""
+
+        self.articulation.set_world_poses(
+            positions=[list(position)],
+            orientations=[list(orientation_wxyz)],
+        )
+
     def set_base_velocities(
         self, linear: Sequence[float], angular: Sequence[float]
     ) -> None:

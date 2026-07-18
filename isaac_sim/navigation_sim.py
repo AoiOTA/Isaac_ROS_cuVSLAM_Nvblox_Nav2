@@ -332,6 +332,7 @@ def run(args: argparse.Namespace) -> int:
 
     import omni.timeline
 
+    from isaacsim.core.simulation_manager import SimulationManager
     from isaacsim.core.utils.extensions import enable_extension
 
     from jackal_sim.graphs import create_control_graphs
@@ -426,6 +427,37 @@ def run(args: argparse.Namespace) -> int:
                 ),
             }
         )
+        # Match the known-good Jackal runtime from the reference project.  An
+        # authored PhysX timeStepsPerSecond value alone does not update Isaac
+        # Sim's active SimulationManager clock; the motion assist would then
+        # integrate with a different dt than the physics engine.
+        physics_scene_path = str(composition["physics_scene"])
+        requested_physics_dt = 1.0 / float(args.physics_hz)
+        SimulationManager.set_physics_dt(
+            requested_physics_dt,
+            physics_scene=physics_scene_path,
+        )
+        effective_physics_dt = float(
+            SimulationManager.get_physics_dt(physics_scene=physics_scene_path)
+        )
+        if not math.isclose(
+            effective_physics_dt,
+            requested_physics_dt,
+            rel_tol=0.0,
+            abs_tol=1.0e-12,
+        ):
+            raise RuntimeError(
+                "Isaac SimulationManager physics dt mismatch: "
+                f"requested={requested_physics_dt} effective={effective_physics_dt}"
+            )
+        report["physics_timing"] = {
+            "scene": physics_scene_path,
+            "requested_hz": float(args.physics_hz),
+            "requested_dt_s": requested_physics_dt,
+            "effective_dt_s": effective_physics_dt,
+            "explicit_simulation_manager_configuration": True,
+            "reference": "codex/kujiale-navigation-mapping@caae0c08",
+        }
         app.update()
         if stage_identity() != active_stage_identity:
             raise RuntimeError("active stage changed after Jackal composition")
@@ -522,14 +554,20 @@ def run(args: argparse.Namespace) -> int:
             ),
             "target_framerate_hz": float(args.update_hz),
         }
+        # Mirror the proven reference lifecycle: stop, warm exactly two
+        # physics updates, then initialize and configure the articulation while
+        # paused.  Starting the tensor articulation after a longer live settle
+        # leaves stale wheel contacts and produces severe skid-steer understeer.
+        timeline.stop()
+        app.update()
         timeline.play()
-        for _ in range(10):
-            app.update()
+        app.update()
+        app.update()
+        timeline.pause()
+        app.update()
 
         if not args.disable_ros_control:
             import rclpy
-            from isaacsim.core.simulation_manager import SimulationManager
-
             rclpy_module = rclpy
             if not rclpy.ok():
                 rclpy.init(args=[])
@@ -564,6 +602,25 @@ def run(args: argparse.Namespace) -> int:
                 topic_name=command_topic,
                 clock=simulation_clock,
             )
+            # Preserve the reference project's proven reset lifecycle.  The
+            # USD transform selects the authored spawn before physics starts;
+            # this paused tensor reset then makes the same pose authoritative
+            # for the live floating articulation and advances one physics step
+            # before accepting velocity commands.
+            robot_runtime.set_world_pose(
+                [spawn.x, spawn.y, spawn.z],
+                [
+                    math.cos(spawn.yaw_radians * 0.5),
+                    0.0,
+                    0.0,
+                    math.sin(spawn.yaw_radians * 0.5),
+                ],
+            )
+            robot_runtime.zero_all_velocities()
+            motion_assist.reset()
+            SimulationManager.step(steps=1, update_fabric=False)
+            timeline.play()
+            app.update()
             report["skid_steer_runtime"] = {
                 "enabled": True,
                 "command_topic": command_topic,
@@ -578,9 +635,12 @@ def run(args: argparse.Namespace) -> int:
                 "effective_wheel_separation_m": float(
                     args.control["kinematics"]["wheel_separation_m"]
                 ),
+                "reference_reset_lifecycle": True,
             }
         else:
             report["skid_steer_runtime"] = {"enabled": False}
+            timeline.play()
+            app.update()
 
         if follow_camera is not None:
             activate_viewport_camera()

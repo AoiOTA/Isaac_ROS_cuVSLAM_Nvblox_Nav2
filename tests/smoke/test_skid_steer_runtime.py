@@ -57,9 +57,14 @@ def test_runtime_overlay_and_graph_preserve_reference_physics_fixes() -> None:
         "DifferentialController.inputs:dt",
         "DifferentialController.inputs:maxWheelSpeed",
         "FourWheelCommand.outputs:array",
+        "GRAPH_PIPELINE_STAGE_ONDEMAND",
     ):
         assert token in graph
     assert graph.count('("ArticulationController",') == 1
+    differential_drive = graph.split(
+        "def _create_differential_drive_graph", 1
+    )[1].split("def _create_joint_state_graph", 1)[0]
+    assert '"evaluator_name": "execution"' not in differential_drive
 
 
 def test_runtime_config_rejects_invalid_joint_friction() -> None:

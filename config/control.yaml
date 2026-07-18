@@ -16,8 +16,6 @@ limits:
   command_timeout_s: 0.25
 
 physics:
-  environment_static_friction: 0.80
-  environment_dynamic_friction: 0.70
   wheel_static_friction: 0.20
   wheel_dynamic_friction: 0.20
   wheel_drive_damping: 0.872664626

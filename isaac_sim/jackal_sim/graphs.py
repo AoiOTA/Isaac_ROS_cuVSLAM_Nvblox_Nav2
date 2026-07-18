@@ -85,7 +85,10 @@ def _create_differential_drive_graph(control: dict[str, object]) -> str:
     if len(left_joints) != 2 or len(right_joints) != 2:
         raise RuntimeError("Jackal control requires two left and two right wheel joints")
     og.Controller.edit(
-        {"graph_path": path, "evaluator_name": "execution"},
+        {
+            "graph_path": path,
+            "pipeline_stage": og.GraphPipelineStage.GRAPH_PIPELINE_STAGE_ONDEMAND,
+        },
         {
             keys.CREATE_NODES: [
                 ("OnPhysicsStep", "isaacsim.core.nodes.OnPhysicsStep"),

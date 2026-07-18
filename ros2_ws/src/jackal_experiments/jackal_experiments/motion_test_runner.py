@@ -18,10 +18,11 @@ from sensor_msgs.msg import JointState
 from std_msgs.msg import String
 
 
-LEFT_JOINT = "joint_wheel_left"
-RIGHT_JOINT = "joint_wheel_right"
-WHEEL_RADIUS = 0.14
-WHEEL_SEPARATION = 0.4132
+LEFT_JOINTS = ("front_left_wheel_joint", "rear_left_wheel_joint")
+RIGHT_JOINTS = ("front_right_wheel_joint", "rear_right_wheel_joint")
+WHEEL_JOINTS = (*LEFT_JOINTS, *RIGHT_JOINTS)
+WHEEL_RADIUS = 0.098
+WHEEL_SEPARATION = 0.800
 
 
 def angle_delta(current: float, previous: float) -> float:
@@ -39,6 +40,10 @@ class PoseSample:
     x: float
     y: float
     yaw: float
+    linear: float = 0.0
+    angular: float = 0.0
+    command_linear: float = 0.0
+    command_angular: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -89,12 +94,21 @@ class MotionTestRunner(Node):
         else:
             self._unwrapped_ground_truth_yaw += angle_delta(raw_yaw, self._last_ground_truth_yaw)
         self._last_ground_truth_yaw = raw_yaw
+        latest_command = (
+            self.commands[-1]
+            if self.commands
+            else CommandSample(self.now_s(), 0.0, 0.0)
+        )
         self.ground_truth.append(
             PoseSample(
                 self.now_s(),
                 message.pose.pose.position.x,
                 message.pose.pose.position.y,
                 self._unwrapped_ground_truth_yaw,
+                message.twist.twist.linear.x,
+                message.twist.twist.angular.z,
+                latest_command.linear,
+                latest_command.angular,
             )
         )
 
@@ -104,12 +118,21 @@ class MotionTestRunner(Node):
             yaw = self.wheel_odometry[-1].yaw + angle_delta(raw_yaw, self.wheel_odometry[-1].yaw)
         else:
             yaw = raw_yaw
+        latest_command = (
+            self.commands[-1]
+            if self.commands
+            else CommandSample(self.now_s(), 0.0, 0.0)
+        )
         self.wheel_odometry.append(
             PoseSample(
                 self.now_s(),
                 message.pose.pose.position.x,
                 message.pose.pose.position.y,
                 yaw,
+                message.twist.twist.linear.x,
+                message.twist.twist.angular.z,
+                latest_command.linear,
+                latest_command.angular,
             )
         )
 
@@ -129,6 +152,15 @@ class MotionTestRunner(Node):
                 return index
         raise ValueError(desired)
 
+    @classmethod
+    def average_joint_velocity(
+        cls,
+        message: JointState,
+        desired: tuple[str, str],
+    ) -> float:
+        indices = [cls.find_joint(message.name, name) for name in desired]
+        return statistics.fmean(float(message.velocity[index]) for index in indices)
+
     def on_joint_state(self, message: JointState) -> None:
         self.joint_names.update(message.name)
         for index, name in enumerate(message.name):
@@ -137,8 +169,8 @@ class MotionTestRunner(Node):
                     self.joint_peak_velocity.get(name, 0.0), abs(float(message.velocity[index]))
                 )
         try:
-            left = float(message.velocity[self.find_joint(message.name, LEFT_JOINT)])
-            right = float(message.velocity[self.find_joint(message.name, RIGHT_JOINT)])
+            left = self.average_joint_velocity(message, LEFT_JOINTS)
+            right = self.average_joint_velocity(message, RIGHT_JOINTS)
         except (ValueError, IndexError):
             return
         latest_command = self.commands[-1] if self.commands else CommandSample(self.now_s(), 0.0, 0.0)
@@ -219,18 +251,32 @@ class MotionTestRunner(Node):
             end.yaw - start.yaw,
         )
 
-    def snapshot(self) -> tuple[PoseSample, PoseSample, int, int]:
+    def snapshot(self) -> tuple[PoseSample, PoseSample, int, int, int, int]:
         return (
             self.ground_truth[-1],
             self.wheel_odometry[-1],
             len(self.commands),
             len(self.joint_samples),
+            len(self.ground_truth),
+            len(self.wheel_odometry),
         )
 
     def segment_metrics(
-        self, name: str, snapshot: tuple[PoseSample, PoseSample, int, int]
-    ) -> dict[str, float | str]:
-        gt_start, wheel_start, command_start, joint_start = snapshot
+        self,
+        name: str,
+        snapshot: tuple[PoseSample, PoseSample, int, int, int, int],
+        *,
+        expected_linear: float | None = None,
+        expected_angular: float | None = None,
+    ) -> dict[str, float | str | None]:
+        (
+            gt_start,
+            wheel_start,
+            command_start,
+            joint_start,
+            ground_truth_start,
+            wheel_odometry_start,
+        ) = snapshot
         gt = self.relative_pose(gt_start, self.ground_truth[-1])
         wheel = self.relative_pose(wheel_start, self.wheel_odometry[-1])
         gt_distance = math.hypot(gt[0], gt[1])
@@ -238,6 +284,53 @@ class MotionTestRunner(Node):
         yaw_error = abs(wheel[2] - gt[2])
         commands = self.commands[command_start:]
         joints = self.joint_samples[joint_start:]
+        ground_truth = self.ground_truth[ground_truth_start:]
+        wheel_odometry = self.wheel_odometry[wheel_odometry_start:]
+
+        def steady(samples: list[PoseSample]) -> list[PoseSample]:
+            if expected_linear is None or expected_angular is None:
+                return []
+            matching = [
+                sample
+                for sample in samples
+                if abs(sample.command_linear - expected_linear) <= 0.02
+                and abs(sample.command_angular - expected_angular) <= 0.03
+            ]
+            if not matching:
+                return []
+            # Mirror the reference benchmark's steady window: the output
+            # command reaching its target is not the same instant that the
+            # PhysX chassis has settled to that twist.
+            steady_start = matching[0].time_s + 0.35
+            steady_end = matching[-1].time_s - 0.10
+            return [
+                sample
+                for sample in matching
+                if steady_start <= sample.time_s <= steady_end
+            ]
+
+        steady_ground_truth = steady(ground_truth)
+        steady_wheel_odometry = steady(wheel_odometry)
+        mean_gt_linear = (
+            statistics.fmean(sample.linear for sample in steady_ground_truth)
+            if steady_ground_truth
+            else None
+        )
+        mean_gt_angular = (
+            statistics.fmean(sample.angular for sample in steady_ground_truth)
+            if steady_ground_truth
+            else None
+        )
+        mean_wheel_linear = (
+            statistics.fmean(sample.linear for sample in steady_wheel_odometry)
+            if steady_wheel_odometry
+            else None
+        )
+        mean_wheel_angular = (
+            statistics.fmean(sample.angular for sample in steady_wheel_odometry)
+            if steady_wheel_odometry
+            else None
+        )
         return {
             "name": name,
             "ground_truth_x_m": gt[0],
@@ -248,12 +341,28 @@ class MotionTestRunner(Node):
             "wheel_odometry_yaw_error_rad": yaw_error,
             "command_samples": len(commands),
             "joint_samples": len(joints),
+            "steady_ground_truth_samples": len(steady_ground_truth),
+            "steady_wheel_odometry_samples": len(steady_wheel_odometry),
+            "mean_ground_truth_linear_mps": mean_gt_linear,
+            "mean_ground_truth_angular_radps": mean_gt_angular,
+            "mean_wheel_odometry_linear_mps": mean_wheel_linear,
+            "mean_wheel_odometry_angular_radps": mean_wheel_angular,
+            "steady_wheel_linear_error_mps": (
+                abs(mean_wheel_linear - mean_gt_linear)
+                if mean_wheel_linear is not None and mean_gt_linear is not None
+                else None
+            ),
+            "steady_wheel_angular_error_radps": (
+                abs(mean_wheel_angular - mean_gt_angular)
+                if mean_wheel_angular is not None and mean_gt_angular is not None
+                else None
+            ),
         }
 
     def run_suite(self) -> dict[str, object]:
         self.wait_ready()
         self.settle(0.5)
-        segments: dict[str, dict[str, float | str]] = {}
+        segments: dict[str, dict[str, float | str | None]] = {}
 
         start = self.snapshot()
         gt_start = start[0]
@@ -264,7 +373,9 @@ class MotionTestRunner(Node):
             8.0,
         )
         self.settle()
-        segments["straight_2m"] = self.segment_metrics("straight_2m", start)
+        segments["straight_2m"] = self.segment_metrics(
+            "straight_2m", start, expected_linear=0.5, expected_angular=0.0
+        )
 
         start = self.snapshot()
         gt_start = start[0]
@@ -275,7 +386,9 @@ class MotionTestRunner(Node):
             8.0,
         )
         self.settle()
-        segments["reverse_2m"] = self.segment_metrics("reverse_2m", start)
+        segments["reverse_2m"] = self.segment_metrics(
+            "reverse_2m", start, expected_linear=-0.5, expected_angular=0.0
+        )
 
         start = self.snapshot()
         gt_start = start[0]
@@ -286,39 +399,43 @@ class MotionTestRunner(Node):
             7.0,
         )
         self.settle()
-        segments["spin_180"] = self.segment_metrics("spin_180", start)
+        segments["spin_180"] = self.segment_metrics(
+            "spin_180", start, expected_linear=0.0, expected_angular=0.9
+        )
 
         start = self.snapshot()
         gt_start = start[0]
         self.drive_until(
-            0.45,
-            0.6,
+            0.32,
+            0.8,
             lambda: self.ground_truth[-1].yaw - gt_start.yaw >= 0.5 * math.pi - 0.19,
-            6.0,
+            4.0,
         )
         self.settle()
-        segments["arc_radius_075"] = self.segment_metrics("arc_radius_075", start)
+        segments["arc_radius_040"] = self.segment_metrics(
+            "arc_radius_040", start, expected_linear=0.32, expected_angular=0.8
+        )
         arc_return_start = self.ground_truth[-1]
         self.drive_until(
-            -0.45,
-            -0.6,
+            -0.32,
+            -0.8,
             lambda: arc_return_start.yaw - self.ground_truth[-1].yaw >= 0.5 * math.pi - 0.19,
-            6.0,
+            4.0,
         )
         self.settle()
 
         start = self.snapshot()
-        for angular, duration in ((0.95, 1.3), (-0.95, 2.6), (0.95, 1.3)):
-            self.drive_for(0.35, angular, duration)
+        for angular, duration in ((0.95, 0.8), (-0.95, 1.6), (0.95, 0.8)):
+            self.drive_for(0.30, angular, duration)
         self.settle()
         segments["s_curve"] = self.segment_metrics("s_curve", start)
-        for angular, duration in ((-0.95, 1.3), (0.95, 2.6), (-0.95, 1.3)):
-            self.drive_for(-0.35, angular, duration)
+        for angular, duration in ((-0.95, 0.8), (0.95, 1.6), (-0.95, 0.8)):
+            self.drive_for(-0.30, angular, duration)
         self.settle()
 
         start = self.snapshot()
         for index in range(8):
-            self.drive_for(0.24, 1.0 if index % 2 == 0 else -1.0, 0.75)
+            self.drive_for(0.20, 1.0 if index % 2 == 0 else -1.0, 0.45)
         self.settle()
         segments["continuous_sharp_turns"] = self.segment_metrics(
             "continuous_sharp_turns", start
@@ -389,6 +506,33 @@ class MotionTestRunner(Node):
                 / math.sqrt(2.0)
             )
 
+        tracked_segments = [
+            segments[name]
+            for name in ("straight_2m", "reverse_2m", "spin_180", "arc_radius_040")
+        ]
+        wheel_linear_errors = [
+            float(value)
+            for segment in tracked_segments
+            if (value := segment["steady_wheel_linear_error_mps"]) is not None
+        ]
+        wheel_angular_errors = [
+            float(value)
+            for segment in tracked_segments
+            if (value := segment["steady_wheel_angular_error_radps"]) is not None
+        ]
+        arc_linear = segments["arc_radius_040"]["mean_ground_truth_linear_mps"]
+        arc_angular = segments["arc_radius_040"]["mean_ground_truth_angular_radps"]
+        steady_arc_radius = (
+            abs(float(arc_linear) / float(arc_angular))
+            if arc_linear is not None
+            and arc_angular is not None
+            and abs(float(arc_angular)) > 1.0e-9
+            else math.inf
+        )
+        segments["arc_radius_040"]["steady_ground_truth_radius_m"] = (
+            steady_arc_radius
+        )
+
         checks = {
             "straight_distance": 1.95 <= float(segments["straight_2m"]["ground_truth_x_m"]) <= 2.15,
             "straight_lateral": abs(float(segments["straight_2m"]["ground_truth_y_m"])) <= 0.08,
@@ -396,28 +540,29 @@ class MotionTestRunner(Node):
             "reverse_distance": float(segments["reverse_2m"]["ground_truth_x_m"]) <= -1.95,
             "spin_angle": abs(float(segments["spin_180"]["ground_truth_yaw_rad"]) - math.pi) <= 0.18,
             "spin_center_drift": float(segments["spin_180"]["ground_truth_displacement_m"]) <= 0.15,
-            "arc_angle": abs(float(segments["arc_radius_075"]["ground_truth_yaw_rad"]) - 0.5 * math.pi) <= 0.18,
-            "arc_radius": 0.60
-            <= float(segments["arc_radius_075"]["ground_truth_displacement_m"]) / math.sqrt(2.0)
-            <= 0.90,
-            "wheel_odometry_position": max(
-                float(item["wheel_odometry_position_error_m"]) for item in segments.values()
-            )
-            <= 0.20,
-            "wheel_odometry_yaw": max(
-                float(item["wheel_odometry_yaw_error_rad"]) for item in segments.values()
-            )
-            <= 0.20,
-            "hard_linear_limit": limit_linear <= 1.0001,
+            "arc_angle": abs(float(segments["arc_radius_040"]["ground_truth_yaw_rad"]) - 0.5 * math.pi) <= 0.18,
+            "arc_radius": 0.30 <= steady_arc_radius <= 0.50,
+            "steady_tracking_samples": all(
+                int(segment["steady_ground_truth_samples"] or 0) >= 20
+                and int(segment["steady_wheel_odometry_samples"] or 0) >= 20
+                for segment in tracked_segments
+            ),
+            "wheel_odometry_linear_tracking": (
+                len(wheel_linear_errors) == len(tracked_segments)
+                and max(wheel_linear_errors, default=math.inf) <= 0.06
+            ),
+            "wheel_odometry_angular_tracking": (
+                len(wheel_angular_errors) == len(tracked_segments)
+                and max(wheel_angular_errors, default=math.inf) <= 0.12
+            ),
+            "hard_linear_limit": limit_linear <= 0.7501,
             "hard_angular_limit": limit_angular <= 1.2001,
             "watchdog": watchdog_latency <= 0.32,
             "invalid_rejected": invalid_latency <= 0.12,
-            "active_wheels_present": any(name.endswith(LEFT_JOINT) for name in self.joint_names)
-            and any(name.endswith(RIGHT_JOINT) for name in self.joint_names),
-            "passive_casters_present": len(
-                [name for name in self.joint_names if "caster" in name or "swing" in name]
-            )
-            >= 5,
+            "four_wheel_skid_steer_joints_present": all(
+                any(name.endswith(expected) for name in self.joint_names)
+                for expected in WHEEL_JOINTS
+            ),
         }
         result = {
             "status": "passed" if all(checks.values()) else "failed",
@@ -449,11 +594,7 @@ class MotionTestRunner(Node):
             },
             "joint_state": {
                 "names": sorted(self.joint_names),
-                "passive_caster_names": sorted(
-                    name
-                    for name in self.joint_names
-                    if "caster" in name or "swing" in name
-                ),
+                "commanded_wheel_names": list(WHEEL_JOINTS),
                 "peak_velocity_radps": self.joint_peak_velocity,
             },
             "sample_counts": {

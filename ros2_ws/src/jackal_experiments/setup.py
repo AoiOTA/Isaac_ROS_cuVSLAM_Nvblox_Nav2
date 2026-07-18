@@ -33,6 +33,7 @@ setup(
             "localization_bootstrap = jackal_experiments.localization_bootstrap:main",
             "navigation_test_runner = jackal_experiments.navigation_test_runner:main",
             "performance_workload_driver = jackal_experiments.performance_workload_driver:main",
+            "motion_response_probe = jackal_experiments.motion_response_probe:main",
             "localization_recovery_manager = jackal_experiments.localization_recovery_manager:main",
             "resilient_navigation = jackal_experiments.resilient_navigation:main",
             "manual_goal_bridge = jackal_experiments.manual_goal_bridge:main",
