@@ -78,13 +78,16 @@ def test_ros_launches_remap_eight_inputs_but_gate_rear_normalizers() -> None:
     assert "' == 'mapping_8cam'" in sensors_launch
 
 
-def test_mapping_workflow_is_manual_eight_camera_and_discards_raw_capture() -> None:
+def test_mapping_workflow_supports_guarded_manual_and_closed_loop_auto_capture() -> None:
     script = (ROOT / "scripts/run_mapping.sh").read_text()
     for token in (
         "--interactive",
+        "--auto",
         "[[ -t 0 ]]",
-        "--gui --duration 0 --camera-profile mapping_8cam",
+        '"${SIM_MODE}" --duration 0 --camera-profile mapping_8cam',
         "ros2 run jackal_teleop keyboard_teleop",
+        "mapping_coverage_driver",
+        "validate_mapping_run.py",
         "for pair in front left right back",
         "mapping_topics_8cam.yaml",
         "ros2 bag record --storage mcap",

@@ -24,7 +24,8 @@
 | `isaac_sim/jackal_sim/articulation_runtime.py` | Jackal articulation 运行时稳定性与速度接口 |
 | `isaac_sim/jackal_sim/idle_brake.py` | 命令超时与静止 creep 制动 |
 | `isaac_sim/jackal_sim/skid_steer_motion_assist.py` | 有边界的 skid-steer 曲率响应修正 |
-| `isaac_sim/jackal_sim/contact_monitor.py` | 所有 Jackal rigid body 的 PhysX 接触统计 |
+| `isaac_sim/jackal_sim/contact_monitor.py` | 所有 Jackal rigid body 的 PhysX 接触统计与接触样本证据 |
+| `isaac_sim/jackal_sim/contact_classification.py` | 只放行低位、竖直法向的轮地支撑接触 |
 | `isaac_sim/jackal_sim/performance.py` | Isaac 官方 recorder + 自适应墙钟采样 |
 
 `dynamic_obstacles.py`、`dynamic_motion.py` 与旧 phase 脚本只为历史回溯保留；`navigation_sim.py` 在本分支拒绝 dynamic profile。
@@ -35,7 +36,7 @@
 |---|---|
 | `ros2_ws/src/jackal_control/` | Command Guard、wheel odometry 与控制 launch |
 | `ros2_ws/src/jackal_bringup/` | 传感器转换、cuVSLAM、cuVGL、nvblox、Nav2、TF、RViz |
-| `ros2_ws/src/jackal_experiments/` | 地图保存、定位 bootstrap、导航 runner 与证据采集 |
+| `ros2_ws/src/jackal_experiments/` | 自动闭环建图、地图保存、定位 bootstrap、导航 runner 与证据采集 |
 | `ros2_ws/src/jackal_teleop/` | 带 0.18 秒 deadman 的 W/S/A/D/Space/Q 建图控制 |
 
 关键 bringup 文件：
@@ -58,13 +59,16 @@
 |---|---|
 | `scripts/build.sh` | 环境、资产、语法与 ROS build 检查 |
 | `scripts/run_sim.sh` | 单独启动 GUI/headless simulator，可选 camera profile |
-| `scripts/run_mapping.sh` | 手动四组 Hawk / 8 路图像建图，完整成功后清理 raw/intermediate |
+| `scripts/run_mapping.sh` | 自动闭环或人工四 Hawk / 8 路图像建图，完整成功后清理 raw/intermediate |
 | `scripts/create_vgl_map.sh` | 从临时 MCAP 生成对齐的 cuVSLAM/cuVGL runtime map |
 | `scripts/run_navigation.sh` | 检查 manifest 并启动 6 路 ROS 导航 |
 | `scripts/run_all.sh` | 启动 simulator + ROS 导航 + 自动路线 runner |
 | `scripts/run_static_trial.sh` | 一次静态有效/无效实验与最终分类 |
 | `scripts/run_static_acceptance.sh` | 至少 20 次、95% 的静态批次 |
 | `scripts/run_performance_benchmark.sh` | 真实 8 路/6 路负载的自适应性能观测 |
+
+自动建图折线与控制门限在 `config/mapping_coverage.yaml`；运行时驱动为
+`jackal_experiments/mapping_coverage_driver.py`，最终门禁为 `tools/validate_mapping_run.py`。
 
 性能配置依据、A/B 数据和回退实验见 `docs/performance_optimization.md`。
 

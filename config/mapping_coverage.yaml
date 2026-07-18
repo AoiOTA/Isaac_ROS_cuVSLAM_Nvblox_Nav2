@@ -1,0 +1,74 @@
+schema_version: 1
+workflow: kujiale_jackal_four_hawk_mapping_coverage
+
+# The old occupancy grid is used only to choose a collision-clear driving
+# polyline for this unchanged USD/spawn pair. It is never copied into the new
+# runtime map. The promoted artifacts still come exclusively from the live
+# four-Hawk MCAP, cuVSLAM/cuVGL, and front-Hawk-depth nvblox workflow.
+planning_reference:
+  repository: AoiOTA/Isaac_Sim_ROS2_Nav
+  branch: codex/kujiale-navigation-mapping
+  commit: caae0c08a451544ec0362df12da165fdc8d75676
+  occupancy_artifact: data/maps/occupancy/warehouse_new.pgm
+  occupancy_sha256: 1f4ee9d3c19d5fb1ff3c2a926888ba9b22c7dd61b88b0833038c65133d29d0c6
+  environment_sha256: f76f1957e8f4cbfccb13f9670d6ce187793007c56d9b3aad8a8ee72507d658d2
+  spawn_usd_xyz_m: [2.9, -0.2, 0.0635]
+  spawn_yaw_deg: 180.0
+  use: planning_only
+
+coordinate_frame: initial_ground_truth_base
+controller:
+  publish_rate_hz: 20.0
+  maximum_linear_speed_mps: 0.28
+  minimum_linear_speed_mps: 0.08
+  maximum_angular_speed_radps: 0.60
+  minimum_angular_speed_radps: 0.12
+  heading_gain: 1.8
+  rotate_in_place_threshold_rad: 0.45
+  waypoint_tolerance_m: 0.10
+  maximum_cross_track_error_m: 0.30
+  progress_epsilon_m: 0.02
+  progress_timeout_sim_s: 25.0
+  visual_tracking_timeout_sim_s: 5.0
+  settle_sim_s: 0.50
+  maximum_sim_duration_s: 600.0
+  maximum_wall_duration_s: 1200.0
+
+# This 38 m closed loop covers the south corridor, west rooms, north room and
+# east room, then returns to the mapping origin for loop closure. Each segment
+# was line-of-sight checked against the calibrated reference occupancy grid;
+# scan turns are placed only at open points with at least about 0.40 m raster
+# clearance. Four cardinal Hawks remain active throughout the whole route.
+route:
+  - xy: [0.01, -0.02]
+    scan_turns: 1.0
+  - xy: [-0.29, -2.07]
+  - xy: [0.61, -2.67]
+  - xy: [0.41, -5.37]
+    scan_turns: 0.5
+  - xy: [0.51, -2.42]
+  - xy: [-1.59, -0.87]
+  - xy: [-2.34, -2.62]
+  - xy: [-2.54, -2.67]
+    scan_turns: 0.5
+  - xy: [-1.89, -1.72]
+  - xy: [-2.04, 1.08]
+  - xy: [-2.54, 1.28]
+    scan_turns: 0.5
+  - xy: [-2.54, 3.68]
+    scan_turns: 0.5
+  - xy: [-2.09, 2.83]
+    scan_turns: 0.5
+  - xy: [-1.74, -0.42]
+  - xy: [-0.39, 0.08]
+  - xy: [-0.36, 1.90]
+  - xy: [-0.34, 3.73]
+  - xy: [0.26, 4.78]
+    scan_turns: 0.75
+  - xy: [1.51, 4.98]
+    scan_turns: 0.5
+  - xy: [-0.14, 3.98]
+  - xy: [-0.44, 3.18]
+  - xy: [-0.29, 0.28]
+  - xy: [0.01, -0.02]
+    scan_turns: 1.0

@@ -58,15 +58,22 @@ git lfs install
 ./scripts/build.sh
 ```
 
-## 1. 手动建立实际八路地图
+## 1. 建立实际八路地图
 
-建图必须在交互终端中执行：
+推荐使用经过同场景参考占据图校核的自动闭环覆盖路线：
 
 ```bash
-./scripts/run_mapping.sh --map kujiale_jackal_8cam --interactive
+./scripts/run_mapping.sh --map kujiale_jackal_8cam --auto --headless
 ```
 
-脚本打开 Isaac Sim GUI，启动 `mapping_8cam`、cuVSLAM 和 nvblox。使用 `W/S` 前后、`A/D` 转向、`Space` 急停；松键超过 0.18 秒会自动停车，按 `Q` 停车并保存。
+旧占据图只用于选择无碰撞行驶折线，不会复制到结果中。最终地图仍由本次实时四 Hawk
+八路 MCAP、cuVSLAM/cuVGL 和 front Hawk 深度 nvblox 全流程生成。需要人工覆盖时使用：
+
+```bash
+./scripts/run_mapping.sh --map kujiale_jackal_8cam --interactive --gui
+```
+
+人工模式使用 `W/S` 前后、`A/D` 转向、`Space` 急停；松键超过 0.18 秒会自动停车，按 `Q` 停车并保存。自动模式只发非负线速度，并检查闭环完成度、cuVSLAM 跟踪、横向偏差和 PhysX 接触。
 
 流程会临时录制 8 路同步 MCAP，从同一份数据生成 cuVSLAM 与 cuVGL 地图，并保存 nvblox、mesh、occupancy 和冻结配置。只有全部步骤成功后才删除 raw bag 与离线中间产物。默认输出：
 

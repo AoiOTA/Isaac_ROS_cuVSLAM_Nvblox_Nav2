@@ -7,20 +7,41 @@ source "${SCRIPT_DIR}/lib/common.sh"
 load_ros
 
 MAP_NAME="kujiale_jackal_8cam"
-INTERACTIVE="false"
+MAPPING_MODE=""
+SIM_MODE=""
+COVERAGE_CONFIG="${PROJECT_ROOT}/config/mapping_coverage.yaml"
 while (($#)); do
   case "$1" in
     --map) MAP_NAME="${2:?missing map name}"; shift 2 ;;
-    --interactive) INTERACTIVE="true"; shift ;;
+    --interactive)
+      [[ -z "${MAPPING_MODE}" ]] || die "choose exactly one of --interactive or --auto"
+      MAPPING_MODE="interactive"; shift ;;
+    --auto)
+      [[ -z "${MAPPING_MODE}" ]] || die "choose exactly one of --interactive or --auto"
+      MAPPING_MODE="auto"; shift ;;
+    --gui|--headless) SIM_MODE="$1"; shift ;;
+    --coverage-config) COVERAGE_CONFIG="${2:?missing coverage config}"; shift 2 ;;
     -h|--help)
-      echo "Usage: ./scripts/run_mapping.sh [--map NAME] --interactive"
-      echo "Starts the GUI and four-Hawk/eight-stream mapper; drive with WASD and press Q to save."
+      echo "Usage: ./scripts/run_mapping.sh [--map NAME] (--interactive | --auto) [--gui | --headless]"
+      echo "Interactive mode uses WASD/Q; auto mode follows the checked closed-loop coverage route."
       exit 0 ;;
     *) die "unknown argument: $1" ;;
   esac
 done
-[[ "${INTERACTIVE}" == "true" ]] || die "manual mapping requires --interactive"
-[[ -t 0 ]] || die "manual mapping requires an interactive terminal"
+[[ -n "${MAPPING_MODE}" ]] || die "mapping requires exactly one of --interactive or --auto"
+if [[ -z "${SIM_MODE}" ]]; then
+  if [[ "${MAPPING_MODE}" == "interactive" ]]; then
+    SIM_MODE="--gui"
+  else
+    SIM_MODE="--headless"
+  fi
+fi
+if [[ "${MAPPING_MODE}" == "interactive" ]]; then
+  [[ -t 0 ]] || die "manual mapping requires an interactive terminal"
+  [[ "${SIM_MODE}" == "--gui" ]] || die "manual mapping requires --gui"
+else
+  require_file "${COVERAGE_CONFIG}"
+fi
 [[ "${MAP_NAME}" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || die "invalid map name"
 
 MAP_DIR="${PROJECT_ROOT}/data/maps/${MAP_NAME}"
@@ -68,9 +89,9 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-info "Starting Kujiale GUI with mapping_8cam in ROS domain ${ROS_DOMAIN_ID}"
+info "Starting Kujiale ${SIM_MODE#--} with mapping_8cam in ROS domain ${ROS_DOMAIN_ID}"
 setsid "${ISAAC_SIM_PYTHON}" "${PROJECT_ROOT}/isaac_sim/navigation_sim.py" \
-  --gui --duration 0 --camera-profile mapping_8cam --reliable-sensor-qos \
+  "${SIM_MODE}" --duration 0 --camera-profile mapping_8cam --reliable-sensor-qos \
   --stop-file "${SIM_STOP}" --report "${LOG_DIR}/simulator.json" \
   >"${LOG_DIR}/simulator.log" 2>&1 & SIM_PID=$!
 for _ in {1..360}; do
@@ -133,8 +154,16 @@ setsid ros2 bag record --storage mcap --storage-preset-profile fastwrite \
 sleep 2
 process_alive "${BAG_PID}" || die "rosbag recorder exited; see ${LOG_DIR}/rosbag.log"
 
-info "Manual mapping ready: W/S forward/back, A/D rotate, Space stop, Q save and exit"
-ros2 run jackal_teleop keyboard_teleop
+if [[ "${MAPPING_MODE}" == "interactive" ]]; then
+  info "Manual mapping ready: W/S forward/back, A/D rotate, Space stop, Q save and exit"
+  ros2 run jackal_teleop keyboard_teleop
+else
+  info "Automated mapping ready: following the collision-clear closed-loop coverage route"
+  ros2 run jackal_experiments mapping_coverage_driver --ros-args \
+    -p use_sim_time:=true -p config_path:="${COVERAGE_CONFIG}" \
+    -p report_path:="${LOG_DIR}/coverage.json" \
+    >"${LOG_DIR}/coverage.log" 2>&1
+fi
 
 info "Stopping and indexing the four-Hawk/eight-stream MCAP"
 stop_group "${BAG_PID}"
@@ -155,6 +184,13 @@ stop_group "${BRINGUP_PID}"
 BRINGUP_PID=""
 stop_simulator
 SIM_PID=""
+
+mapping_validation_args=("${LOG_DIR}/simulator.json")
+if [[ "${MAPPING_MODE}" == "auto" ]]; then
+  mapping_validation_args+=(--coverage-report "${LOG_DIR}/coverage.json")
+fi
+python3 "${PROJECT_ROOT}/tools/validate_mapping_run.py" \
+  "${mapping_validation_args[@]}" >"${LOG_DIR}/mapping-validation.json"
 
 "${PROJECT_ROOT}/scripts/export_vgl_models.sh" "${PROJECT_ROOT}/data/models/vgl" \
   >"${LOG_DIR}/model-export.log" 2>&1

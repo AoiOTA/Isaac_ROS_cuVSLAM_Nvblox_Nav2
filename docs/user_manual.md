@@ -21,10 +21,20 @@ git lfs install
 
 ## 2. 第一次建图
 
-确保当前终端可交互、Isaac Sim GUI 没有被其他实例占用，然后运行：
+推荐先运行自动闭环覆盖：
 
 ```bash
-./scripts/run_mapping.sh --map kujiale_jackal_8cam --interactive
+./scripts/run_mapping.sh --map kujiale_jackal_8cam --auto --headless
+```
+
+该模式沿 `config/mapping_coverage.yaml` 的约 38 m 闭环低速行驶，不倒车，并在开放区域
+扫描。参考分支的旧 occupancy 只用于规划路线，绝不会作为新地图输出。八路图像、
+cuVSLAM/cuVGL、nvblox、mesh 和 occupancy 都来自本轮实时运行。
+
+需要人工控制和 GUI 时运行：
+
+```bash
+./scripts/run_mapping.sh --map kujiale_jackal_8cam --interactive --gui
 ```
 
 键位：
@@ -43,6 +53,10 @@ git lfs install
 - 低速覆盖所有房间、门洞和走廊，转弯时给四组 Hawk 留出重叠视野。
 - 回到已走过区域形成闭环后再按 `Q`。
 - 不要直接关闭终端或强杀进程；失败时 raw bag 会保留在忽略目录，便于诊断。
+
+自动和人工模式都会在晋升地图前检查 PhysX 接触。与地面共面的门洞底面只有在低位、
+近竖直法向且接触者是轮子/caster 时才归类为支撑；其他任何机器人非地面接触仍会使
+建图失败并保留现场。
 
 脚本会等待 8 个标准化图像话题，临时录制 MCAP，并保存：
 

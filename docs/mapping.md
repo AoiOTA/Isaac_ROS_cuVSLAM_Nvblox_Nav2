@@ -20,16 +20,36 @@ Jackal LiDAR 明确关闭，模拟器不会创建 LiDAR prim、render product �
 ## 建图命令
 
 ```bash
-./scripts/run_mapping.sh --map kujiale_jackal_8cam --interactive
+./scripts/run_mapping.sh --map kujiale_jackal_8cam --auto --headless
 ```
 
-该脚本有三个硬保护：
+`config/mapping_coverage.yaml` 保存一条约 38 m 的低速闭环覆盖路线。路线只把参考分支中
+同一 USD、同一出生点且经过三次冷启动标定的 occupancy 当作规划依据；旧栅格不会进入
+新地图，产物仍必须来自本轮实时八路 MCAP 与 front Hawk depth。自动驱动会检查：
 
-- 必须显式传入 `--interactive` 且 stdin 是 TTY；
+- 线速度始终非负且不超过 `0.28 m/s`；
+- cuVSLAM 跟踪、路线进度和最大横向偏差；
+- 每个开放区域的定点扫描与最终闭环；
+- simulator 报告中的四 Hawk/八路拓扑、LiDAR 关闭和 PhysX 零碰撞。
+
+人工建图仍可用：
+
+```bash
+./scripts/run_mapping.sh --map kujiale_jackal_8cam --interactive --gui
+```
+
+该脚本的共同硬保护包括：
+
+- 必须显式选择 `--interactive` 或 `--auto`，不能静默选择驾驶方式；
+- 人工模式必须有 TTY 且使用 GUI；
 - 目标地图目录非空时拒绝覆盖；
 - 同一时刻只允许一个 mapping workflow。
 
 GUI 出现后用 `W/S/A/D` 驾驶，`Space` 停车，`Q` 保存。建议缓慢遍历所有目标区域、门洞与走廊，并形成闭环。
+
+酷家乐 `wall_0016` 的开门洞底边包含一片与地面共面的碰撞面。接触统计只在“轮子或
+caster、接触点距标定地面不超过 3 cm、接触法向的竖直分量绝对值至少 0.8”三个条件
+同时满足时把它归为支撑接触；底盘接触、较高接触或水平墙面法向仍按真实碰撞计数。
 
 ## 生成流程
 
