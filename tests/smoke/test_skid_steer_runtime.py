@@ -44,10 +44,16 @@ def test_runtime_defaults_match_reference_and_headless_skips_editor_viewport() -
     simulation = yaml.safe_load((ROOT / "config/simulation.yaml").read_text())
     assert simulation["runtime"]["physics_hz"] == 60
     assert simulation["runtime"]["update_hz"] == 60
+    assert simulation["runtime"]["renderer"] == "RealTimePathTracing"
+    assert simulation["runtime"]["rt2_cached_retrace"] == 0.1
+    assert simulation["runtime"]["fractional_cutout_opacity"] is False
+    assert simulation["runtime"]["dlss_exec_mode"] == 0
+    assert simulation["runtime"]["texture_streaming"] is False
 
     entrypoint = (ROOT / "isaac_sim/navigation_sim.py").read_text()
     assert '"disable_viewport_updates": args.headless' in entrypoint
     assert '"headless_viewport_updates_disabled": bool(args.headless)' in entrypoint
+    assert '"preview_resolution_reduced": False' in entrypoint
 
 
 def test_runtime_overlay_and_graph_preserve_reference_physics_fixes() -> None:

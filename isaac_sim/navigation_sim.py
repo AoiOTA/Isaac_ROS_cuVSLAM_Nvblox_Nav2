@@ -226,7 +226,24 @@ def parse_args() -> argparse.Namespace:
         parser.error("--lock-wait-seconds must be non-negative")
     if args.physics_hz <= 0 or args.update_hz <= 0.0:
         parser.error("physics and update frequencies must be positive")
-    args.renderer = str(runtime["renderer"])
+    try:
+        args.renderer = str(runtime["renderer"])
+        args.rt2_cached_retrace = float(runtime["rt2_cached_retrace"])
+        args.fractional_cutout_opacity = runtime["fractional_cutout_opacity"]
+        args.dlss_exec_mode = int(runtime["dlss_exec_mode"])
+        args.texture_streaming = runtime["texture_streaming"]
+    except (KeyError, TypeError, ValueError) as exc:
+        parser.error(f"invalid renderer configuration: {exc}")
+    if args.renderer != "RealTimePathTracing":
+        parser.error("runtime renderer must be RealTimePathTracing")
+    if not 0.0 < args.rt2_cached_retrace <= 1.0:
+        parser.error("rt2_cached_retrace must be in (0, 1]")
+    if not isinstance(args.fractional_cutout_opacity, bool):
+        parser.error("fractional_cutout_opacity must be boolean")
+    if args.dlss_exec_mode not in (0, 1, 2, 3):
+        parser.error("dlss_exec_mode must be 0, 1, 2, or 3")
+    if not isinstance(args.texture_streaming, bool):
+        parser.error("texture_streaming must be boolean")
     args.spawn_grid_resolution = float(spawn["grid_resolution_m"])
     args.spawn_height = float(spawn["height_above_floor_m"])
     args.spawn_obstacle_height = float(spawn["obstacle_height_m"])
@@ -333,6 +350,14 @@ def run(args: argparse.Namespace) -> int:
             "renderer": args.renderer,
             "width": args.width,
             "height": args.height,
+            "extra_args": [
+                f"--/rtx/pathtracing/cached/retrace={args.rt2_cached_retrace}",
+                "--/rtx/pathtracing/fractionalCutoutOpacity="
+                f"{str(args.fractional_cutout_opacity).lower()}",
+                f"--/rtx/post/dlss/execMode={args.dlss_exec_mode}",
+                "--/rtx-transient/resourcemanager/texturestreaming/enabled="
+                f"{str(args.texture_streaming).lower()}",
+            ],
         }
     )
 
@@ -386,6 +411,18 @@ def run(args: argparse.Namespace) -> int:
         "stage_open_count": 0,
         "config": str(args.config.resolve()),
         "headless_viewport_updates_disabled": bool(args.headless),
+        "rendering": {
+            "mode": args.renderer,
+            "resolution": [args.width, args.height],
+            "rt2_cached_retrace": args.rt2_cached_retrace,
+            "fractional_cutout_opacity": args.fractional_cutout_opacity,
+            "dlss_exec_mode": args.dlss_exec_mode,
+            "dlss_mode_name": ("performance", "balanced", "quality", "auto")[
+                args.dlss_exec_mode
+            ],
+            "texture_streaming": args.texture_streaming,
+            "preview_resolution_reduced": False,
+        },
     }
     environment_before = fingerprint(args.environment_usd)
     robot_before = fingerprint(args.robot_usd)

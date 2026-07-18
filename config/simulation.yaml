@@ -20,7 +20,16 @@ runtime:
   # without increasing the camera cadence.
   physics_hz: 60
   update_hz: 60
-  renderer: RaytracedLighting
+  renderer: RealTimePathTracing
+  # Isaac Sim 6.0.1 performance-handbook profile. These settings preserve
+  # resolution and sensor cadence; only expensive RT2 lighting features are
+  # adjusted. DLSS 0 is the documented Performance mode.
+  rt2_cached_retrace: 0.1
+  fractional_cutout_opacity: false
+  dlss_exec_mode: 0
+  # The local RTX 4090 has sufficient headroom for the handbook's optional
+  # throughput-over-VRAM tradeoff (the full workload uses about 10/24 GiB).
+  texture_streaming: false
   resolution: [1280, 720]
   forbid_stage_switching: true
   project_process_lock: data/locks/navigation_sim.lock
