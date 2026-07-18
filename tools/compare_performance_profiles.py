@@ -31,7 +31,7 @@ def main() -> int:
         "",
         "This report uses adaptive wall-time sampling after the live workload stabilizes. It has no 600-frame baseline and no pass/fail comparison with documentation example output.",
         "",
-        "| Workload | Cameras | Mean FPS | RTF | App mean ms | Physics mean ms | GPU mean % | GPU memory mean MiB |",
+        "| Workload | Image streams | Mean FPS | RTF | App mean ms | Physics mean ms | GPU mean % | GPU memory mean MiB |",
         "|---|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for profile in profiles:

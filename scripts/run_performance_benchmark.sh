@@ -38,7 +38,7 @@ while (($#)); do
     --telemetry-period-s) TELEMETRY_PERIOD="${2:?missing value}"; shift 2 ;;
     -h|--help)
       echo "Usage: ./scripts/run_performance_benchmark.sh [--profile all|mapping_8cam|navigation_6cam] [--map NAME] [adaptive wall-time options]"
-      echo "Mapping records a temporary 8-camera MCAP; navigation cycles real goals."
+      echo "Mapping records a temporary four-Hawk/eight-image-stream MCAP; navigation cycles real goals."
       echo "No frame-count baseline or documentation KPI gate is applied."
       exit 0 ;;
     *) die "unknown argument: $1" ;;

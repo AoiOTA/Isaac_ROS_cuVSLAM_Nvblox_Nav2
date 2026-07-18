@@ -14,7 +14,7 @@ while (($#)); do
     --interactive) INTERACTIVE="true"; shift ;;
     -h|--help)
       echo "Usage: ./scripts/run_mapping.sh [--map NAME] --interactive"
-      echo "Starts the GUI and 8-camera mapper; drive with WASD and press Q to save."
+      echo "Starts the GUI and four-Hawk/eight-stream mapper; drive with WASD and press Q to save."
       exit 0 ;;
     *) die "unknown argument: $1" ;;
   esac
@@ -79,7 +79,7 @@ for _ in {1..360}; do
   sleep 0.5
 done
 grep -Fq "camera_profile=mapping_8cam streams=8 lidar=false" "${LOG_DIR}/simulator.log" || \
-  die "8-camera simulator startup timed out"
+  die "four-Hawk/eight-stream simulator startup timed out"
 
 BRINGUP_SHARE="$(ros2 pkg prefix jackal_bringup --share)"
 setsid ros2 launch jackal_bringup phase6.launch.py \
@@ -136,7 +136,7 @@ process_alive "${BAG_PID}" || die "rosbag recorder exited; see ${LOG_DIR}/rosbag
 info "Manual mapping ready: W/S forward/back, A/D rotate, Space stop, Q save and exit"
 ros2 run jackal_teleop keyboard_teleop
 
-info "Stopping and indexing the 8-camera MCAP"
+info "Stopping and indexing the four-Hawk/eight-stream MCAP"
 stop_group "${BAG_PID}"
 BAG_PID=""
 ros2 bag info "${BAG_DIR}" >"${LOG_DIR}/rosbag-info.txt"

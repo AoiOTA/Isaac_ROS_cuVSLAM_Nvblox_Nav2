@@ -167,6 +167,11 @@ valid_trial_count >= 20
 - GPU utilization、memory、power、temperature
 - `host_context.cpu_governors` 和 NVIDIA driver
 
+保持 1280×720 GUI 预览、四组 Hawk/八路图像和实际 ROS 工作负载的本机最终观测为
+22.732 FPS / 0.379 RTF，短窗口最好值为 23.697 / 0.395。它们是本次 RTX 4090 的实际范围，
+不是验收阈值。优化配置、官方依据和被回退的实验见
+[performance_optimization.md](performance_optimization.md)。
+
 ## 7. 结果与停止
 
 | 路径 | 内容 |

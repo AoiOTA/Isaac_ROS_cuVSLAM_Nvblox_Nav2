@@ -1,4 +1,4 @@
-# Kujiale Jackal 8-Camera Visual Navigation
+# Kujiale Jackal 4-Hawk / 8-Image-Stream Visual Navigation
 
 本分支面向 Ubuntu 24.04、ROS 2 Jazzy、Isaac Sim 6.0.1、Isaac ROS 4.5 和 RTX 4090，将仿真环境替换为酷家乐房间、机器人替换为 Clearpath Jackal，并安装四组 Hawk 双目。
 
@@ -10,7 +10,7 @@
 |---|---|
 | 场景 | `kujiale_0026_A_to_B_door_open.usd`，只打开一次 |
 | 机器人 | Clearpath Jackal，四轮滑移转向 |
-| 传感器 | front / left / right / back 四组 Hawk，共 8 路 RGB |
+| 传感器 | front / left / right / back 四组 Hawk 双目，共 8 路 RGB 图像流 |
 | 建图 | `mapping_8cam`：8 路全部发布并参与 cuVSLAM/cuVGL 建图 |
 | 导航 | `navigation_6cam`：只发布 front / left / right，后向 render product 和 ROS publisher 均不创建 |
 | nvblox | 只使用 front Hawk 左目产生的原生模拟深度，不使用 lidar、ESS 或 FoundationStereo |
@@ -145,6 +145,10 @@ python3 tools/validate_acceptance_routes.py \
 
 文档中的 benchmark Summary Report 仅是格式示例，本项目不会拿其中数值作通过门槛，也没有固定 600 帧停止条件。CPU governor、驱动和硬件信息会随报告记录；脚本不会擅自修改系统 governor。
 
+本机保持 1280×720 GUI 跟随视口、四组 Hawk/八路图像和完整 ROS 工作负载时，最终 30 秒稳定采样为
+22.732 FPS / 0.379 RTF；短窗口最好观测为 23.697 / 0.395。完整 A/B、官方依据、未采用方案和复测方法见
+[RTX 4090 性能优化与实测](docs/performance_optimization.md)。
+
 ## 5. Git 与运行产物
 
 只有 `data/maps/kujiale_jackal_8cam` 的运行时地图允许进入版本库，其中二进制、图像、nvblox 和 mesh 由 Git LFS 管理。raw `.mcap`/`.db3`、离线工作目录、TensorRT cache、日志、实验 run 和报告默认忽略。
@@ -169,6 +173,7 @@ colcon test-result --verbose
 - [用户操作手册](docs/user_manual.md)
 - [架构与 TF 所有权](docs/architecture.md)
 - [建图与地图产物](docs/mapping.md)
+- [RTX 4090 性能优化与实测](docs/performance_optimization.md)
 - [重要文件索引](docs/file_index.md)
 
 旧的 phase9–phase11 动态实验脚本和验证文档保留用于历史回溯，但不属于本分支支持范围；正式入口仅以上述命令为准。

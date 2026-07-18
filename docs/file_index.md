@@ -6,9 +6,9 @@
 |---|---|
 | `config/assets.yaml` | 酷家乐、Jackal、Hawk 的固定路径、default prim 与 SHA-256 |
 | `config/environment.env` | Isaac Sim、ROS 2、Isaac ROS 与 DDS 环境 |
-| `config/simulation.yaml` | 单次 stage、固定出生点、120 Hz physics/update |
+| `config/simulation.yaml` | 单次 stage、固定出生点、60 Hz physics/update 与 RTX 4090 RT2 配置 |
 | `config/control.yaml` | 有效轮距、四轮关节、速度限制、PhysX、idle brake、motion assist |
-| `config/sensors.yaml` | 四组 Hawk prim、8 路话题、分辨率、频率和外参 |
+| `config/sensors.yaml` | 四组 Hawk prim、8 路图像话题、分辨率、频率和外参 |
 | `config/acceptance.yaml` | 静态 20 次 / 95% 口径、候选目标、路线验证和自适应性能策略 |
 | `.gitattributes` | `kujiale_jackal_8cam` 运行时地图的 Git LFS 规则 |
 | `.gitignore` | raw bag、中间产物、模型 cache、日志、run 和其他地图排除规则 |
@@ -58,13 +58,15 @@
 |---|---|
 | `scripts/build.sh` | 环境、资产、语法与 ROS build 检查 |
 | `scripts/run_sim.sh` | 单独启动 GUI/headless simulator，可选 camera profile |
-| `scripts/run_mapping.sh` | 手动 8 路建图，完整成功后清理 raw/intermediate |
+| `scripts/run_mapping.sh` | 手动四组 Hawk / 8 路图像建图，完整成功后清理 raw/intermediate |
 | `scripts/create_vgl_map.sh` | 从临时 MCAP 生成对齐的 cuVSLAM/cuVGL runtime map |
 | `scripts/run_navigation.sh` | 检查 manifest 并启动 6 路 ROS 导航 |
 | `scripts/run_all.sh` | 启动 simulator + ROS 导航 + 自动路线 runner |
 | `scripts/run_static_trial.sh` | 一次静态有效/无效实验与最终分类 |
 | `scripts/run_static_acceptance.sh` | 至少 20 次、95% 的静态批次 |
 | `scripts/run_performance_benchmark.sh` | 真实 8 路/6 路负载的自适应性能观测 |
+
+性能配置依据、A/B 数据和回退实验见 `docs/performance_optimization.md`。
 
 ## 地图、验收与性能工具
 

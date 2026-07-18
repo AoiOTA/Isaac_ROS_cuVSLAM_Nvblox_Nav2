@@ -64,7 +64,7 @@ def bag_summary(path: Path) -> dict[str, object]:
     }
     missing = [topic for topic in MAPPING_IMAGE_TOPICS if topics.get(topic, 0) <= 0]
     if missing:
-        raise RuntimeError(f"8-camera mapping bag has empty image topics: {missing}")
+        raise RuntimeError(f"four-Hawk/eight-stream mapping bag has empty image topics: {missing}")
     return {
         "storage_identifier": information.get("storage_identifier"),
         "message_count": int(information.get("message_count", 0)),
