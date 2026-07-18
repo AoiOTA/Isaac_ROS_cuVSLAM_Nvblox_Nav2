@@ -24,6 +24,7 @@ class SensorGraphSummary:
     active_pairs: tuple[str, ...]
     active_image_streams: int
     rear_render_products_created: bool
+    lidar_enabled: bool
     camera_prims: dict[str, dict[str, str]]
     stereo_resolution: tuple[int, int]
     depth_resolution: tuple[int, int]
@@ -276,6 +277,8 @@ def create_sensor_graphs(
 ) -> SensorGraphSummary:
     if camera_profile not in CAMERA_PROFILES:
         raise ValueError(f"unknown camera profile: {camera_profile}")
+    if sensor.get("lidar_enabled") is not False:
+        raise RuntimeError("Jackal LiDAR must remain disabled; only Hawk sensors are supported")
     active_pairs = CAMERA_PROFILES[camera_profile]
     _configure_sensor_rates(stage, sensor, active_pairs)
     graph_paths = [_create_stereo_graph(sensor, name) for name in active_pairs]
@@ -294,6 +297,7 @@ def create_sensor_graphs(
         active_pairs=active_pairs,
         active_image_streams=2 * len(active_pairs),
         rear_render_products_created="back" in active_pairs,
+        lidar_enabled=False,
         camera_prims=camera_prims,
         stereo_resolution=(int(front["image_width"]), int(front["image_height"])),
         depth_resolution=(int(front["depth_width"]), int(front["depth_height"])),

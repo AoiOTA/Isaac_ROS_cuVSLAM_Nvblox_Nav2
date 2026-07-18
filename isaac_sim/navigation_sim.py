@@ -258,6 +258,8 @@ def parse_args() -> argparse.Namespace:
         for key in ("front_stereo", "topics", "frames", "extrinsics"):
             if not isinstance(args.sensor.get(key), dict):
                 raise ValueError(f"sensor config entry {key!r} must be a mapping")
+        if args.sensor.get("lidar_enabled") is not False:
+            raise ValueError("Jackal LiDAR must be explicitly disabled")
         if (args.front_image_width is None) != (args.front_image_height is None):
             raise ValueError(
                 "--front-image-width and --front-image-height must be supplied together"
@@ -660,7 +662,8 @@ def run(args: argparse.Namespace) -> int:
         ready_fields = (
             f"mode={report['mode']} spawn=({spawn.x:.3f},{spawn.y:.3f},{spawn.z:.3f}) "
             f"control={not args.disable_ros_control} sensors={not args.disable_sensors} "
-            f"camera_profile={args.camera_profile} streams={8 if args.camera_profile == 'mapping_8cam' else 6}"
+            f"camera_profile={args.camera_profile} streams={8 if args.camera_profile == 'mapping_8cam' else 6} "
+            "lidar=false"
         )
         print(f"JACKAL_CONTROL_READY {ready_fields}", flush=True)
         print(f"JACKAL_SENSORS_READY {ready_fields}", flush=True)

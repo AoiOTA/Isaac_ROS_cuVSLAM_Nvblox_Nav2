@@ -25,7 +25,8 @@ visual_slam_node:
     enable_localization_n_mapping: true
     multicam_mode: 1
     sync_matching_threshold_ms: 40.0
-    image_jitter_threshold_ms: 51.0
+    # 10 Hz images are nominally 100 ms apart; tolerate scheduling jitter.
+    image_jitter_threshold_ms: 151.0
     imu_jitter_threshold_ms: 10.0
     image_buffer_size: 160
     imu_buffer_size: 400

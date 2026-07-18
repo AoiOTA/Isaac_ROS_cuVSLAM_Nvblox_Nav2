@@ -1,3 +1,5 @@
+lidar_enabled: false
+
 front_stereo:
   left_camera_prim: /World/Jackal/base_link/sensors/front_hawk/left/camera_left
   right_camera_prim: /World/Jackal/base_link/sensors/front_hawk/right/camera_right

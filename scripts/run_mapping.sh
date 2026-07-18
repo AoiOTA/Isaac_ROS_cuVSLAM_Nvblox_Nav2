@@ -78,7 +78,7 @@ for _ in {1..360}; do
   process_alive "${SIM_PID}" || die "simulator exited; see ${LOG_DIR}/simulator.log"
   sleep 0.5
 done
-grep -Fq "camera_profile=mapping_8cam streams=8" "${LOG_DIR}/simulator.log" || \
+grep -Fq "camera_profile=mapping_8cam streams=8 lidar=false" "${LOG_DIR}/simulator.log" || \
   die "8-camera simulator startup timed out"
 
 BRINGUP_SHARE="$(ros2 pkg prefix jackal_bringup --share)"
@@ -87,7 +87,7 @@ setsid ros2 launch jackal_bringup phase6.launch.py \
   visual_slam_params:="${BRINGUP_SHARE}/config/visual_slam_mapping_8cam.yaml" \
   >"${LOG_DIR}/bringup.log" 2>&1 & BRINGUP_PID=$!
 
-info "Waiting for all eight normalized image publishers and nvblox services"
+info "Waiting for eight live normalized images, CameraInfo, and nvblox"
 IMAGE_TOPICS=()
 CAMERA_INFO_TOPICS=()
 for pair in front left right back; do
@@ -96,23 +96,34 @@ for pair in front left right back; do
     CAMERA_INFO_TOPICS+=("/${pair}_stereo_camera/${side}/camera_info")
   done
 done
+for topic in "${IMAGE_TOPICS[@]}"; do
+  process_alive "${BRINGUP_PID}" || die "mapping bringup exited; see ${LOG_DIR}/bringup.log"
+  ros2 topic echo --no-daemon --once --no-arr --timeout 30 \
+    "${topic}" sensor_msgs/msg/Image >/dev/null || \
+    die "mapping image has no live sample: ${topic}"
+done
+for topic in "${CAMERA_INFO_TOPICS[@]}"; do
+  process_alive "${BRINGUP_PID}" || die "mapping bringup exited; see ${LOG_DIR}/bringup.log"
+  ros2 topic echo --no-daemon --once --no-arr --timeout 30 \
+    "${topic}" sensor_msgs/msg/CameraInfo >/dev/null || \
+    die "mapping CameraInfo has no live sample: ${topic}"
+done
+service_ready="false"
 for _ in {1..360}; do
-  topic_list="$(ros2 topic list --no-daemon --spin-time 2 2>/dev/null || true)"
-  topics_ready="true"
-  for topic in "${IMAGE_TOPICS[@]}"; do
-    grep -Fxq "${topic}" <<<"${topic_list}" || topics_ready="false"
-  done
-  if [[ "${topics_ready}" == "true" ]] \
-    && ros2 service type /nvblox_node/save_map 2>/dev/null | grep -Fq FilePath; then
+  if ros2 service type /nvblox_node/save_map 2>/dev/null | grep -Fq FilePath; then
+    service_ready="true"
     break
   fi
   process_alive "${BRINGUP_PID}" || die "mapping bringup exited; see ${LOG_DIR}/bringup.log"
   sleep 0.5
 done
-topic_list="$(ros2 topic list --no-daemon --spin-time 3 2>/dev/null || true)"
-for topic in "${IMAGE_TOPICS[@]}"; do
-  grep -Fxq "${topic}" <<<"${topic_list}" || die "mapping topic is missing: ${topic}"
-done
+[[ "${service_ready}" == "true" ]] || die "nvblox save service startup timed out"
+ros2 topic echo --no-daemon --once --timeout 30 \
+  /visual_slam/status isaac_ros_visual_slam_interfaces/msg/VisualSlamStatus >/dev/null || \
+  die "cuVSLAM status has no live sample"
+ros2 topic echo --no-daemon --once --timeout 30 \
+  /nvblox_node/static_map_slice nvblox_msgs/msg/DistanceMapSlice >/dev/null || \
+  die "nvblox static map slice has no live sample"
 
 BAG_TOPICS=("${IMAGE_TOPICS[@]}" "${CAMERA_INFO_TOPICS[@]}" \
   /front_stereo_imu/imu /tf /tf_static /clock)

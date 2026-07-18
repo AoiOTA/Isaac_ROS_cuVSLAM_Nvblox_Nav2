@@ -104,8 +104,9 @@ def main() -> int:
         "Kujiale collision prims were not discovered",
     )
     require(
-        repairs.get("physics_material_binding_root") == "/Root",
-        "Kujiale physics material is not bound at the environment root",
+        repairs.get("source_physics_material_preserved") is True
+        and repairs.get("physics_material_binding_root") is None,
+        "Kujiale source contact material was overridden",
     )
 
     hawk_pairs = composition.get("hawk_rig", {}).get("pairs", {})
@@ -123,6 +124,9 @@ def main() -> int:
             ),
             f"{name} Hawk prim paths are invalid",
         )
+
+    sensors = report.get("sensor_graphs", {})
+    require(sensors.get("lidar_enabled") is False, "Jackal LiDAR was not disabled")
 
     spawn = composition.get("spawn", {})
     require(spawn.get("floor_count") == 1, "fixed spawn has no supporting floor")
