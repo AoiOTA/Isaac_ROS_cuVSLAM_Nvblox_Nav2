@@ -1,227 +1,113 @@
-# Architecture
+# 架构与所有权
 
-## Runtime composition
+## 仿真组合
 
-The simulator opens the fixed warehouse USD once, references the official Nova Carter main USD into the session layer, and creates project-owned OmniGraphs at runtime. The official ROS sample USD is never loaded.
+`isaac_sim/navigation_sim.py` 是正式 Standalone 入口。它先创建 `SimulationApp`，再执行：
 
-The intended pipeline is:
+1. 只打开一次酷家乐 `/Root` stage；
+2. 在匿名 session layer 引用 `/World/Jackal`；
+3. 在 Jackal `base_link` 下引用 front、left、right、back 四组 Hawk；
+4. 写入轮地物理、碰撞与求解迭代 overlay；
+5. 创建项目拥有的控制、Clock、JointState、GroundTruth 和传感器图；
+6. 启动 contact monitor、idle brake 与有界 skid-steer motion assist；
+7. 检查 stage identity、仿真时间单调性、重叠、碰撞和三个官方资产指纹；
+8. 写 JSON 报告后关闭。
+
+组合 stage 永不保存，源 USD 永不修改。固定 USD 出生点为 `[2.9, -0.2, 0.0635]`、yaw `180°`；视觉地图启动坐标为 map `[0, 0, 0]`。
+
+## 相机 profile
+
+| Profile | front | left | right | back | RGB 总数 | 用途 |
+|---|---:|---:|---:|---:|---:|---|
+| `mapping_8cam` | 2 | 2 | 2 | 2 | 8 | 手动建图、离线 cuVSLAM/cuVGL |
+| `navigation_6cam` | 2 | 2 | 2 | 0 | 6 | 定位与导航 |
+
+导航 profile 不为 back Hawk 创建 render product，因而不是“发布后丢弃”或“ROS 侧不订阅”。front 原生 depth 与 IMU 在两个 profile 中均启用。
+
+## TF 所有权
 
 ```text
-Isaac Sim Standalone
-  -> stereo / depth / IMU / clock
-  -> cuVSLAM
-  -> nvblox
-  -> Visual Global Localization
-  -> Nav2
-  -> guarded cmd_vel
-  -> two-wheel differential controller
+map -> odom -> base_link -> four Hawk optical frames + front IMU + wheels
 ```
 
-## TF ownership
+- `robot_state_publisher` 独占 `base_link` 以下固定 TF。
+- cuVSLAM 发布跟踪里程计；导航时关闭其直接 `map -> odom`，由 `navigation_tf_bridge` 组合 VGL map anchor 与 cuVSLAM odom 后独占发布。
+- wheel odometry 与 `/ground_truth/odometry` 不发布主 TF，也不作为正式定位输入。
+- nvblox 在 `odom` 中重建，occupancy map 在 `map` 中供全局规划。
+
+## 感知与定位
 
 ```text
-map -> odom -> base_link -> sensors and wheel frames
+8 RGB mapping ──> ImageFormatConverter x8 ──> cuVSLAM map
+                                         └─> offline cuVGL map
+
+6 RGB navigation ──> cuVSLAM tracking
+                  └─> cuVGL relocalization ──> map anchor
+
+front 32FC1 depth ──> nvblox static TSDF/ESDF/static_map_slice
+                   └─> raw LaserScan ──> Collision Monitor
+                   └─> TF-aligned scan/points ──> Nav2 obstacle layers
 ```
 
-- Phases 5–8 use cuVSLAM-derived main TF edges as described below.
-- Phase 9 navigation makes `navigation_tf_bridge` the sole `map -> odom`
-  publisher and `visual_wheel_ekf` the sole `odom -> base_link` publisher.
-- robot_state_publisher owns the tree below `base_link`.
-- VGL, wheel odometry, and ground truth do not publish competing TF edges.
+所有 Hawk 相机在 session layer 中使用与 `rectified_images=true` 一致的 pinhole 投影。源 Hawk USD 保持不变。图像为 `1280×800 @ 10 Hz`，front depth 为 `640×400 @ 10 Hz`，front IMU 为 `120 Hz`。
 
-## Initial integration order
+nvblox 配置为 `static_tsdf`、5 cm voxel、2D ESDF，深度集成 10 Hz、颜色 3 Hz、ESDF 10 Hz；只接 front native depth，不使用 lidar 或双目深度网络。
 
-The project first targets a front-stereo static-map MVP. Four-direction VGL, dynamic nvblox, lighting variation, and statistical acceptance are added only after the end-to-end mapping/localization/navigation loop works.
-
-## Implemented Phase 3 control boundary
+## 导航与控制
 
 ```text
-/cmd_vel_safe
-  -> Command Guard (finite check, planar projection, slew limits, watchdog)
+occupancy map ──> global Static/Obstacle/Inflation costmap
+nvblox slice + front scan ──> local Nvblox/Obstacle/Inflation costmap
+
+SmacPlanner2D
+  -> MPPI DiffDrive (10 Hz, 20 x 0.1 s, batch 500, vx 0..0.75)
+  -> /cmd_vel_nav_raw
+  -> Velocity Smoother
+  -> /cmd_vel_smoothed
+  -> Collision Monitor
+  -> /cmd_vel_safe
+  -> Command Guard
   -> /cmd_vel_sim
-  -> runtime DifferentialController
-  -> runtime IsaacArticulationController
-  -> [joint_wheel_left, joint_wheel_right]
+  -> four-wheel DifferentialController on every physics step
 ```
 
-The runtime graphs are `/World/Graphs/Clock`, `DifferentialDrive`, `JointState`, and `GroundTruth`. JointState uses the Isaac Sim 6.0 `IsaacReadJointState` sensor-output path. Ground truth publishes only an Odometry message in `sim_world`; it never enters the navigation TF tree. The ROS wheel odometry node integrates only the two driven wheels and also publishes no TF.
+MPPI 的 `vx_min=0.0`，Velocity Smoother 的最小线速度也是 0。Behavior Server 只注册 Spin 和 Wait，`navigate_forward_only.xml` 没有 BackUp 或 DriveOnHeading。
 
-## Implemented Phase 4 sensor boundary
+Command Guard 做 finite/平面化、速度/加速度/jerk、定位与感知新鲜度以及 0.25 秒 watchdog。Collision Monitor 保留 Stop、Slowdown 和 footprint approach 区域。
+
+## Jackal 滑移转向
+
+四个轮子仍由差速目标和 PhysX 接触驱动。由于各向同性接触会让四轮 skid-steer 弧线严重欠转，运行时增加参考分支标定的受限平面速度修正：
+
+- 几何轮距：`0.37559 m`，只描述 USD/URDF 轮心；
+- 控制与 wheel odometry 有效轮距：`0.800 m`；
+- motion assist 命令超时：`0.25 s`；
+- 最大修正带宽：线 `6.0 m/s²`、角 `30.0 rad/s²`；
+- Isaac 内层硬保护：线/角速度 `1.0 m/s` / `1.5 rad/s`，轮速 `15 rad/s`，线/角加速度 `2.0 m/s²` / `6.0 rad/s²`；
+- 正常导航命令仍由较低的 `1.1 m/s²` / `3.0 rad/s²` 约束；
+- 无命令、零命令或超时后 idle brake 清零 base/轮速并让 base 进入 sleep；
+- motion assist 不绕过 Command Guard、Collision Monitor、超时或正式实验倒车判定。
+
+这些参数固定对照参考分支 `caae0c08a451544ec0362df12da165fdc8d75676` 的 skid-steer 复盘。酷家乐复盘中的只读 overlay、米制/Z-up/唯一 PhysicsScene、double-sided 墙面和地图/出生点配对原则同样保留；RTX LiDAR 专项处理不适用于当前 Hawk 原生深度链，死胡同 BackUp 例外也因本项目要求导航完全不倒车而没有引入。
+
+## 验收数据流
 
 ```text
-front Hawk left/right cameras
-  -> runtime FrontStereo (RGB + stereo CameraInfo, 1280x800 @ 30 Hz)
-  -> Isaac ROS ImageFormatConverterNode x2
-  -> mono8 left/right
-
-front Hawk left camera -> runtime FrontDepth (32FC1 meters, 640x400 @ 30 Hz)
-front Hawk IMU -> runtime FrontImu (physics step @ 120 Hz)
+navigation_test_runner result + command trace
+simulator time/profile/contact report
+immutable trial metadata
+  -> finalize_static_trial.py
+  -> passed / valid failed / infrastructure invalid
+  -> summarize_static_avoidance.py
+  -> collision-free passages / valid trials
 ```
 
-`Clock` and `FrontImu` use on-demand physics-step graphs; camera and depth graphs use render products at the camera's authored 30 Hz tick rate. All sensor publishers use Best-Effort SensorData QoS. The simplified Xacro contains the USD-extracted 0.15 m stereo baseline, optical-frame rotations, IMU mount, active wheels, and passive caster chain. Only robot_state_publisher owns TF below `base_link`.
+runner 一旦被调用，本轮就是有效实验；之后所有失败留在分母。runner 调用前的启动失败单独报告和重跑。20 次有效实验至少需要 19 次完整成功。
 
-## Implemented Phase 5 localization boundary
+Ground truth 仅用于验证最小实际运动和轨迹证据，不反馈给定位、规划或控制。
 
-```text
-front stereo RGB -> ImageFormatConverterNode x2 -> mono8
-mono8 + stereo CameraInfo + front IMU -> cuVSLAM VIO
-cuVSLAM -> map→odom→base_link + tracking odometry/status + map services
-```
+## 性能观测
 
-The official Hawk assets use the legacy `fisheyePolynomial` projection. Isaac Sim 6.0.1 renders that distortion but its stereo CameraInfo helper reports zero distortion, which is not a valid `rectified_images=true` input. The simulator therefore overrides only the two front navigation cameras to zero-distortion pinhole in the anonymous session layer before creating render products. The source USD remains unchanged. The 0.15 m stereo baseline remains encoded by the right CameraInfo projection matrix and the robot_state_publisher transform.
+`AdaptiveOfficialBenchmark` 使用 Isaac Sim 6.0.1 的 App、Physics、CPU、Memory 和 Hardware 官方 recorders。外部采样器同时统计 simulator 与 ROS 进程树、系统内存和 `nvidia-smi` 指标。
 
-`visual_slam.launch.py` composes both GPU converters and cuVSLAM in a single multithreaded container with intra-process communication for normalized images. cuVSLAM uses the front stereo pair and IMU, publishes both main TF edges, enables mapping, and exposes save/load/get-all-poses services. Wheel odometry and simulator ground truth remain observation-only and never enter the main TF tree.
-
-## Implemented Phase 6 reconstruction boundary
-
-```text
-native 32FC1 depth + depth CameraInfo ─┐
-front-left RGB + color CameraInfo ─────┼→ nvblox static TSDF in odom
-cuVSLAM/robot-state-publisher TF ──────┘     ├→ TSDF/color layers
-                                              ├→ Mesh
-                                              ├→ static 2D ESDF
-                                              ├→ static_map_slice
-                                              └→ .nvblx / .ply
-```
-
-`nvblox.launch.py` creates a project-owned multithreaded component container and loads `nvblox::NvbloxNode`. It uses one camera, 5 cm voxels, no lidar, native simulated depth, 30 Hz configured depth integration, 5 Hz color integration, 10 Hz ESDF update and 1 Hz mesh/layer output. `global_frame=odom` matches the future Nav2 local rolling costmap and avoids loop-closure discontinuities inside the reconstruction frame.
-
-The 2D ESDF spans 0.09–0.65 m and is published as both a pointcloud and `DistanceMapSlice`. In nvblox 4.5 the dense `get_esdf_and_gradient` service is 3D-only, so it is deliberately not called in this configuration. Map, PLY, rates and timings are saved through actual nvblox services.
-
-## Implemented Phase 8 navigation boundary
-
-```text
-cuVGL pose -> /visual_slam/initial_pose -> cuVSLAM map localization
-cuVSLAM slam_path + tracking odometry -> current-time map->odom adapter
-native depth -> raw LaserScan -> Collision Monitor
-native depth -> TF-synchronized odom PointCloud2 -> local ObstacleLayer
-nvblox static_map_slice -> local NvbloxCostmapLayer
-occupancy map -> global StaticLayer
-
-SmacPlanner2D -> MPPI(DiffDrive) -> /cmd_vel_nav_raw
-  -> Velocity Smoother -> /cmd_vel_smoothed
-  -> Collision Monitor -> /cmd_vel_safe
-  -> navigation-health Command Guard -> /cmd_vel_sim
-  -> runtime two-wheel differential OmniGraph
-```
-
-Phase 8 disables cuVSLAM's direct `map→odom` TF output and makes `navigation_tf_bridge` the sole publisher of that edge. The adapter computes it only from cuVSLAM's map-frame SLAM path and odom-frame tracking odometry, then republishes at current simulation time. Ground truth and wheel odometry are never inputs. cuVSLAM remains the sole `odom→base_link` source, while robot_state_publisher owns all robot-fixed edges.
-
-The raw scan stays in `base_link` and feeds Collision Monitor without waiting for localization. `scan_timestamp_relay` separately releases a scan only when a matching cuVSLAM transform exists and publishes `/front_depth/points_odom`; this prevents future-dated depth from poisoning the rolling costmap while preserving a low-latency emergency stop path.
-
-Nav2 uses a map-frame global costmap with Static and Inflation layers, and an odom-frame rolling local costmap with Nvblox, visual PointCloud2 Obstacle, and Inflation layers. SmacPlanner2D supplies the global path. MPPI runs a DiffDrive motion model at 20 Hz and publishes the controller-local transformed path. The final guard checks localization readiness, cuVSLAM tracking freshness, depth freshness, nvblox slice freshness, finite commands, planar motion, bounds, acceleration/jerk, and a 250 ms command watchdog.
-
-## Implemented Phase 9 front-stereo dynamic-navigation boundary
-
-Phase 9 deliberately keeps the validated front Hawk stereo pair as the only
-runtime visual-localization rig. Side and rear cameras are not created by the
-default simulator entry and are not required by mapping, recovery, RViz, or
-acceptance.
-
-```text
-front stereo + IMU -> cuVSLAM status/tracking health ───────────────┐
-front stereo -> triggered cuVGL -> innovation-gated map pose ──────┤
-wheel odometry twist -> robot_localization EKF -> odom->base_link ─┤
-VGL anchor + filtered odom -> navigation_tf_bridge -> map->odom ───┘
-
-native front depth -> nvblox dynamic mapper
-  -> dynamic ESDF/map slice + combined ESDF/map slice
-  -> local NvbloxCostmapLayer
-
-RViz 2D Goal Pose -> /goal_pose -> manual_goal_bridge
-  -> /navigate_to_pose_resilient
-  -> stock /navigate_to_pose
-  -> SmacPlanner2D + MPPI(DiffDrive)
-  -> Velocity Smoother -> Collision Monitor -> Command Guard
-```
-
-The daily Phase 9 runner uses this manual path and does not embed a goal list.
-The bounded acceptance runner calls the resilient action directly only when
-`run_phase9.sh --auto` is selected.
-
-Moving foreground features in a front-only warehouse view can momentarily
-perturb raw visual odometry. Phase 9 therefore separates global visual
-observability from smooth local prediction: VGL anchors `map`; cuVSLAM health
-remains a hard permission for motion; the EKF integrates only the two-wheel
-odometry twist between visual global corrections. Ground truth is never an
-input. A lost or stale cuVSLAM status immediately withdraws localization
-readiness, so wheel prediction can never authorize blind navigation.
-
-The recovery manager waits for a potentially occluding foreground object to
-clear, triggers front-stereo VGL, rejects excessive translation/yaw innovation,
-injects an accepted pose into cuVSLAM, and requires 20 consecutive healthy
-tracking samples. It retries at most three times and otherwise remains in
-`failed_safe`. The resilient action proxy cancels the active Nav2 goal while
-unready and submits the same goal after recovery.
-
-The simulator moves an official scene forklift plus project-owned box and
-capsule shapes using session-layer kinematic transforms. PhysX contact reports
-are part of acceptance: moving actors must enter the local cost envelope but
-their physical swept volumes must not ram a correctly stopped robot.
-
-## Implemented Phase 10 experiment and safety boundary
-
-Phase 10 keeps the same front-stereo perception graph and adds an automation
-boundary around it. Every trial owns an isolated DDS discovery server,
-simulator, ROS launch, test runner, optional MCAP recorder and GPU sampler. A
-single finalizer joins navigation, simulation, contact and resource evidence;
-ground truth remains metrics-only.
-
-Kinematic obstacle actors retain collision and perception geometry while
-yielding. Ordinary actors retreat along their configured trajectory in the
-direction that increases robot clearance, then resume after release hysteresis.
-For a latched refuge, every bounded motion step chooses among both route
-endpoints and the refuge while retaining the current position as a candidate;
-the actor is therefore never commanded to reduce its current center clearance
-from the robot. This is necessary because the visual map can be rotated from
-the USD world and a fixed world-frame refuge may temporarily lie beyond the
-robot. It avoids both an actor ramming a correctly stopped robot and the old
-stationary-obstacle deadlock. All motion, yield events, final positions and
-PhysX contacts remain acceptance evidence.
-
-Test-only SetBool services can suppress depth or combined-map health refreshes
-when explicitly enabled by `phase10.launch.py`. Normal Phase 9 launch behavior
-is unchanged. The final Guard must enter the corresponding blocked state and
-publish zero motion before the injected fault can count as recovered.
-
-Nav2 lifecycle activation is checked once after staged startup. A partial
-activation shuts down the complete ROS launch and the wrapper starts a fresh
-stack, up to three attempts; in-process lifecycle reset is deliberately avoided
-because the nvblox costmap plugin cannot be safely reconfigured in place. Run,
-matrix and physical-GPU locks make report ownership unambiguous.
-
-## Implemented Phase 11 long-distance and formal-acceptance boundary
-
-Stage 11 retains the front-stereo-only runtime and makes the global-path
-reference independent of Nav2. The reference extractor opens the fixed
-official Warehouse USD with Isaac Sim's USD runtime and selects actual
-`UsdPhysics.CollisionAPI` geometry in the robot vertical band. An eight-heading
-SE(2) A* evaluates the padded asymmetric Nova Carter footprint at 5 cm
-resolution. Ground-truth poses are used only after a run to measure the actual
-path; neither the USD reference nor ground truth is sent to Nav2.
-
-The local ObstacleLayer consumes `/front_depth/scan` in the true optical sensor
-frame. This is essential beyond the startup neighborhood: a PointCloud2 that
-has already been transformed into `odom` contains no separate raytrace origin,
-so Nav2 otherwise treats `odom (0,0)` as the sensor and eventually places the
-origin outside the rolling costmap. `/front_depth/points_odom` remains a
-visualization and metrics product, not an ObstacleLayer input.
-
-Dynamic nvblox uses a rolling 8 m map-clearing radius at 1 Hz. MapServer owns
-the fixed global occupancy map, while nvblox owns only the bounded local 3D
-TSDF/ESDF and combined slice. This keeps long-distance slice publication above
-the safety contract without discarding global static structure.
-
-```text
-actual USD CollisionAPI -> padded-footprint SE(2) reference ─┐
-ground-truth metrics-only trajectory -------------------------┤
-ROS navigation/data age/latency/smoothness -------------------┼-> trial finalizer
-PhysX contacts + actor motion + simulator graph identity ------┤
-GPU/RTF + optional compact MCAP -------------------------------┘
-                                                               -> 10/10/10 summary
-```
-
-Each trial owns its DDS server, simulator, ROS stack, recorder, sampler and run
-directory. The final matrix validates the complete class/seed/goal identity set
-before computing static, dynamic, heterogeneous and long-distance success
-rates. Lighting and color remain unchanged by explicit Stage 11 scope.
+工作负载 ready file 到达后才开始预热。预热和正式采样均按墙钟窗口稳定性结束，或达到最大墙钟时长；报告显式写入 `fixed_frame_count: null` 和 `fixed_kpi_thresholds: null`。

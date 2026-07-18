@@ -1,202 +1,182 @@
-# Nova Carter 视觉导航用户操作手册
+# 酷家乐 Jackal 用户操作手册
 
-本手册面向已经完成本仓库裸机安装的 Ubuntu 24.04 / ROS 2 Jazzy / Isaac Sim 6.0.1 工作站。正常操作不需要在 Isaac Sim 中拖拽 USD、不需要点击 Play、不需要在 RViz 中手工设置初始位姿或目标。
+本手册只描述 `codex/kujiale-jackal-8cam` 的静态视觉导航流程。历史 Warehouse/Nova Carter 和动态实验入口不适用于本分支。
 
-## 1. 系统边界
-
-当前冻结方案使用 Nova Carter 前向 Hawk 双目、前向 IMU 和 Isaac Sim 原生前向深度；不启用 lidar，也不创建侧向或后向相机图。cuVSLAM 负责连续视觉跟踪，前向双目 cuVGL 负责启动与失锁后的全局重定位，dynamic nvblox 和前向深度 LaserScan 负责三维/局部障碍感知，Nav2 负责规划与 MPPI 差速控制。
-
-`/ground_truth/odometry` 和 PhysX 接触只用于离线评估，绝不输入定位、规划或控制。轮式里程计只做短时平滑预测；是否允许运动仍由视觉定位健康、深度新鲜度和 nvblox 新鲜度共同控制。因此这里的“纯视觉导航”是无 lidar、无 ground truth 导航输入的视觉环境感知与视觉定位系统，不等同于禁用 IMU 或轮速反馈。
-
-## 2. 第一次使用
-
-打开一个干净终端：
+## 1. 前置检查
 
 ```bash
 cd /home/lyb/Workspace/Isaac_ROS_cuVSLAM_Nvblox_Nav2
+git lfs install
 ./scripts/build.sh
 ```
 
-成功标志是三个 ROS 包完成构建，并且环境检查报告同时显示：
+确认 `config/environment.env` 中三个资产路径存在。脚本会核对 USD default prim 与 SHA-256，并构建：
 
-- Isaac Sim `6.0.1.0`；
-- RTX 4090 与驱动可访问；
-- CUDA 13.0、TensorRT 10.13.3.9；
-- cuVSLAM、nvblox、Visual Global Localization 均为 Isaac ROS 4.5.0；
-- 官方 Warehouse 和 Nova Carter USD 能被实际打开。
+- `jackal_control`
+- `jackal_bringup`
+- `jackal_experiments`
+- `jackal_teleop`
 
-若是全新的另一台电脑，请先按[裸机安装手册](installation.md)完成依赖，再执行本节命令。脚本不会修改 `~/.bashrc`。
+不要同时启动两个本项目 Isaac Sim；`data/locks/navigation_sim.lock` 会拒绝重复实例，但不会终止其他项目的进程。
 
-## 3. 日常完整导航
+## 2. 第一次建图
 
-带 Isaac Sim GUI 和 RViz 的手动目标静态障碍导航：
-
-```bash
-./scripts/run_phase9.sh --map warehouse_v2_front --gui --rviz
-```
-
-入口完成初始化后不会自动发送目标。在RViz地图中选择工具栏的`2D Goal Pose`，在目标位置按下鼠标左键并拖动箭头指定最终朝向，松开后机器人开始导航。再次发布目标会先取消当前手动目标，再执行新目标。目标通过`/goal_pose`进入`/navigate_to_pose_resilient`，所以定位丢失时仍会安全停车、恢复定位并续航。
-
-手动模式必须带`--rviz`；Isaac Sim本体也可以用低开销headless模式：
+确保当前终端可交互、Isaac Sim GUI 没有被其他实例占用，然后运行：
 
 ```bash
-./scripts/run_phase9.sh --map warehouse_v2_front --headless --rviz
+./scripts/run_mapping.sh --map kujiale_jackal_8cam --interactive
 ```
 
-该入口会依次启动本项目专属 Fast DDS discovery server、Isaac Sim Standalone、前向传感器、cuVSLAM/cuVGL、nvblox、Nav2、手动目标桥接器和RViz，并持续运行到用户停止。场景额外放置三个静态、可碰撞的箱体/胶囊体，不含动态障碍物；前向/角速度导航上限为1.10 m/s、1.40 rad/s。前向深度同时写入局部与全局代价地图，因此物体进入视野后会触发路径重规划，再由MPPI平滑绕行。`Ctrl-C` 可以安全停止整套系统。不要使用 `killall` 或全局 `pkill`，机器上可能还有其他项目。
+键位：
 
-需要运行原来的自动三目标验收时显式使用`--auto`；该模式可以不打开RViz：
+| 键 | 动作 |
+|---|---|
+| `W` / `S` | 前进 / 后退 |
+| `A` / `D` | 左转 / 右转 |
+| `Space` | 立即停车 |
+| `Q` | 停车、结束录制并保存地图 |
+
+安全规则：
+
+- 松开运动键超过 0.18 秒自动发零速度。
+- 建图可以人工后退；导航验收不允许负向线速度。
+- 低速覆盖所有房间、门洞和走廊，转弯时给四组 Hawk 留出重叠视野。
+- 回到已走过区域形成闭环后再按 `Q`。
+- 不要直接关闭终端或强杀进程；失败时 raw bag 会保留在忽略目录，便于诊断。
+
+脚本会等待 8 个标准化图像话题，临时录制 MCAP，并保存：
+
+- 8 相机 cuVSLAM 数据库；
+- 8 相机 cuVGL keyframes、vocabulary 和 BoW index；
+- front 原生深度生成的 nvblox `.nvblx` 与 PLY mesh；
+- Nav2 occupancy `map.yaml` / `map.pgm`；
+- cuVGL 同步配置与 `manifest.json`。
+
+成功后 raw bag 和 EDEx/离线中间目录自动删除。地图目录非空时脚本拒绝覆盖，重建请使用新地图名或先由用户自行归档旧地图。
+
+## 3. 地图检查与目标校准
 
 ```bash
-./scripts/run_phase9.sh --map warehouse_v2_front --headless --no-rviz --auto
+python3 tools/check_map_manifest.py data/maps/kujiale_jackal_8cam
+python3 tools/validate_acceptance_routes.py \
+  data/maps/kujiale_jackal_8cam \
+  --config config/acceptance.yaml \
+  --output data/reports/route-validation.json
 ```
 
-自动模式仍支持用`PHASE9_GOAL_POSES`传入`x,y,yaw`三元组，但这只用于有界调试和回归。需要正式可比较的结果时使用阶段11固定六目标和固定seed。
+若路线验证失败，根据 occupancy map 修改 `config/acceptance.yaml` 的 `goals[].pose`。每个目标必须：
 
-阶段11的单目标、固定 seed、完整指标运行更适合复现实验：
+- 在地图范围内且属于已知自由空间；
+- 按 `0.34 m` 碰撞半径膨胀后仍安全；
+- 与 map 原点 `[0, 0]` 连通；
+- 原点到目标的直线穿过障碍，以保证测试包含实际绕行。
+
+候选目标只有经过真实地图验证后才能用于正式统计。
+
+## 4. 导航运行
+
+快速自动路线：
 
 ```bash
-./scripts/run_stage11_trial.sh \
-  --class heterogeneous --seed 41000 --goal-index 5 \
-  --headless --no-rviz --record-bag
+./scripts/run_all.sh --map kujiale_jackal_8cam --headless --no-rviz
 ```
 
-其中：
+需要观察时：
 
-- `--class` 为 `static`、`dynamic` 或 `heterogeneous`；
-- `--goal-index` 为 0–5，3–5 是跨越多个仓库区域的长距离目标；
-- `--seed` 固定障碍尺寸、初相位和速度；
-- `--record-bag` 记录压缩 MCAP，`--no-bag` 用于快速调试；
-- 每次运行自动发送目标，不允许人工干预。
+```bash
+./scripts/run_all.sh --map kujiale_jackal_8cam --gui --rviz
+```
 
-## 4. 地图准备与重建
+也可以分两个终端运行。终端 A：
 
-当前导航默认使用已生成的 `warehouse_v2_front`：
+```bash
+./scripts/run_sim.sh --headless --camera-profile navigation_6cam
+```
+
+终端 B：
+
+```bash
+./scripts/run_navigation.sh --map kujiale_jackal_8cam --rviz
+```
+
+此时可在 RViz 用 `2D Goal Pose` 发目标。导航始终使用 front、left、right 三组 Hawk 的 6 路图像；back Hawk 不创建 render product。nvblox 仍只接 front 原生深度。
+
+Nav2 的线速度下限为 `0.0 m/s`，Behavior Server 只有 Spin 和 Wait，行为树没有 BackUp/DriveOnHeading。任何小于 `-0.01 m/s` 的最终命令都会使正式实验失败。
+
+## 5. 静态避障正式统计
+
+先跑一个单轮排查：
+
+```bash
+./scripts/run_static_trial.sh \
+  --map kujiale_jackal_8cam --goal-index 0 --attempt-index 1 --headless
+```
+
+再跑正式批次：
+
+```bash
+./scripts/run_static_acceptance.sh \
+  --map kujiale_jackal_8cam --headless
+```
+
+批次按三个目标 round-robin，直到得到 20 次有效实验。有效实验开始后，下列任一项都会记失败：
+
+- 未到达目标或超时；
+- PhysX 检测到任何非地面机器人接触；
+- cuVSLAM/主 TF/Command Guard 不健康；
+- 存在人工干预标记；
+- 最终命令轨迹包含倒车；
+- simulator 未通过或仿真时间显著回退；
+- 动态环境被启用；
+- 不是 6 路导航，或创建了后向 render product。
+
+通过要求为：
 
 ```text
-data/maps/warehouse_v2_front/
-├── occupancy/map.yaml
-├── occupancy/map.pgm
-├── cuvslam/data.mdb
-├── cuvgl/bow_index.pb
-└── config/
+collision_free_passage_count / valid_trial_count >= 0.95
+valid_trial_count >= 20
 ```
 
-若地图缺失或需要重新建立前向视觉地图：
+20 次有效实验时，19/20 通过，18/20 不通过。基础设施无效尝试仍列在汇总中，但不进入有效分母。
+
+## 6. 性能实测
 
 ```bash
-./scripts/run_phase9_mapping.sh --map warehouse_v2_front
+./scripts/run_performance_benchmark.sh \
+  --profile all --map kujiale_jackal_8cam --headless
 ```
 
-该命令自动采集、保存 cuVSLAM/nvblox/PLY/occupancy、生成 cuVGL 地图并准备 TensorRT 引擎。详细输入、同步和调参分别见[建图手册](mapping.md)、[cuVSLAM手册](cuvslam_configuration.md)、[cuVGL手册](cuvgl_configuration.md)和[nvblox手册](nvblox_configuration.md)。
-
-阶段11还需要根据官方场景实际 CollisionAPI 生成理论最优路径基准：
+也可单独运行：
 
 ```bash
-./scripts/prepare_stage11_reference.sh --map warehouse_v2_front
+./scripts/run_performance_benchmark.sh --profile mapping_8cam --headless
+./scripts/run_performance_benchmark.sh \
+  --profile navigation_6cam --map kujiale_jackal_8cam --headless
 ```
 
-输出在 `data/reference/warehouse_usd_005/`。它会重新打开固定官方 Warehouse USD，提取真实碰撞体，按 Nova Carter 带 padding 的不对称 footprint 生成 5 cm 栅格，并运行 8 航向 SE(2) A*；不会修改官方 USD。
+`mapping_8cam` 会启动实际 8 路 cuVSLAM + nvblox 负载；`navigation_6cam` 会加载地图、cuVGL、Nav2 和 nvblox。性能预热只在工作负载全部 ready 后开始。
 
-## 5. RViz 与第三人称视角
+默认自适应参数在 `config/acceptance.yaml/performance.adaptive_sampling`。可用脚本参数临时改变最小/最大预热与采样墙钟时长，但不允许把文档示例数值变成通过门槛。
 
-`--rviz` 会加载 `nova_carter_bringup/rviz/navigation.rviz`。其`2D Goal Pose`发布`/goal_pose`，并包含：
+报告重点查看：
 
-- RobotModel 和完整 TF；
-- occupancy map、全局/局部代价地图；
-- Smac 全局路径与 MPPI 局部路径；
-- 前向左右图像、深度和 LaserScan；
-- nvblox mesh、ESDF 和 combined map slice；
-- footprint、Collision Monitor 区域和定位状态。
+- `official_isaac_sim_6_0_1.mean_fps`
+- `official_isaac_sim_6_0_1.real_time_factor`
+- App/Physics frametime 的 mean、P95、P99
+- 整个项目进程树 RSS/VMS/USS
+- GPU utilization、memory、power、temperature
+- `host_context.cpu_governors` 和 NVIDIA driver
 
-`--gui` 模式会创建 `/World/FollowCameraRig` 并平滑跟随机器人。它会在时间线开始后重新绑定Isaac Sim 6的活动viewport，因此不会落回默认透视相机。第三人称相机只用于观察，不发布 ROS 图像，也不参与导航。headless 模式不创建 viewport 依赖。
+## 7. 结果与停止
 
-## 6. 阶段11正式验收
+| 路径 | 内容 |
+|---|---|
+| `data/logs/mapping/` | 建图过程日志 |
+| `data/runs/static-acceptance/` | 单轮原始结果 |
+| `data/reports/static-acceptance/` | 静态统计 JSON/CSV/Markdown |
+| `data/reports/performance/` | 8 路/6 路性能观测 |
+| `data/maps/kujiale_jackal_8cam/` | 唯一允许版本化的运行时地图 |
 
-完整验收按用户最终口径固定执行静态、动态和异构动态各10次：
+前台运行按一次 `Ctrl-C`。自动脚本只停止自己创建的进程组，并通过 stop file 让 Isaac Sim 写完报告；不要使用 `killall` 或全局 `pkill`。
 
-```bash
-./scripts/run_acceptance.sh \
-  --matrix-id phase11-final-20260718 \
-  --record-bag
-```
-
-中断后使用同一个 matrix ID 继续；脚本只复用身份、seed和目标均匹配且
-`navigation.json/goals`证明已实际发送目标的完成轮。通过和失败轮都会复用，
-因此不能用断点续跑隐藏真实碰撞或导航失败：
-
-```bash
-./scripts/run_acceptance.sh \
-  --matrix-id phase11-final-20260718 \
-  --resume --skip-build --record-bag
-```
-
-如果仿真ready之后、ROS目标运行器启动之前发生进程级瞬时中断，该空轮没有`navigation.json/goals`，不会占用正式成功率的失败预算；脚本默认最多自动重试2次。只要目标已经实际发出，后续任何导航、碰撞、定位或性能失败都照常计入分母，不能靠重试隐藏。
-
-正式输出：
-
-```text
-data/reports/phase11/acceptance/<matrix-id>/summary.json
-data/reports/phase11/acceptance/<matrix-id>/trials.csv
-data/reports/phase11/acceptance/<matrix-id>/report.md
-data/reports/phase11/acceptance-summary-latest.json
-```
-
-每轮的权威结论是 `data/runs/<run-id>/result.json`。只有目标误差、碰撞、定位安全、深度/地图新鲜度、频率、实时因子、命令时延、平滑性和场景有效性全部通过，该轮才是 `passed`。最终矩阵还检查各类别成功率、长距离成功率和成功轨迹伸长率 P95。
-
-按当前项目范围，光照和颜色随机化明确关闭；正式验收不包含光照/颜色变化，不应把这项排除误读为已通过该类泛化测试。
-
-本机已完成的权威矩阵是`phase11-final-20260718`：静态10/10、动态10/10、异构9/10，成功轨迹伸长率P95为5.10%，长距离11/12。原异构失败保留在分母；最终前向图像频率已冻结为15 Hz。按用户要求复用的历史轮次保留其当时10 Hz/12 Hz实际配置，并未为了形式上统一频率而整批重跑；详细证据见[Phase 11 Validation](phase11_validation.md)。
-
-## 7. 常用结果读取
-
-查看最近正式汇总：
-
-```bash
-jq '{status, trial_count, classes, aggregate}' \
-  data/reports/phase11/acceptance-summary-latest.json
-```
-
-查看单轮失败项：
-
-```bash
-jq '{status, checks, path, goal_results, observed_rates_hz}' \
-  data/runs/<run-id>/result.json
-```
-
-关键产物说明：
-
-- `scenario.yaml/json`：本轮固定 seed 场景与目标；
-- `navigation.json`：ROS 数据流、终点、轨迹、命令与时延原始统计；
-- `simulator.json`：实际资产、仿真时间、传感器图、actor 运动和 PhysX 接触；
-- `trajectory.csv`：只用于指标的 ground truth 轨迹；
-- `command_trace.csv`：四级速度链及平滑性；
-- `gpu.csv`：利用率、显存、功耗；
-- `rosbag/`：压缩 MCAP 证据；
-- `result.json`：单轮最终机器判定。
-
-## 8. 安全停止与并发规则
-
-- 正常前台运行按一次 `Ctrl-C`；自动脚本会先停止 ROS bag 和 Nav2，再通过 stop sentinel 关闭 Isaac Sim。
-- 同一时刻只允许本项目一个 Stage11 trial/矩阵和一个 Isaac Sim，`flock` 会拒绝重复运行。
-- 不要删除正在使用的 `data/locks/*`、run目录或 MCAP。
-- 不要把 `/ground_truth/odometry` 接到 EKF、Nav2、TF 或控制器。
-- 不要绕过 Command Guard、Collision Monitor、定位 ready 或 stale-data 检查来“提高成功率”。
-
-## 9. 故障诊断
-
-先收集只读诊断：
-
-```bash
-./scripts/collect_diagnostics.sh
-```
-
-报告写入 `data/logs/diagnostics/`。进一步按[故障排查手册](troubleshooting.md)定位。常见顺序是：
-
-1. `result.json/checks` 找唯一失败门；
-2. `ros.log` 检查 cuVSLAM、VGL、Nav2 lifecycle 和 Command Guard；
-3. `simulator.json` 检查时间、传感器图、actor 运动和接触；
-4. `gpu.csv` 检查外部GPU负载和实时因子；
-5. 修复后换新 run ID 重跑，不覆盖原始证据。
-
-完整文件导航见[项目重要文件索引](file_index.md)。
+地图二进制使用 Git LFS，raw bags、日志、实验 run 和报告默认不提交。正式结果是否达标以新生成的 `summary.json` 为准，不能用短时技术烟测代替。

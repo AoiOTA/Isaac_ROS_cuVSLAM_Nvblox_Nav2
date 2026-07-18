@@ -1,49 +1,95 @@
-# Mapping
+# 酷家乐八路相机建图
 
-阶段7已实现统一地图根目录`data/maps/warehouse_v1`：
+## 输入契约
+
+`mapping_8cam` 固定按以下顺序使用 8 路单目图像：
+
+1. front left / right
+2. left left / right
+3. right left / right
+4. back left / right
+
+四组 Hawk 均为 `1280×800 @ 10 Hz`，front IMU 为 `120 Hz`。nvblox 只接收 front Hawk 左目的 `640×400` 原生模拟深度；视觉建图与 nvblox 不共享合成双目深度。
+
+话题清单在 `ros2_ws/src/jackal_bringup/config/mapping_topics_8cam.yaml`。cuVSLAM 建图要求 `num_cameras=8` 且 `min_num_images=8`，因此任一路缺帧都不能悄悄退化为少相机地图。
+
+## 建图命令
+
+```bash
+./scripts/run_mapping.sh --map kujiale_jackal_8cam --interactive
+```
+
+该脚本有三个硬保护：
+
+- 必须显式传入 `--interactive` 且 stdin 是 TTY；
+- 目标地图目录非空时拒绝覆盖；
+- 同一时刻只允许一个 mapping workflow。
+
+GUI 出现后用 `W/S/A/D` 驾驶，`Space` 停车，`Q` 保存。建议缓慢遍历所有目标区域、门洞与走廊，并形成闭环。
+
+## 生成流程
 
 ```text
-warehouse_v1/
-├── cuvslam/              离线对齐的cuVSLAM data.mdb
-├── cuvgl/                ALIKED关键帧、BoW vocabulary/index
-├── nvblox/               warehouse.nvblx及统计
-├── mesh/warehouse.ply
-├── occupancy/map.{yaml,pgm}
-├── config/               冻结的cuVGL pb.txt配置
-├── online_cuvslam/       在线采集保存的诊断地图
-├── offline/              EDEx、轨迹和离线中间产物
+8 RGB + 8 CameraInfo + IMU + TF + clock
+  -> temporary MCAP
+  -> offline cuVSLAM pose/map
+  -> ALIKED features + cuVGL vocabulary/BoW index
+
+front native depth + TF
+  -> nvblox static map + mesh + 2D ESDF
+  -> occupancy map
+
+all runtime groups
+  -> manifest.json
+  -> delete temporary MCAP and offline workspace
+```
+
+cuVSLAM 与 cuVGL 必须来自同一份 MCAP。`create_vgl_map.sh` 默认使用 `40000 µs` 同步窗，并把同一值写入地图内冻结的 cuVGL runtime config；不要在导航时另行使用不匹配的同步配置。
+
+## 运行时地图
+
+```text
+data/maps/kujiale_jackal_8cam/
+├── config/       cuVGL runtime pb.txt
+├── cuvgl/        keyframes, vocabulary, bow_index
+├── cuvslam/      cuVSLAM database
+├── mesh/         PLY
+├── nvblox/       .nvblx, PLY, rates/timings
+├── occupancy/    map.yaml, map.pgm
 └── manifest.json
 ```
 
-自动生成和检查：
+`manifest.json` 记录：
+
+- 三个源 USD 的路径、default prim 与 SHA-256；
+- `mapping_8cam=8`、`navigation_6cam=6`、后向导航 render product 为 false；
+- 8 个图像话题的实际消息数；
+- 每个运行时目录的文件数、总字节数与 tree hash；
+- raw capture 未保留；
+- 当前地图的验证状态。
+
+完整检查：
 
 ```bash
-./scripts/run_mapping.sh --map warehouse_v1
-python3 tools/check_phase7_maps.py data/maps/warehouse_v1
+python3 tools/check_map_manifest.py data/maps/kujiale_jackal_8cam
 ```
 
-脚本执行40秒闭环采集、MCAP录制、在线cuVSLAM/nvblox/Mesh/occupancy保存、官方EDEx与离线cuVSLAM计算、ALIKED特征提取、BoW构建及TensorRT引擎缓存。运行时使用的cuVSLAM和cuVGL地图来自同一bag、同一次离线轨迹计算；nvblox、Mesh和occupancy则来自录制该bag的同一在线采集进程。
+检查器会拒绝缺失的 cuVSLAM DB、cuVGL BoW index、nvblox binary、mesh、occupancy、被改动的 artifact hash、旧资产 hash，以及 `.mcap`/`.db3` 或 capture/offline/online_cuvslam 泄漏。
 
-Isaac Sim原生32FC1米制深度是nvblox输入；基线不运行FoundationStereo或ESS。occupancy由`odom`坐标系的2D ESDF slice保存，障碍距离门槛初值0.28 m。阶段8接入Nav2前必须先验证其与加载后的`map→odom`关系，再决定转换到`map`或仅用于局部代价地图，不能只改YAML的frame名称来伪造对齐。
+## Git LFS
 
-单独重建视觉地图：
+只有这一张地图的运行时文件可提交。`.gitattributes` 对数据库、protobuf/bin、keyframe 图像、nvblox、mesh 和 occupancy PGM 启用 LFS；其他地图、raw bag、TensorRT engine、日志与中间数据仍被忽略。
 
 ```bash
-./scripts/export_vgl_models.sh data/models/vgl
-./scripts/create_vgl_map.sh data/bags/<bag> data/maps/warehouse_v1
+git check-attr filter -- \
+  data/maps/kujiale_jackal_8cam/nvblox/kujiale.nvblx
+git lfs status
 ```
 
-完整cuVGL跨机器过程见[cuVGL配置手册](cuvgl_configuration.md)，nvblox持久化见[nvblox配置手册](nvblox_configuration.md)，实际结果见[阶段7验证](phase7_validation.md)。
+不要把 temporary MCAP 复制进地图目录，也不要提交 `data/bags`。
 
-## 阶段9前向双目地图
+## 导航侧复用
 
-阶段9默认地图名为`warehouse_v2_front`，仍由同一份离线数据同时生成cuVSLAM与cuVGL地图，禁止把在线cuVSLAM数据库覆盖到离线对齐目录。当前本机地图含366个cuVGL关键帧，运行时输入顺序固定为前左、前右；侧向和后向相机不属于这张地图的rig identity。
+导航使用同一份 8 相机 cuVSLAM calibration，但运行时只发布前、左、右共 6 路图像；`min_num_images=2` 允许 cuVSLAM 从可用流跟踪。cuVGL 使用独立的 6 相机输入配置，后向话题和渲染资源均不存在。
 
-```bash
-./scripts/run_phase9_mapping.sh --map warehouse_v2_front
-python3 tools/check_phase7_maps.py data/maps/warehouse_v2_front
-```
-
-阶段9导航把前向图像固定为1280×800、10 Hz，与该地图的采集节奏一致。`create_vgl_map.sh`先以显式同步窗生成EDEx，再从同一离线轨迹执行pose、feature和BoW步骤。`manifest.json`必须记录两台相机、一个双目对和实际生成命令。
-
-若以后实验四向相机，必须使用新的地图名、重新录制八路同步数据并同时重建cuVSLAM和cuVGL；不能把四向配置套在`warehouse_v2_front`上，也不能只修改`num_cameras`后复用现有数据库。
+地图生成后必须用真实 occupancy map 验证 `config/acceptance.yaml` 中的候选路线，未通过路线检查的地图不能进入 20 次正式实验。
