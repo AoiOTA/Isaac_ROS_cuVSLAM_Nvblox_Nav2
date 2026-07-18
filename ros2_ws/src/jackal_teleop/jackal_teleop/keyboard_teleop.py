@@ -47,7 +47,11 @@ class KeyboardTeleop(Node):
 
     def stop_now(self) -> None:
         self.state.stop()
-        self.publish()
+        # SIGINT can invalidate the rcl context before the Python finally
+        # block runs. The simulator-side command timeout already guarantees
+        # a stop in that case; avoid publishing through an invalid context.
+        if rclpy.ok():
+            self.publish()
 
 
 def main(args: list[str] | None = None) -> None:

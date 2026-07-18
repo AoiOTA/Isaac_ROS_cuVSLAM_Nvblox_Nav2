@@ -3,11 +3,18 @@ set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 CALLER_ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-}"
+CALLER_ROS_DISCOVERY_SERVER="${ROS_DISCOVERY_SERVER:-}"
 # shellcheck source=lib/common.sh
 source "${SCRIPT_DIR}/lib/common.sh"
 load_ros
 if [[ -n "${CALLER_ROS_DOMAIN_ID}" ]]; then
   export ROS_DOMAIN_ID="${CALLER_ROS_DOMAIN_ID}"
+fi
+if [[ -n "${CALLER_ROS_DISCOVERY_SERVER}" ]]; then
+  export ROS_DISCOVERY_SERVER="${CALLER_ROS_DISCOVERY_SERVER}"
+  # environment.env enables simple local discovery by default. Preserve the
+  # caller's loopback discovery-server mode for late-starting Nav2 processes.
+  unset ROS_LOCALHOST_ONLY
 fi
 
 MAP_NAME="kujiale_jackal_8cam"

@@ -170,7 +170,7 @@ Visualization Manager:
       Displays:
         - Class: nvblox_rviz_plugin/NvbloxMesh
           Name: TSDF mesh
-          Enabled: true
+          Enabled: false
           Mesh Color: Color
           Cut Ceiling: true
           Ceiling Height: 1.8
@@ -182,7 +182,7 @@ Visualization Manager:
             Depth: 5
         - Class: rviz_default_plugins/PointCloud2
           Name: Static ESDF
-          Enabled: true
+          Enabled: false
           Style: Flat Squares
           Size (Pixels): 3
           Size (m): 0.03
@@ -196,7 +196,7 @@ Visualization Manager:
             Depth: 5
         - Class: rviz_default_plugins/PointCloud2
           Name: Dynamic ESDF
-          Enabled: true
+          Enabled: false
           Style: Flat Squares
           Size (Pixels): 4
           Size (m): 0.04
@@ -225,7 +225,7 @@ Visualization Manager:
             Depth: 5
         - Class: rviz_default_plugins/PointCloud2
           Name: Dynamic depth points
-          Enabled: true
+          Enabled: false
           Style: Spheres
           Size (Pixels): 5
           Size (m): 0.06
@@ -244,7 +244,7 @@ Visualization Manager:
       Displays:
         - Class: rviz_default_plugins/Image
           Name: Front left image
-          Enabled: true
+          Enabled: false
           Normalize Range: true
           Topic:
             Value: /front_stereo_camera/left/image_raw
@@ -254,7 +254,7 @@ Visualization Manager:
             Depth: 5
         - Class: rviz_default_plugins/Image
           Name: Front depth
-          Enabled: true
+          Enabled: false
           Normalize Range: true
           Min Value: 0
           Max Value: 6
@@ -309,7 +309,7 @@ Visualization Manager:
             Depth: 5
         - Class: rviz_default_plugins/PointCloud2
           Name: Depth obstacles in odom
-          Enabled: true
+          Enabled: false
           Style: Flat Squares
           Size (Pixels): 4
           Size (m): 0.03

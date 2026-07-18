@@ -9,6 +9,7 @@ load_ros
 MAP_NAME="kujiale_jackal_8cam"
 MAPPING_MODE=""
 SIM_MODE=""
+RVIZ=""
 COVERAGE_CONFIG="${PROJECT_ROOT}/config/mapping_coverage.yaml"
 while (($#)); do
   case "$1" in
@@ -20,10 +21,13 @@ while (($#)); do
       [[ -z "${MAPPING_MODE}" ]] || die "choose exactly one of --interactive or --auto"
       MAPPING_MODE="auto"; shift ;;
     --gui|--headless) SIM_MODE="$1"; shift ;;
+    --rviz) RVIZ="true"; shift ;;
+    --no-rviz) RVIZ="false"; shift ;;
     --coverage-config) COVERAGE_CONFIG="${2:?missing coverage config}"; shift 2 ;;
     -h|--help)
-      echo "Usage: ./scripts/run_mapping.sh [--map NAME] (--interactive | --auto) [--gui | --headless]"
-      echo "Interactive mode uses WASD/Q; auto mode follows the checked closed-loop coverage route."
+      echo "Usage: ./scripts/run_mapping.sh [--map NAME] (--interactive | --auto) [--gui | --headless] [--rviz | --no-rviz]"
+      echo "Interactive mode defaults to Isaac Sim GUI + RViz and uses WASD/Q."
+      echo "Auto mode defaults to headless/no-RViz and follows the checked closed-loop route."
       exit 0 ;;
     *) die "unknown argument: $1" ;;
   esac
@@ -34,6 +38,13 @@ if [[ -z "${SIM_MODE}" ]]; then
     SIM_MODE="--gui"
   else
     SIM_MODE="--headless"
+  fi
+fi
+if [[ -z "${RVIZ}" ]]; then
+  if [[ "${MAPPING_MODE}" == "interactive" ]]; then
+    RVIZ="true"
+  else
+    RVIZ="false"
   fi
 fi
 if [[ "${MAPPING_MODE}" == "interactive" ]]; then
@@ -63,6 +74,7 @@ flock -n 9 || die "another mapping workflow is already running"
 SIM_PID=""
 BRINGUP_PID=""
 BAG_PID=""
+RVIZ_PID=""
 process_alive() { [[ -n "$1" ]] && kill -0 "$1" 2>/dev/null; }
 group_alive() { [[ -n "$1" ]] && kill -0 -- "-$1" 2>/dev/null; }
 stop_group() {
@@ -83,6 +95,7 @@ stop_simulator() {
   stop_group "${SIM_PID}"
 }
 cleanup() {
+  stop_group "${RVIZ_PID}"
   stop_group "${BAG_PID}"
   stop_group "${BRINGUP_PID}"
   stop_simulator
@@ -146,6 +159,16 @@ ros2 topic echo --no-daemon --once --timeout 30 \
   /nvblox_node/static_map_slice nvblox_msgs/msg/DistanceMapSlice >/dev/null || \
   die "nvblox static map slice has no live sample"
 
+if [[ "${RVIZ}" == "true" ]]; then
+  RVIZ_CONFIG="${BRINGUP_SHARE}/rviz/mapping.rviz"
+  require_file "${RVIZ_CONFIG}"
+  info "Starting mapping RViz (map, robot, TF, cuVSLAM trajectory, nvblox mesh/ESDF)"
+  setsid rviz2 -d "${RVIZ_CONFIG}" --ros-args -p use_sim_time:=true \
+    >"${LOG_DIR}/rviz.log" 2>&1 & RVIZ_PID=$!
+  sleep 3
+  process_alive "${RVIZ_PID}" || die "mapping RViz exited; see ${LOG_DIR}/rviz.log"
+fi
+
 BAG_TOPICS=("${IMAGE_TOPICS[@]}" "${CAMERA_INFO_TOPICS[@]}" \
   /front_stereo_camera/depth/image_raw \
   /front_stereo_camera/depth/camera_info \
@@ -157,7 +180,8 @@ sleep 2
 process_alive "${BAG_PID}" || die "rosbag recorder exited; see ${LOG_DIR}/rosbag.log"
 
 if [[ "${MAPPING_MODE}" == "interactive" ]]; then
-  info "Manual mapping ready: W/S forward/back, A/D rotate, Space stop, Q save and exit"
+  info "Manual mapping ready in Isaac Sim GUI + RViz"
+  info "W/S forward/back, A/D rotate, Space stop, Q stop recording, validate, save and exit"
   ros2 run jackal_teleop keyboard_teleop
 else
   info "Automated mapping ready: following the collision-clear closed-loop coverage route"
@@ -210,6 +234,8 @@ ros2 run jackal_experiments visual_map_saver --ros-args \
 
 stop_group "${BRINGUP_PID}"
 BRINGUP_PID=""
+stop_group "${RVIZ_PID}"
+RVIZ_PID=""
 stop_simulator
 SIM_PID=""
 

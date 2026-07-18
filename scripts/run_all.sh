@@ -29,6 +29,13 @@ while (($#)); do
   esac
 done
 
+if [[ "${RUN_MODE}" == "manual" ]]; then
+  [[ "${SIM_MODE}" == "--gui" ]] || \
+    die "manual navigation requires --gui so robot behavior remains visible"
+  [[ "${RVIZ}" == "true" ]] || \
+    die "manual navigation requires --rviz for 2D Goal Pose"
+fi
+
 require_file "${ACCEPTANCE_CONFIG}"
 MAP_DIR="${PROJECT_ROOT}/data/maps/${MAP_NAME}"
 python3 "${PROJECT_ROOT}/tools/check_map_manifest.py" "${MAP_DIR}"
@@ -46,7 +53,7 @@ LOG_DIR="${PROJECT_ROOT}/data/logs/navigation/${RUN_ID}"
 REPORT="${REPORT:-${PROJECT_ROOT}/data/reports/navigation/navigation-${RUN_ID}.json}"
 SIM_STOP="${LOG_DIR}/stop-simulator"
 mkdir -p "${LOG_DIR}" "$(dirname "${REPORT}")"
-SIM_PID=""; NAV_PID=""
+SIM_PID=""; NAV_PID=""; DISCOVERY_PID=""
 
 alive() { [[ -n "$1" ]] && kill -0 "$1" 2>/dev/null; }
 group_alive() { [[ -n "$1" ]] && kill -0 -- "-$1" 2>/dev/null; }
@@ -77,8 +84,35 @@ stop_simulator() {
 cleanup() {
   stop_group "${NAV_PID}"
   stop_simulator
+  stop_group "${DISCOVERY_PID}"
 }
 trap cleanup EXIT INT TERM
+
+DISCOVERY_PORT="${NAVIGATION_DISCOVERY_PORT:-11849}"
+[[ "${DISCOVERY_PORT}" =~ ^[0-9]+$ ]] || \
+  die "NAVIGATION_DISCOVERY_PORT must be an integer"
+DISCOVERY_PORT="$((10#${DISCOVERY_PORT}))"
+(( DISCOVERY_PORT >= 1024 && DISCOVERY_PORT <= 65535 )) || \
+  die "NAVIGATION_DISCOVERY_PORT must be in 1024..65535"
+command -v fastdds >/dev/null || die "fastdds discovery executable not found"
+if ss -H -lun "sport = :${DISCOVERY_PORT}" 2>/dev/null | grep -q .; then
+  die "Fast DDS discovery port ${DISCOVERY_PORT} is already in use"
+fi
+export ROS_DISCOVERY_SERVER="127.0.0.1:${DISCOVERY_PORT}"
+# This Jazzy build gives ROS_LOCALHOST_ONLY precedence over discovery-server
+# mode. The server itself is bound to loopback, so communication stays local.
+unset ROS_LOCALHOST_ONLY
+info "Starting project-local Fast DDS discovery server on ${ROS_DISCOVERY_SERVER}"
+setsid fastdds discovery -i 0 -l 127.0.0.1 -p "${DISCOVERY_PORT}" \
+  >"${LOG_DIR}/fastdds-discovery.log" 2>&1 & DISCOVERY_PID=$!
+for _ in {1..30}; do
+  ss -H -lun "sport = :${DISCOVERY_PORT}" 2>/dev/null | grep -q . && break
+  alive "${DISCOVERY_PID}" || \
+    die "Fast DDS discovery server exited; see ${LOG_DIR}/fastdds-discovery.log"
+  sleep 0.1
+done
+ss -H -lun "sport = :${DISCOVERY_PORT}" 2>/dev/null | grep -q . || \
+  die "Fast DDS discovery server did not bind UDP port ${DISCOVERY_PORT}"
 
 info "Starting Kujiale/Jackal navigation simulator (${SIM_MODE}) in ROS domain ${ROS_DOMAIN_ID}"
 setsid "${ISAAC_SIM_PYTHON}" "${PROJECT_ROOT}/isaac_sim/navigation_sim.py" \
@@ -103,7 +137,18 @@ sleep 2
 alive "${NAV_PID}" || { tail -n 200 "${LOG_DIR}/navigation.log" >&2; die "navigation bringup exited"; }
 
 if [[ "${RUN_MODE}" == "manual" ]]; then
-  info "Navigation is ready for external/RViz goals; press Ctrl-C to stop"
+  info "Waiting for cuVGL global localization, map->odom, occupancy map, and Nav2"
+  set +e
+  ros2 run jackal_experiments manual_navigation_ready --ros-args \
+    -p use_sim_time:=true -p action_topic:=/navigate_to_pose -p timeout_s:=180.0
+  ready_status=$?
+  set -e
+  if (( ready_status != 0 )); then
+    tail -n 240 "${LOG_DIR}/navigation.log" >&2
+    die "manual navigation did not become ready"
+  fi
+  info "Navigation ready: use RViz 2D Goal Pose; no 2D Pose Estimate is required"
+  info "A newer clicked goal replaces the active goal; press Ctrl-C here to stop"
   wait "${NAV_PID}"
   exit $?
 fi

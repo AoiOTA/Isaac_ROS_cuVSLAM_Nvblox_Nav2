@@ -39,6 +39,7 @@ setup(
             "localization_recovery_manager = jackal_experiments.localization_recovery_manager:main",
             "resilient_navigation = jackal_experiments.resilient_navigation:main",
             "manual_goal_bridge = jackal_experiments.manual_goal_bridge:main",
+            "manual_navigation_ready = jackal_experiments.manual_navigation_ready:main",
             "nav2_lifecycle_guard = jackal_experiments.nav2_lifecycle_guard:main",
         ]
     },

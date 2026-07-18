@@ -24,13 +24,13 @@ def test_mapping_uses_all_eight_images_and_navigation_omits_rear_publishers() ->
     navigation = parameters("visual_slam_navigation_6cam.yaml", "visual_slam_node")
     assert mapping["num_cameras"] == mapping["min_num_images"] == 8
     assert mapping["camera_optical_frames"] == CAMERA_FRAMES
-    # The saved cuVSLAM rig remains an eight-camera calibration.  Runtime can
-    # track from the six front/side publishers because min_num_images is two.
-    assert navigation["num_cameras"] == 8
+    # Runtime declarations must match the six publishers; otherwise cuVSLAM's
+    # input synchronizer waits forever for the disabled rear Hawk.
+    assert navigation["num_cameras"] == 6
     assert navigation["min_num_images"] == 2
-    assert navigation["camera_optical_frames"] == CAMERA_FRAMES
+    assert navigation["camera_optical_frames"] == CAMERA_FRAMES[:6]
     assert mapping["image_jitter_threshold_ms"] >= 100.0
-    assert navigation["image_jitter_threshold_ms"] >= 100.0
+    assert navigation["image_jitter_threshold_ms"] == 501.0
 
     mapping_vgl = parameters(
         "vgl_mapping_8cam.yaml", "visual_global_localization_node"

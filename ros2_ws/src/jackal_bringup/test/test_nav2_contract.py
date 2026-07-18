@@ -140,6 +140,57 @@ def test_rviz_contains_every_stage8_display_source() -> None:
         "/collision_monitor/stop_zone",
     }
     assert required <= topics
+    assert "/goal_pose" in topics
+
+
+def test_navigation_rviz_keeps_heavy_sensor_geometry_on_demand() -> None:
+    rviz = yaml.safe_load((BRINGUP / "rviz/navigation.rviz").read_text())
+    displays = rviz["Visualization Manager"]["Displays"]
+    nvblox = next(display for display in displays if display.get("Name") == "Nvblox")
+    assert all(not display["Enabled"] for display in nvblox["Displays"])
+    sensors = next(
+        display
+        for display in displays
+        if display.get("Name") == "Visual sensors and safety"
+    )
+    expensive = {
+        "Front left image",
+        "Front depth",
+        "Left Hawk on demand",
+        "Right Hawk on demand",
+        "Back Hawk on demand",
+        "Depth obstacles in odom",
+    }
+    assert all(
+        not display["Enabled"]
+        for display in sensors["Displays"]
+        if display["Name"] in expensive
+    )
+    assert next(
+        display
+        for display in sensors["Displays"]
+        if display["Name"] == "Depth safety scan"
+    )["Enabled"]
+
+
+def test_mapping_rviz_shows_geometry_without_default_camera_decoding() -> None:
+    rviz = yaml.safe_load((BRINGUP / "rviz/mapping.rviz").read_text())
+    topics = collect_values(rviz)
+    assert {
+        "/robot_description",
+        "/visual_slam/tracking/slam_path",
+        "/nvblox_node/mesh",
+        "/nvblox_node/static_esdf_pointcloud",
+        "/front_stereo_camera/left/image_raw",
+        "/front_stereo_camera/depth/image_raw",
+    } <= topics
+    displays = rviz["Visualization Manager"]["Displays"]
+    sensor_group = next(
+        display
+        for display in displays
+        if display.get("Name") == "Sensor views (disabled by default)"
+    )
+    assert all(not display["Enabled"] for display in sensor_group["Displays"])
 
 
 def test_phase8_launch_enables_health_gate_and_runtime_components() -> None:
@@ -153,17 +204,51 @@ def test_phase8_launch_enables_health_gate_and_runtime_components() -> None:
         '"nav2.launch.py"',
         'executable="localization_bootstrap"',
         'executable="navigation_tf_bridge"',
+        'executable="manual_goal_bridge"',
+        '"anchor_pose_topic": "/vgl_pose_relay/pose"',
+        '"anchor_ready_topic": "/localization/ready"',
+        '"action_topic": "/navigate_to_pose"',
         'executable="rviz2"',
         "TimerAction",
-        'DeclareLaunchArgument("nav2_start_delay", default_value="12.0")',
+        'DeclareLaunchArgument("nav2_start_delay", default_value="20.0")',
     ):
         assert token in launch
+
+
+def test_manual_gui_rviz_entrypoints_are_guarded() -> None:
+    mapping = (ROOT / "scripts/run_mapping.sh").read_text()
+    manual_mapping = (ROOT / "scripts/run_manual_mapping.sh").read_text()
+    manual_navigation = (ROOT / "scripts/run_manual_navigation.sh").read_text()
+    manual_check = (ROOT / "scripts/check_manual_navigation.sh").read_text()
+    run_all = (ROOT / "scripts/run_all.sh").read_text()
+    for token in (
+        '--interactive --gui --rviz',
+        'run_mapping.sh',
+    ):
+        assert token in manual_mapping
+    assert 'rviz/mapping.rviz' in mapping
+    assert 'RVIZ="true"' in mapping
+    assert '--manual --gui --rviz' in manual_navigation
+    assert 'manual_navigation_ready' in manual_check
+    assert 'fastdds-super-client.xml' in manual_check
+    assert '/back_stereo_camera/left/image_raw' in manual_check
+    assert 'manual_navigation_ready' in run_all
+    assert 'fastdds discovery' in run_all
+    assert 'unset ROS_LOCALHOST_ONLY' in run_all
+    navigation_script = (ROOT / "scripts/run_navigation.sh").read_text()
+    assert "CALLER_ROS_DISCOVERY_SERVER" in navigation_script
+    assert 'manual navigation requires --gui' in run_all
+    assert 'manual navigation requires --rviz' in run_all
 
 
 def test_nav2_activation_is_staggered_after_map_server() -> None:
     launch = (BRINGUP / "launch/nav2.launch.py").read_text()
     assert "TimerAction" in launch
-    assert "period=8.0" in launch
+    assert "NAVIGATION_START_SCHEDULE" in launch
+    assert "NAVIGATION_ACTIVATION_DELAY_S = 25.0" in launch
+    assert "OpaqueFunction" in launch
+    for delay in (6.0, 8.0, 10.0, 12.0, 14.0, 16.0, 18.0):
+        assert f"({delay}," in launch
     assert '"bond_timeout": 15.0' in launch
 
 

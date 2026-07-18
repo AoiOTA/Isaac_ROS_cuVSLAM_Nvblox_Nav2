@@ -6,7 +6,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[4]
 
 
-def test_visual_slam_profiles_share_saved_rig_and_tf_contract() -> None:
+def test_visual_slam_profiles_match_runtime_camera_and_tf_contracts() -> None:
     root = ROOT / "ros2_ws/src/jackal_bringup/config"
     mapping = yaml.safe_load((root / "visual_slam_mapping_8cam.yaml").read_text())[
         "visual_slam_node"
@@ -15,9 +15,9 @@ def test_visual_slam_profiles_share_saved_rig_and_tf_contract() -> None:
         (root / "visual_slam_navigation_6cam.yaml").read_text()
     )["visual_slam_node"]["ros__parameters"]
     assert mapping["num_cameras"] == mapping["min_num_images"] == 8
-    assert navigation["num_cameras"] == 8
+    assert navigation["num_cameras"] == 6
     assert navigation["min_num_images"] == 2
-    assert mapping["camera_optical_frames"] == navigation["camera_optical_frames"]
+    assert navigation["camera_optical_frames"] == mapping["camera_optical_frames"][:6]
     for config in (mapping, navigation):
         assert config["tracking_mode"] == 1
         assert config["base_frame"] == "base_link"

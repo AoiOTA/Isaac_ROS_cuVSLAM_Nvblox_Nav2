@@ -44,7 +44,7 @@ def generate_launch_description() -> LaunchDescription:
             ),
             DeclareLaunchArgument("rviz", default_value="true"),
             DeclareLaunchArgument("nvblox_start_delay", default_value="3.0"),
-            DeclareLaunchArgument("nav2_start_delay", default_value="12.0"),
+            DeclareLaunchArgument("nav2_start_delay", default_value="20.0"),
             DeclareLaunchArgument(
                 "rviz_config", default_value=str(share / "rviz/navigation.rviz")
             ),
@@ -94,6 +94,12 @@ def generate_launch_description() -> LaunchDescription:
                         "use_sim_time": True,
                         "publish_rate_hz": 30.0,
                         "max_source_age_s": 1.0,
+                        # cuVGL supplies the global map pose.  Anchor it once
+                        # cuVSLAM has accepted the initial pose and recovered
+                        # stable tracking; no RViz 2D Pose Estimate is needed.
+                        "anchor_pose_topic": "/vgl_pose_relay/pose",
+                        "anchor_ready_topic": "/localization/ready",
+                        "odometry_topic": "/visual_slam/tracking/odometry",
                     }
                 ],
             ),
@@ -102,7 +108,29 @@ def generate_launch_description() -> LaunchDescription:
                 executable="localization_bootstrap",
                 name="localization_bootstrap",
                 output="screen",
-                parameters=[{"use_sim_time": True}],
+                parameters=[
+                    {
+                        "use_sim_time": True,
+                        "max_trigger_attempts": 60,
+                        "trigger_period_s": 2.0,
+                    }
+                ],
+            ),
+            Node(
+                package="jackal_experiments",
+                executable="manual_goal_bridge",
+                name="manual_goal_bridge",
+                output="screen",
+                parameters=[
+                    {
+                        "use_sim_time": True,
+                        "goal_topic": "/goal_pose",
+                        "action_topic": "/navigate_to_pose",
+                        "required_frame": "map",
+                        "ready_topic": "/localization/ready",
+                        "require_ready": True,
+                    }
+                ],
             ),
             Node(
                 package="rviz2",

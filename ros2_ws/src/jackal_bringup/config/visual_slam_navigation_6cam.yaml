@@ -2,9 +2,10 @@ visual_slam_node:
   ros__parameters:
     use_sim_time: true
     tracking_mode: 1
-    # Keep the saved 8-camera calibration while accepting the six publishers
-    # present in navigation_6cam. Rear IDs 6/7 remain absent.
-    num_cameras: 8
+    # Navigation creates only the front/left/right Hawk publishers. cuVSLAM
+    # must declare the same six inputs; declaring eight makes its synchronizer
+    # wait forever for the disabled rear pair.
+    num_cameras: 6
     min_num_images: 2
     camera_optical_frames:
       - front_stereo_camera_left_optical
@@ -13,8 +14,6 @@ visual_slam_node:
       - left_stereo_camera_right_optical
       - right_stereo_camera_left_optical
       - right_stereo_camera_right_optical
-      - back_stereo_camera_left_optical
-      - back_stereo_camera_right_optical
     imu_frame: front_stereo_camera_imu
     base_frame: base_link
     map_frame: map
@@ -24,8 +23,10 @@ visual_slam_node:
     enable_localization_n_mapping: true
     multicam_mode: 1
     sync_matching_threshold_ms: 40.0
-    # 10 Hz images are nominally 100 ms apart; tolerate scheduling jitter.
-    image_jitter_threshold_ms: 151.0
+    # With Isaac Sim GUI and RViz active on one RTX 4090, the 10 Hz render
+    # streams can arrive 200--400 ms apart in wall-clock time.  This threshold
+    # is navigation-only and keeps those measured gaps from resetting tracking.
+    image_jitter_threshold_ms: 501.0
     imu_jitter_threshold_ms: 10.0
     image_buffer_size: 160
     imu_buffer_size: 400
