@@ -13,7 +13,10 @@ from jackal_sim.articulation_runtime import (  # noqa: E402
     articulation_physics_config_from_mapping,
 )
 from jackal_sim.idle_brake import IdleBrake, IdleBrakeError, IdleBrakeState  # noqa: E402
-from jackal_sim.contact_classification import is_wheel_support_contact  # noqa: E402
+from jackal_sim.contact_classification import (  # noqa: E402
+    is_nonimpact_proximity_contact,
+    is_wheel_support_contact,
+)
 from jackal_sim.skid_steer_motion_assist import (  # noqa: E402
     SkidSteerMotionAssistError,
     SkidSteerMotionAssistState,
@@ -188,3 +191,21 @@ def test_contact_filter_only_accepts_low_vertical_wheel_support() -> None:
     assert not is_wheel_support_contact(
         "/World/Jackal/base_link", support, 0.0
     )
+
+
+def test_contact_filter_separates_nonimpact_proximity_from_collision() -> None:
+    class Contact:
+        def __init__(
+            self,
+            separation: float,
+            impulse: tuple[float, float, float],
+        ) -> None:
+            self.separation = separation
+            self.impulse = impulse
+
+    separated = [Contact(0.003, (0.0, 0.0, 0.0))]
+    penetrating = [Contact(-0.0001, (0.0, 0.0, 0.0))]
+    impacted = [Contact(0.003, (0.0, 0.002, 0.0))]
+    assert is_nonimpact_proximity_contact(separated)
+    assert not is_nonimpact_proximity_contact(penetrating)
+    assert not is_nonimpact_proximity_contact(impacted)

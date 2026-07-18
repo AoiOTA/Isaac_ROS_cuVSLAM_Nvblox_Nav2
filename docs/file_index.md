@@ -25,7 +25,7 @@
 | `isaac_sim/jackal_sim/idle_brake.py` | 命令超时与静止 creep 制动 |
 | `isaac_sim/jackal_sim/skid_steer_motion_assist.py` | 有边界的 skid-steer 曲率响应修正 |
 | `isaac_sim/jackal_sim/contact_monitor.py` | 所有 Jackal rigid body 的 PhysX 接触统计与接触样本证据 |
-| `isaac_sim/jackal_sim/contact_classification.py` | 只放行低位、竖直法向的轮地支撑接触 |
+| `isaac_sim/jackal_sim/contact_classification.py` | 区分零冲量正间隙 proximity 与低位竖直轮地支撑接触 |
 | `isaac_sim/jackal_sim/performance.py` | Isaac 官方 recorder + 自适应墙钟采样 |
 
 `dynamic_obstacles.py`、`dynamic_motion.py` 与旧 phase 脚本只为历史回溯保留；`navigation_sim.py` 在本分支拒绝 dynamic profile。

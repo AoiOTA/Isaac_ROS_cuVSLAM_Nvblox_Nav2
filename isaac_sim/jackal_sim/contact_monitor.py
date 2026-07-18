@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 from collections import Counter
+import math
 import time
 
 from omni.physx import get_physx_simulation_interface
 from pxr import PhysicsSchemaTools, PhysxSchema, Usd, UsdPhysics
 
-from .contact_classification import is_wheel_support_contact
+from .contact_classification import (
+    is_nonimpact_proximity_contact,
+    is_wheel_support_contact,
+)
 
 
 class RobotContactMonitor:
@@ -66,10 +70,13 @@ class RobotContactMonitor:
         self.started_wall = time.monotonic()
         self.events = 0
         self.filtered_floor_events = 0
+        self.filtered_proximity_events = 0
         self.filtered_support_events = 0
         self.empty_contact_events = 0
         self.pairs: Counter[tuple[str, str]] = Counter()
+        self.proximity_pairs: Counter[tuple[str, str]] = Counter()
         self.support_pairs: Counter[tuple[str, str]] = Counter()
+        self.pair_audits: dict[tuple[str, str], dict[str, float | int]] = {}
         self.collision_samples: list[dict[str, object]] = []
         self.subscription = (
             get_physx_simulation_interface().subscribe_contact_report_events(
@@ -105,6 +112,11 @@ class RobotContactMonitor:
                 self.empty_contact_events += 1
                 continue
             records = [data[index] for index in range(offset, offset + count)]
+            self._audit_records(pair, records)
+            if is_nonimpact_proximity_contact(records):
+                self.filtered_proximity_events += 1
+                self.proximity_pairs[pair] += 1
+                continue
             if is_wheel_support_contact(
                 robot_actor,
                 records,
@@ -131,10 +143,47 @@ class RobotContactMonitor:
                     }
                 )
 
+    def _audit_records(
+        self,
+        pair: tuple[str, str],
+        records: list[object],
+    ) -> None:
+        audit = self.pair_audits.setdefault(
+            pair,
+            {
+                "event_count": 0,
+                "record_count": 0,
+                "minimum_separation_m": math.inf,
+                "maximum_impulse_norm": 0.0,
+                "maximum_contact_z_m": -math.inf,
+                "minimum_absolute_normal_z": math.inf,
+            },
+        )
+        audit["event_count"] = int(audit["event_count"]) + 1
+        audit["record_count"] = int(audit["record_count"]) + len(records)
+        for record in records:
+            audit["minimum_separation_m"] = min(
+                float(audit["minimum_separation_m"]),
+                float(record.separation),
+            )
+            audit["maximum_impulse_norm"] = max(
+                float(audit["maximum_impulse_norm"]),
+                math.sqrt(sum(float(value) ** 2 for value in record.impulse)),
+            )
+            audit["maximum_contact_z_m"] = max(
+                float(audit["maximum_contact_z_m"]),
+                float(record.position[2]),
+            )
+            audit["minimum_absolute_normal_z"] = min(
+                float(audit["minimum_absolute_normal_z"]),
+                abs(float(record.normal[2])),
+            )
+
     def summary(self) -> dict[str, object]:
         return {
             "collision_event_count": self.events,
             "filtered_floor_event_count": self.filtered_floor_events,
+            "filtered_nonimpact_proximity_event_count": self.filtered_proximity_events,
             "filtered_support_event_count": self.filtered_support_events,
             "empty_contact_event_count": self.empty_contact_events,
             "reporter_count": len(self.reporter_paths),
@@ -145,6 +194,14 @@ class RobotContactMonitor:
                 {"actors": list(pair), "count": count}
                 for pair, count in sorted(self.pairs.items())
             ],
+            "nonimpact_proximity_filter": {
+                "minimum_separation_m": 0.0,
+                "maximum_impulse_norm": 1.0e-9,
+            },
+            "nonimpact_proximity_pairs": [
+                {"actors": list(pair), "count": count}
+                for pair, count in sorted(self.proximity_pairs.items())
+            ],
             "support_contact_filter": {
                 "wheel_or_caster_only": True,
                 "support_surface_z_m": self.support_surface_z,
@@ -154,6 +211,17 @@ class RobotContactMonitor:
             "support_contact_pairs": [
                 {"actors": list(pair), "count": count}
                 for pair, count in sorted(self.support_pairs.items())
+            ],
+            "contact_pair_audits": [
+                {
+                    "actors": list(pair),
+                    **{
+                        key: value
+                        for key, value in audit.items()
+                        if not isinstance(value, float) or math.isfinite(value)
+                    },
+                }
+                for pair, audit in sorted(self.pair_audits.items())
             ],
             "collision_samples": self.collision_samples,
             "monitor_wall_seconds": time.monotonic() - self.started_wall,

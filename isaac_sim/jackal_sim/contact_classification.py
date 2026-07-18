@@ -2,6 +2,34 @@
 
 from __future__ import annotations
 
+import math
+
+
+def is_nonimpact_proximity_contact(
+    records: list[object],
+    *,
+    maximum_impulse_norm: float = 1.0e-9,
+) -> bool:
+    """Identify PhysX contact-offset reports with no touch or applied impulse.
+
+    PhysX can emit a contact report while two shapes are still separated by a
+    positive contact offset.  Such a speculative/proximity record is not a
+    physical collision.  A negative separation or any measurable impulse keeps
+    the record in the collision/support classifier.
+    """
+
+    if not records:
+        return False
+    for record in records:
+        if float(record.separation) < 0.0:
+            return False
+        impulse_norm = math.sqrt(
+            sum(float(component) ** 2 for component in record.impulse)
+        )
+        if impulse_norm > maximum_impulse_norm:
+            return False
+    return True
+
 
 def is_wheel_support_contact(
     robot_path: str,
