@@ -62,26 +62,26 @@ frozen_parameters:
     depth_timeout_s: 1.25
     map_slice_timeout_s: 1.25
     command_timeout_s: 0.25
-    max_linear_acceleration_mps2: 1.0
-    max_linear_jerk_mps3: 5.0
-    max_angular_acceleration_radps2: 2.0
-    max_angular_jerk_radps3: 10.0
-    slew_response_rate: 8.0
+    max_linear_acceleration_mps2: 1.4
+    max_linear_jerk_mps3: 8.0
+    max_angular_acceleration_radps2: 2.8
+    max_angular_jerk_radps3: 16.0
+    slew_response_rate: 10.0
   collision_monitor:
     stop_clearance_m: 0.25
     slowdown_clearance_m: 0.50
-    slowdown_ratio: 0.35
+    slowdown_ratio: 0.65
     approach_time_s: 1.2
   nav2:
-    controller_frequency_hz: 20.0
+    controller_frequency_hz: 25.0
     mppi_time_steps: 48
     mppi_batch_size: 800
-    max_linear_velocity_mps: 0.55
-    max_angular_velocity_radps: 0.90
+    max_linear_velocity_mps: 1.10
+    max_angular_velocity_radps: 1.40
     internal_goal_position_tolerance_m: 0.15
     internal_goal_yaw_tolerance_deg: 8.0
-    local_inflation_radius_m: 0.80
-    global_inflation_radius_m: 0.80
+    local_inflation_radius_m: 0.65
+    global_inflation_radius_m: 0.65
     footprint_padding_m: 0.03
   nvblox:
     voxel_size_m: 0.05

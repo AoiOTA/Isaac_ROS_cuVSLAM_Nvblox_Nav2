@@ -14,8 +14,11 @@ nvblox_node:
     # below the low-latency contract even on an RTX 4090.
     clear_map_outside_radius_rate_hz: 1.0
     map_clearing_radius_m: 8.0
-    publish_layer_rate_hz: 5.0
-    publish_debug_vis_rate_hz: 2.0
+    # Publish at the depth integration rate so a static obstacle appears in
+    # the local planner on the next controller cycle instead of up to 200 ms
+    # later.  This is essential once the nominal forward speed exceeds 1 m/s.
+    publish_layer_rate_hz: 10.0
+    publish_debug_vis_rate_hz: 4.0
     layer_streamer_bandwidth_limit_mbps: -1.0
 
     static_mapper:

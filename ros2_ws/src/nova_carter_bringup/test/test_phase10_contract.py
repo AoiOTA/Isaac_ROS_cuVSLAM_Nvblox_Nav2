@@ -38,19 +38,36 @@ def test_stage10_frozen_safety_and_mapping_parameters_match_runtime() -> None:
     assert control["max_linear_jerk"] == frozen["command_guard"][
         "max_linear_jerk_mps3"
     ]
+    assert control["max_angular_acceleration"] == frozen["command_guard"][
+        "max_angular_acceleration_radps2"
+    ]
+    assert control["max_angular_jerk"] == frozen["command_guard"]["max_angular_jerk_radps3"]
     assert control["slew_response_rate"] == frozen["command_guard"][
         "slew_response_rate"
     ]
     local = nav2["local_costmap"]["local_costmap"]["ros__parameters"]
     global_map = nav2["global_costmap"]["global_costmap"]["ros__parameters"]
     goal_checker = nav2["controller_server"]["ros__parameters"]["goal_checker"]
+    controller = nav2["controller_server"]["ros__parameters"]["FollowPath"]
     assert goal_checker["xy_goal_tolerance"] == 0.15
     assert goal_checker["yaw_goal_tolerance"] < 0.14
-    assert local["inflation_layer"]["inflation_radius"] == 0.8
-    assert global_map["inflation_layer"]["inflation_radius"] == 0.8
+    assert controller["vx_max"] == frozen["nav2"]["max_linear_velocity_mps"]
+    assert controller["wz_max"] == frozen["nav2"]["max_angular_velocity_radps"]
+    assert nav2["controller_server"]["ros__parameters"]["controller_frequency"] == frozen[
+        "nav2"
+    ]["controller_frequency_hz"]
+    assert local["inflation_layer"]["inflation_radius"] == 0.65
+    assert global_map["inflation_layer"]["inflation_radius"] == 0.65
     mapper = dynamic["dynamic_mapper"]
     assert mapper["occupied_region_decay_probability"] == 0.35
     assert mapper["free_region_decay_probability"] == 0.60
+    assert dynamic["publish_layer_rate_hz"] == 10.0
+    collision = nav2["collision_monitor"]["ros__parameters"]
+    assert collision["SlowdownZone"]["slowdown_ratio"] == frozen["collision_monitor"][
+        "slowdown_ratio"
+    ]
+    phase9 = (BRINGUP / "launch/phase9.launch.py").read_text()
+    assert '"source_timeout": "0.75"' in phase9
 
 
 def test_stage10_automation_owns_processes_and_records_required_evidence() -> None:

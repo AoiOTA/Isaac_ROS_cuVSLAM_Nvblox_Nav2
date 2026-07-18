@@ -185,6 +185,11 @@ def parse_args() -> argparse.Namespace:
         help="name under scenarios.yaml dynamic_profiles; empty disables obstacles",
     )
     parser.add_argument(
+        "--static-profile",
+        default="",
+        help="name under scenarios.yaml static_profiles; empty disables static obstacles",
+    )
+    parser.add_argument(
         "--disable-follow-camera",
         action="store_true",
         help="keep the default GUI viewport camera instead of the smooth robot follower",
@@ -261,22 +266,38 @@ def parse_args() -> argparse.Namespace:
         )
     except (OSError, ValueError, yaml.YAMLError) as exc:
         parser.error(str(exc))
-    if args.dynamic_profile:
+    if args.dynamic_profile or args.static_profile:
         if not args.scenario_config.is_file():
             parser.error(f"scenario config does not exist: {args.scenario_config}")
         try:
             scenarios = load_mapping(args.scenario_config, "scenario config")
+            static_profiles = scenarios.get("static_profiles", {})
             profiles = scenarios.get("dynamic_profiles", {})
-            if not isinstance(profiles, dict) or args.dynamic_profile not in profiles:
+            if args.static_profile and (
+                not isinstance(static_profiles, dict)
+                or args.static_profile not in static_profiles
+            ):
+                raise ValueError(
+                    f"static profile {args.static_profile!r} is not configured"
+                )
+            if args.dynamic_profile and (
+                not isinstance(profiles, dict) or args.dynamic_profile not in profiles
+            ):
                 raise ValueError(
                     f"dynamic profile {args.dynamic_profile!r} is not configured"
                 )
-            args.dynamic_scenario = profiles[args.dynamic_profile]
-            if not isinstance(args.dynamic_scenario, dict):
+            args.static_scenario = (
+                static_profiles[args.static_profile] if args.static_profile else None
+            )
+            args.dynamic_scenario = profiles[args.dynamic_profile] if args.dynamic_profile else None
+            if args.static_scenario is not None and not isinstance(args.static_scenario, dict):
+                raise ValueError("selected static profile must be a mapping")
+            if args.dynamic_scenario is not None and not isinstance(args.dynamic_scenario, dict):
                 raise ValueError("selected dynamic profile must be a mapping")
         except (OSError, ValueError, yaml.YAMLError) as exc:
             parser.error(str(exc))
     else:
+        args.static_scenario = None
         args.dynamic_scenario = None
     return args
 
@@ -310,6 +331,7 @@ def run(args: argparse.Namespace) -> int:
     from nova_carter_sim.contact_monitor import RobotContactMonitor
     from nova_carter_sim.follow_camera import FollowCamera, activate_viewport_camera
     from nova_carter_sim.dynamic_obstacles import DynamicObstacleManager
+    from nova_carter_sim.static_obstacles import StaticObstacleManager
     from nova_carter_sim.sensors import create_sensor_graphs
     from nova_carter_sim.runtime import (
         stage_identity,
@@ -326,6 +348,8 @@ def run(args: argparse.Namespace) -> int:
     timeline = None
     follow_camera = None
     dynamic_obstacles = None
+    static_obstacles = None
+    follow_camera_bindings = 0
     contact_monitor = None
     report: dict[str, object] = {
         "status": "failed",
@@ -403,6 +427,18 @@ def run(args: argparse.Namespace) -> int:
             if stage_identity() != active_stage_identity:
                 raise RuntimeError("active stage changed while creating Phase 4 graphs")
 
+        if args.static_scenario is not None:
+            static_obstacles = StaticObstacleManager(
+                stage,
+                args.static_profile,
+                args.static_scenario,
+                (spawn.x, spawn.y, spawn.z),
+            )
+            app.update()
+            report["static_obstacles"] = static_obstacles.summary()
+        else:
+            report["static_obstacles"] = {"enabled": False}
+
         if args.dynamic_scenario is not None:
             dynamic_obstacles = DynamicObstacleManager(
                 stage,
@@ -438,6 +474,9 @@ def run(args: argparse.Namespace) -> int:
         timeline.play()
         for _ in range(10):
             app.update()
+        if follow_camera is not None:
+            activate_viewport_camera()
+            follow_camera_bindings += 1
 
         start_simulation_time = float(timeline.get_current_time())
         last_simulation_time = start_simulation_time
@@ -467,6 +506,9 @@ def run(args: argparse.Namespace) -> int:
                 dynamic_obstacles.update(float(timeline.get_current_time()))
             if follow_camera is not None:
                 follow_camera.update(1.0 / args.update_hz)
+                if frames % 30 == 0:
+                    activate_viewport_camera()
+                    follow_camera_bindings += 1
             frames += 1
             current_simulation_time = float(timeline.get_current_time())
             if current_simulation_time + 1.0e-9 < last_simulation_time:
@@ -534,6 +576,13 @@ def run(args: argparse.Namespace) -> int:
                 },
             }
         )
+        if follow_camera is not None:
+            report["follow_camera"].update(
+                {
+                    "viewport_bindings": follow_camera_bindings,
+                    **follow_camera.state(),
+                }
+            )
         print(
             "NOVA_CARTER_SIM_COMPLETED "
             f"mode={report['mode']} spawn=({spawn.x:.3f},{spawn.y:.3f},{spawn.z:.3f}) "

@@ -19,6 +19,29 @@ profiles:
     lighting_scale: 1.5
     color_temperature_k: 6500
 
+static_profiles:
+  warehouse_manual_static:
+    # These bodies are authored only in the anonymous session layer.  They are
+    # collidable and visible to the forward depth camera, but intentionally
+    # have no rigid-body motion or trajectory controller.
+    obstacles:
+      - name: orange_crate
+        kind: box
+        size_m: [0.42, 0.42, 0.68]
+        color_rgb: [0.95, 0.30, 0.08]
+        position_m: [0.90, 0.65, 0.34]
+      - name: blue_barrel
+        kind: capsule
+        radius_m: 0.22
+        height_m: 0.72
+        color_rgb: [0.08, 0.35, 0.95]
+        position_m: [1.80, -1.35, 0.36]
+      - name: yellow_crate
+        kind: box
+        size_m: [0.55, 0.32, 0.55]
+        color_rgb: [0.95, 0.78, 0.08]
+        position_m: [2.80, 0.20, 0.275]
+
 dynamic_profiles:
   warehouse_crossing:
     # The official scene forklift remains an official referenced prim; only

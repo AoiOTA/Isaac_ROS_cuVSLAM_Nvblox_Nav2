@@ -50,7 +50,7 @@ def generate_launch_description() -> LaunchDescription:
                 "odom_topic", default_value="/visual_slam/tracking/odometry"
             ),
             DeclareLaunchArgument("movement_time_allowance", default_value="25.0"),
-            DeclareLaunchArgument("source_timeout", default_value="0.40"),
+            DeclareLaunchArgument("source_timeout", default_value="0.75"),
             Node(
                 package="nav2_map_server",
                 executable="map_server",

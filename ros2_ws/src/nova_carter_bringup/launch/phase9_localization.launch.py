@@ -114,5 +114,19 @@ def generate_launch_description() -> LaunchDescription:
                 output="screen",
                 parameters=[{"use_sim_time": True}],
             ),
+            Node(
+                package="nova_carter_experiments",
+                executable="manual_goal_bridge",
+                name="manual_goal_bridge",
+                output="screen",
+                parameters=[
+                    {
+                        "use_sim_time": True,
+                        "goal_topic": "/goal_pose",
+                        "action_topic": "/navigate_to_pose_resilient",
+                        "required_frame": "map",
+                    }
+                ],
+            ),
         ]
     )

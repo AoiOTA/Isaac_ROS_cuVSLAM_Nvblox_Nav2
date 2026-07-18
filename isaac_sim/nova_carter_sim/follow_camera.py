@@ -67,6 +67,16 @@ class FollowCamera:
         ).GetInverse()
         self.transform.Set(camera_to_world)
 
+    def state(self) -> dict[str, list[float]]:
+        """Return the currently authored camera and focus positions for reporting."""
+
+        if self.eye is None or self.look_at is None:
+            raise RuntimeError("follow camera was queried before its first update")
+        return {
+            "eye_m": [float(value) for value in self.eye],
+            "look_at_m": [float(value) for value in self.look_at],
+        }
+
 
 def activate_viewport_camera() -> None:
     from omni.kit.viewport.utility import get_active_viewport
@@ -74,4 +84,11 @@ def activate_viewport_camera() -> None:
     viewport = get_active_viewport()
     if viewport is None:
         raise RuntimeError("Isaac Sim GUI has no active viewport")
-    viewport.set_active_camera(CAMERA_PATH)
+    # Isaac Sim 6 uses the ViewportAPI camera_path property.  set_active_camera
+    # belongs to an older viewport wrapper and can leave the visible viewport
+    # on its perspective camera after the timeline starts.
+    viewport.camera_path = Sdf.Path(CAMERA_PATH)
+    if str(viewport.camera_path) != CAMERA_PATH:
+        raise RuntimeError(
+            f"failed to bind GUI viewport to follow camera: {viewport.camera_path}"
+        )

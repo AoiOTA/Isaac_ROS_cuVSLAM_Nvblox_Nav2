@@ -26,7 +26,7 @@ python3 tools/check_stage1.py
 ./scripts/run_phase8_tests.sh warehouse_v1
 ./scripts/run_phase9_mapping.sh --map warehouse_v2_front
 ./scripts/run_phase9_navigation.sh --map warehouse_v2_front --rviz
-./scripts/run_phase9.sh --map warehouse_v2_front --headless --rviz
+./scripts/run_phase9.sh --map warehouse_v2_front --gui --rviz
 ./scripts/run_phase9_tests.sh warehouse_v2_front
 ./scripts/run_phase10_trial.sh --class dynamic --seed 11000 --goal-index 0 --record-bag
 ./scripts/run_phase10_hardening.sh warehouse_v2_front
@@ -234,21 +234,37 @@ PHASE8_GOAL_POSES='[1.0, 0.0, 0.0]' ./scripts/run_all.sh --map warehouse_v1 --he
 
 The default simulator update cap is 120 Hz and the physics rate remains 120 Hz. `PHASE8_GOAL_POSES` is intended for bounded tuning runs; the persisted Stage 8 checker requires the default three-goal report. Full interfaces and measured results are in [`docs/phase8_validation.md`](phase8_validation.md).
 
-## Stage 9 front-stereo dynamic navigation
+## Stage 9 front-stereo static-obstacle navigation
 
 The default one-command run is:
 
 ```bash
 cd /home/lyb/Workspace/Isaac_ROS_cuVSLAM_Nvblox_Nav2
-./scripts/run_phase9.sh --map warehouse_v2_front --headless --rviz
+./scripts/run_phase9.sh --map warehouse_v2_front --gui --rviz
 ```
 
-It owns a loopback-only Fast DDS discovery server, simulator, ROS launch and
-test runner. The simulator creates only `FrontStereo`, `FrontDepth` and
+It owns a loopback-only Fast DDS discovery server, simulator and ROS launch,
+then waits until Ctrl-C while RViz supplies manual goals. Select `2D Goal Pose`,
+click the destination and drag the desired heading. `/goal_pose` is forwarded
+to `/navigate_to_pose_resilient`; a newer click replaces the active manual
+goal. The simulator creates only `FrontStereo`, `FrontDepth` and
 `FrontImu` sensor graphs, publishes the front pair at 10 Hz and IMU at 120 Hz,
-and drives the `warehouse_crossing` dynamic profile. The ROS stack starts
+and creates the `warehouse_manual_static` profile with three collidable,
+non-moving obstacles. The ROS stack starts
 front-only cuVSLAM/cuVGL, wheel-local EKF, dynamic nvblox, recovery manager,
-resilient Nav2 action, complete Nav2, and optional RViz.
+resilient Nav2 action, complete Nav2, the manual goal bridge, and RViz. No
+goal is embedded or automatically sent in this default mode. MPPI and the
+velocity smoother allow up to 1.10 m/s forward and 1.40 rad/s angular motion;
+the 1.20 m/s / 1.60 rad/s Command Guard limits and Collision Monitor remain
+active. The front depth scan feeds both the rolling local costmap and global
+costmap, so static session-layer obstacles trigger a global replan as well as
+local MPPI avoidance.
+
+The original bounded three-goal acceptance remains available explicitly:
+
+```bash
+./scripts/run_phase9.sh --map warehouse_v2_front --headless --no-rviz --auto
+```
 
 To run only the ROS half against this repository's already running simulator:
 

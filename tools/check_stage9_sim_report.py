@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate the simulator half of a Stage 9 dynamic-navigation run."""
+"""Validate the simulator half of a Stage 9 static-obstacle run."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ EXPECTED_GRAPHS = {
     "/World/Graphs/FrontDepth",
     "/World/Graphs/FrontImu",
 }
-EXPECTED_KINDS = {"existing_forklift", "box", "capsule"}
+EXPECTED_KINDS = {"box", "capsule"}
 
 
 def main() -> int:
@@ -22,9 +22,10 @@ def main() -> int:
     args = parser.parse_args()
     report = json.loads(args.report.read_text(encoding="utf-8"))
     sensors = report.get("sensor_graphs", {})
+    statics = report.get("static_obstacles", {})
     dynamics = report.get("dynamic_obstacles", {})
     runtime = report.get("runtime", {})
-    obstacles = dynamics.get("obstacles", [])
+    obstacles = statics.get("obstacles", [])
     checks = {
         "simulator_passed": report.get("status") == "passed",
         "stage_opened_once": report.get("stage_open_count") == 1,
@@ -38,14 +39,14 @@ def main() -> int:
         "surround_rate_is_10_hz": sensors.get("surround_rate_hz") == 10.0,
         "surround_resolution_is_bounded": sensors.get("surround_resolution")
         == [1280, 800],
-        "dynamic_profile_enabled": dynamics.get("enabled") is True
-        and dynamics.get("profile") == "warehouse_crossing",
-        "all_dynamic_shapes_present": {item.get("kind") for item in obstacles}
-        == EXPECTED_KINDS,
-        "all_dynamic_shapes_moved": len(obstacles) == 3
-        and all(float(item.get("distance_travelled_m", 0.0)) >= 0.20 for item in obstacles),
-        "no_robot_dynamic_contact": dynamics.get("robot_contact_count") == 0
-        and dynamics.get("robot_contact_pairs") == [],
+        "static_profile_enabled": statics.get("enabled") is True
+        and statics.get("profile") == "warehouse_manual_static",
+        "static_shapes_present": len(obstacles) == 3
+        and {item.get("kind") for item in obstacles} == EXPECTED_KINDS,
+        "static_shapes_have_fixed_positions": all(
+            len(item.get("position_m", [])) == 3 for item in obstacles
+        ),
+        "dynamic_profile_disabled": dynamics.get("enabled") is False,
         "simulation_time_monotonic": runtime.get("time_regressions") == 0
         and float(runtime.get("simulation_time_delta", 0.0)) > 0.0,
         "robot_has_no_final_overlap": runtime.get("final_unexpected_overlaps") == [],

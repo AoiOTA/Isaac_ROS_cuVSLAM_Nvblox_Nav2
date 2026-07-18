@@ -89,7 +89,11 @@ def generate_launch_description() -> LaunchDescription:
                             ),
                             "odom_topic": "/odometry/filtered",
                             "movement_time_allowance": "60.0",
-                            "source_timeout": "1.50",
+                            # A 10 Hz depth stream plus the timestamp relay
+                            # stays comfortably inside 0.75 s.  The previous
+                            # 1.50 s override let the safety layer drive on a
+                            # stale scan for too long around static obstacles.
+                            "source_timeout": "0.75",
                         },
                     )
                 ],

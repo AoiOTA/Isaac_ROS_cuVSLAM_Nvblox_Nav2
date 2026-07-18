@@ -29,28 +29,29 @@ cd /home/lyb/Workspace/Isaac_ROS_cuVSLAM_Nvblox_Nav2
 
 ## 3. 日常完整导航
 
-带 Isaac Sim GUI 和 RViz 的自动动态导航：
+带 Isaac Sim GUI 和 RViz 的手动目标静态障碍导航：
 
 ```bash
 ./scripts/run_phase9.sh --map warehouse_v2_front --gui --rviz
 ```
 
-低开销 headless 运行：
+入口完成初始化后不会自动发送目标。在RViz地图中选择工具栏的`2D Goal Pose`，在目标位置按下鼠标左键并拖动箭头指定最终朝向，松开后机器人开始导航。再次发布目标会先取消当前手动目标，再执行新目标。目标通过`/goal_pose`进入`/navigate_to_pose_resilient`，所以定位丢失时仍会安全停车、恢复定位并续航。
+
+手动模式必须带`--rviz`；Isaac Sim本体也可以用低开销headless模式：
 
 ```bash
-./scripts/run_phase9.sh --map warehouse_v2_front --headless --no-rviz
+./scripts/run_phase9.sh --map warehouse_v2_front --headless --rviz
 ```
 
-该入口会依次启动本项目专属 Fast DDS discovery server、Isaac Sim Standalone、前向传感器、cuVSLAM/cuVGL、dynamic nvblox、Nav2 和自动目标执行器；结束时只清理自己创建的进程组。`Ctrl-C` 可以安全停止整套系统。不要使用 `killall` 或全局 `pkill`，机器上可能还有其他项目。
+该入口会依次启动本项目专属 Fast DDS discovery server、Isaac Sim Standalone、前向传感器、cuVSLAM/cuVGL、nvblox、Nav2、手动目标桥接器和RViz，并持续运行到用户停止。场景额外放置三个静态、可碰撞的箱体/胶囊体，不含动态障碍物；前向/角速度导航上限为1.10 m/s、1.40 rad/s。前向深度同时写入局部与全局代价地图，因此物体进入视野后会触发路径重规划，再由MPPI平滑绕行。`Ctrl-C` 可以安全停止整套系统。不要使用 `killall` 或全局 `pkill`，机器上可能还有其他项目。
 
-不改代码而执行一个或多个自定义 `map` 坐标目标，可传入扁平的 `x,y,yaw` 三元组：
+需要运行原来的自动三目标验收时显式使用`--auto`；该模式可以不打开RViz：
 
 ```bash
-PHASE9_GOAL_POSES='[2.0,0.0,0.0,1.8,10.5,1.570796327]' \
-  ./scripts/run_phase9.sh --map warehouse_v2_front --headless --no-rviz
+./scripts/run_phase9.sh --map warehouse_v2_front --headless --no-rviz --auto
 ```
 
-脚本仍会自动全局重定位、逐个发送目标并验证数据链。目标必须位于当前occupancy map的连通自由空间；yaw单位为弧度。需要正式可比较的结果时不要自定义目标，使用阶段11固定六目标和固定seed。
+自动模式仍支持用`PHASE9_GOAL_POSES`传入`x,y,yaw`三元组，但这只用于有界调试和回归。需要正式可比较的结果时使用阶段11固定六目标和固定seed。
 
 阶段11的单目标、固定 seed、完整指标运行更适合复现实验：
 
@@ -99,7 +100,7 @@ data/maps/warehouse_v2_front/
 
 ## 5. RViz 与第三人称视角
 
-`--rviz` 会加载 `nova_carter_bringup/rviz/navigation.rviz`，包含：
+`--rviz` 会加载 `nova_carter_bringup/rviz/navigation.rviz`。其`2D Goal Pose`发布`/goal_pose`，并包含：
 
 - RobotModel 和完整 TF；
 - occupancy map、全局/局部代价地图；
@@ -108,7 +109,7 @@ data/maps/warehouse_v2_front/
 - nvblox mesh、ESDF 和 combined map slice；
 - footprint、Collision Monitor 区域和定位状态。
 
-`--gui` 模式会创建 `/World/FollowCameraRig` 并平滑跟随机器人。第三人称相机只用于观察，不发布 ROS 图像，也不参与导航。headless 模式不创建 viewport 依赖。
+`--gui` 模式会创建 `/World/FollowCameraRig` 并平滑跟随机器人。它会在时间线开始后重新绑定Isaac Sim 6的活动viewport，因此不会落回默认透视相机。第三人称相机只用于观察，不发布 ROS 图像，也不参与导航。headless 模式不创建 viewport 依赖。
 
 ## 6. 阶段11正式验收
 

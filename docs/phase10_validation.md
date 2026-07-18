@@ -77,11 +77,11 @@ actual ground-truth path / SmacPlanner2D first valid global plan - 1
 | 子系统 | 关键值 |
 |---|---|
 | Command Guard | cuVSLAM 1.50 s、depth/map slice 1.25 s、Twist 0.25 s |
-| 最终平滑 | 临界阻尼响应率8.0；线加速度1.0 m/s²、线jerk 5.0 m/s³、角加速度2.0 rad/s²、角jerk 10.0 rad/s³ |
-| Collision Monitor | 0.25 m停车、0.50 m减速、0.35倍率、1.2 s approach |
-| MPPI DiffDrive | 20 Hz、48 time steps、800 batch、0.55 m/s、0.90 rad/s |
+| 最终平滑 | 当前：临界阻尼响应率10.0；线加速度1.4 m/s²、线jerk 8.0 m/s³、角加速度2.8 rad/s²、角jerk 16.0 rad/s³ |
+| Collision Monitor | 0.25 m停车、0.50 m减速、0.65倍率、1.2 s approach |
+| MPPI DiffDrive | 当前：25 Hz、48 time steps、800 batch、1.10 m/s、1.40 rad/s；历史测量使用0.55 m/s、0.90 rad/s |
 | GoalChecker | 内部0.15 m、8°；外部验收0.25 m、10° |
-| Costmap | 全局/局部inflation 0.80 m、footprint padding 0.03 m |
+| Costmap | 全局/局部inflation 0.65 m、footprint padding 0.03 m；前向深度同时进入全局与局部障碍层 |
 | nvblox | 5 cm voxel、10 Hz decay、free/occupied decay 0.60/0.35 |
 
 这些值通过`phase10.launch.py`传入更严格的健康超时，不改变阶段9公共launch的默认兼容行为。

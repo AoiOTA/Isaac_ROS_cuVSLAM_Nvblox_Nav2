@@ -95,18 +95,18 @@ def test_dynamic_nvblox_and_combined_nav2_wiring() -> None:
     assert "odom1" not in ekf
     assert 'executable="localization_recovery_manager"' in localization
     assert 'executable="resilient_navigation"' in localization
+    assert 'executable="manual_goal_bridge"' in localization
+    assert '"goal_topic": "/goal_pose"' in localization
+    assert '"action_topic": "/navigate_to_pose_resilient"' in localization
 
 
-def test_dynamic_scenario_has_heterogeneous_movers() -> None:
+def test_phase9_manual_scenario_has_only_static_obstacles() -> None:
     scenarios = yaml.safe_load((ROOT / "config/scenarios.yaml").read_text())
-    obstacles = scenarios["dynamic_profiles"]["warehouse_crossing"]["obstacles"]
-    assert {item["kind"] for item in obstacles} == {
-        "existing_forklift",
-        "box",
-        "capsule",
-    }
-    assert any(item.get("prim_path") == "/World/Forklift" for item in obstacles)
-    assert all(item["period_s"] > 0.0 for item in obstacles)
+    obstacles = scenarios["static_profiles"]["warehouse_manual_static"]["obstacles"]
+    assert len(obstacles) == 3
+    assert {item["kind"] for item in obstacles} == {"box", "capsule"}
+    assert all(len(item["position_m"]) == 3 for item in obstacles)
+    assert all("period_s" not in item for item in obstacles)
 
 
 def test_phase9_runtime_uses_front_stereo_and_strict_sync() -> None:
@@ -119,6 +119,18 @@ def test_phase9_runtime_uses_front_stereo_and_strict_sync() -> None:
     assert '"${PHASE9_FRONT_IMAGE_RATE_HZ:-10}"' in full
     assert "--reliable-sensor-qos" in full
     assert "require_surround_cameras:=false" in full
+    assert '--static-profile "${SCENARIO}"' in full
+    assert "--dynamic-profile" not in full
+    assert "require_dynamic_outputs:=true" not in full
+    simulator = (ROOT / "isaac_sim/navigation_sim.py").read_text()
+    static_manager = (ROOT / "isaac_sim/nova_carter_sim/static_obstacles.py").read_text()
+    follow_camera = (ROOT / "isaac_sim/nova_carter_sim/follow_camera.py").read_text()
+    assert '"static_obstacles"' in simulator
+    assert "StaticObstacleManager" in simulator
+    assert "CollisionAPI.Apply" in static_manager
+    assert "period_s" not in static_manager
+    assert "viewport.camera_path = Sdf.Path(CAMERA_PATH)" in follow_camera
+    assert "viewport.set_active_camera" not in follow_camera
     mapping_entry = (ROOT / "scripts/run_phase9_mapping.sh").read_text()
     assert "--four-way" not in mapping_entry
 
@@ -195,6 +207,40 @@ def test_rviz_exposes_dynamic_and_on_demand_sources() -> None:
         "/back_stereo_camera/left/image_raw",
     ):
         assert topic in text
+
+
+def test_phase9_defaults_to_rviz_manual_goal_dispatch() -> None:
+    script = (ROOT / "scripts/run_phase9.sh").read_text()
+    rviz = (BRINGUP / "rviz/navigation.rviz").read_text()
+    setup = (ROOT / "ros2_ws/src/nova_carter_experiments/setup.py").read_text()
+    bridge = (
+        ROOT
+        / "ros2_ws/src/nova_carter_experiments/nova_carter_experiments/manual_goal_bridge.py"
+    ).read_text()
+
+    assert 'RUN_MODE="manual"' in script
+    assert '--manual) RUN_MODE="manual"' in script
+    assert '--auto) RUN_MODE="auto"' in script
+    assert 'if [[ "${RUN_MODE}" == "manual" ]]' in script
+    assert script.index('if [[ "${RUN_MODE}" == "manual" ]]') < script.index(
+        "ros2 run nova_carter_experiments navigation_test_runner"
+    )
+    assert "Use the RViz '2D Goal Pose' tool" in script
+    assert 'ros2 run nova_carter_experiments navigation_test_runner' in script
+    assert "rviz_default_plugins/SetGoal" in rviz
+    assert "Value: /goal_pose" in rviz
+    assert "nav2_rviz_plugins/GoalTool" not in rviz
+    assert "manual_goal_bridge =" in setup
+    assert 'self.declare_parameter("goal_topic", "/goal_pose")' in bridge
+    assert (
+        'self.declare_parameter("action_topic", "/navigate_to_pose_resilient")'
+        in bridge
+    )
+
+
+def test_phase9_regression_explicitly_selects_auto_mode() -> None:
+    regression = (ROOT / "scripts/run_phase9_tests.sh").read_text()
+    assert '"${rviz_arg}" --auto --report "${report}"' in regression
 
 
 def test_phase9_full_runner_owns_a_local_discovery_server() -> None:

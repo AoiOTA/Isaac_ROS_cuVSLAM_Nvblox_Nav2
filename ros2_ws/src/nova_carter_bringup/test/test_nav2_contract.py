@@ -30,8 +30,10 @@ def test_nav2_uses_diff_drive_mppi_and_smac_2d() -> None:
     planner = config["planner_server"]["ros__parameters"]["GridBased"]
     assert controller["plugin"] == "nav2_mppi_controller::MPPIController"
     assert controller["motion_model"] == "DiffDrive"
-    assert controller["vx_max"] <= 0.7
-    assert controller["wz_max"] <= 1.0
+    assert controller["vx_max"] == 1.10
+    assert controller["wz_max"] == 1.40
+    assert controller["ax_max"] == 1.60
+    assert controller["az_max"] == 3.20
     assert controller["temperature"] <= 0.2
     assert controller["GoalCritic"]["cost_weight"] >= 10.0
     assert controller["VelocityDeadbandCritic"]["deadband_velocities"] == [0.08, 0.0, 0.08]
@@ -53,7 +55,10 @@ def test_costmap_and_visual_safety_sources_are_wired() -> None:
     assert local["obstacle_layer"]["depth_scan"]["topic"] == "/front_depth/scan"
     assert local["obstacle_layer"]["depth_scan"]["data_type"] == "LaserScan"
     assert global_map["global_frame"] == "map"
-    assert global_map["plugins"] == ["static_layer", "inflation_layer"]
+    assert global_map["plugins"] == ["static_layer", "obstacle_layer", "inflation_layer"]
+    assert global_map["obstacle_layer"]["depth_scan"]["topic"] == "/front_depth/scan"
+    assert local["update_frequency"] == 12.0
+    assert global_map["update_frequency"] == 5.0
 
 
 def test_scan_is_shifted_behind_visual_slam_tf_before_safety_consumers() -> None:
@@ -97,7 +102,10 @@ def test_command_chain_and_collision_zones_are_fixed() -> None:
     assert collision["StopZone"]["action_type"] == "stop"
     assert collision["SlowdownZone"]["action_type"] == "slowdown"
     velocity = config["velocity_smoother"]["ros__parameters"]
-    assert velocity["max_velocity"] == [0.55, 0.0, 0.9]
+    assert velocity["max_velocity"] == [1.10, 0.0, 1.40]
+    assert velocity["max_accel"] == [1.40, 0.0, 2.80]
+    assert collision["SlowdownZone"]["slowdown_ratio"] == 0.65
+    assert collision["source_timeout"] == 0.75
 
 
 def test_rviz_contains_every_stage8_display_source() -> None:

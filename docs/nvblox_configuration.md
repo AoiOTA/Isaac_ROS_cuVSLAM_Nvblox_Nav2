@@ -926,7 +926,7 @@ nvblox_node:
     integrate_depth_rate_hz: 10.0
     integrate_color_rate_hz: 2.0
     decay_dynamic_occupancy_rate_hz: 10.0
-    publish_layer_rate_hz: 5.0
+    publish_layer_rate_hz: 10.0
     dynamic_mapper:
       projective_integrator_max_integration_distance_m: 5.0
       occupied_region_half_width_m: 0.15
@@ -951,7 +951,7 @@ Nav2局部NvbloxCostmapLayer改接`combined_map_slice`，而不是阶段6/8的`s
 完整验证入口为：
 
 ```bash
-./scripts/run_phase9.sh --map warehouse_v2_front --headless --rviz
+./scripts/run_phase9.sh --map warehouse_v2_front --headless --rviz --auto
 ```
 
 报告必须同时记录dynamic slice、dynamic ESDF、combined slice和combined ESDF的非零元素，并验证Robot与动态物体PhysX接触数为0。完整结果见[阶段9验证记录](phase9_validation.md)。

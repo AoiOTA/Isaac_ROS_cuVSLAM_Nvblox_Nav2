@@ -19,6 +19,9 @@ def main() -> int:
         "camera_enabled": camera.get("enabled") is True,
         "correct_prim": camera.get("prim") == "/World/FollowCameraRig",
         "viewport_active": camera.get("viewport_active") is True,
+        "viewport_rebound_after_play": int(camera.get("viewport_bindings", 0)) >= 1,
+        "camera_pose_reported": len(camera.get("eye_m", [])) == 3
+        and len(camera.get("look_at_m", [])) == 3,
     }
     print(json.dumps(checks, indent=2, sort_keys=True))
     return 0 if all(checks.values()) else 1

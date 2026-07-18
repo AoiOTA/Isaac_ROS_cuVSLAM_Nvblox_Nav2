@@ -42,9 +42,9 @@ for ((trial=1; trial<=TRIALS; trial++)); do
   info "Running isolated Stage 9 trial ${trial}/${TRIALS} (${rviz_arg})"
   PHASE9_ROS_DOMAIN_ID="$((58 + trial))" \
     "${PROJECT_ROOT}/scripts/run_phase9.sh" --map "${MAP_NAME}" --headless \
-    "${rviz_arg}" --report "${report}"
+    "${rviz_arg}" --auto --report "${report}"
 done
 python3 "${PROJECT_ROOT}/tools/summarize_phase9_trials.py" \
   "${REPORT_DIR}/summary.json" "${reports[@]}"
 cp "${REPORT_DIR}/summary.json" "${PROJECT_ROOT}/data/reports/phase9/summary-latest.json"
-info "Stage 9 passed ${TRIALS}/${TRIALS} independent dynamic-navigation trials"
+info "Stage 9 passed ${TRIALS}/${TRIALS} independent static-obstacle trials"

@@ -58,7 +58,7 @@ GUI模式：
 ./scripts/run_control.sh
 ```
 
-输入为`/cmd_vel_safe`，安全输出为`/cmd_vel_sim`。Command Guard拒绝NaN/Inf、执行1.0 m/s和1.2 rad/s硬限幅、只保留`linear.x/angular.z`、进行加速度/jerk约束，并在0.25秒无命令时立即归零。仿真发布`/clock`、`/joint_states`和`/ground_truth/odometry`，ROS节点发布不带TF的`/wheel/odometry`。
+输入为`/cmd_vel_safe`，安全输出为`/cmd_vel_sim`。Command Guard拒绝NaN/Inf、执行1.2 m/s和1.6 rad/s硬限幅、只保留`linear.x/angular.z`、进行加速度/jerk约束，并在0.25秒无命令时立即归零。仿真发布`/clock`、`/joint_states`和`/ground_truth/odometry`，ROS节点发布不带TF的`/wheel/odometry`。
 
 一键执行阶段3实际物理验收：
 
@@ -165,18 +165,20 @@ cd /home/lyb/Workspace/Isaac_ROS_cuVSLAM_Nvblox_Nav2
 
 本机最终带RViz回归的三个目标全部成功，位置误差为0.195、0.240和0.193 m，航向误差为8.62°、3.07°和2.97°；真值轨迹4.64 m，四级速度链约20 Hz，局部MPPI路径约20 Hz，TF约46 Hz，深度时间戳无回退。详细架构、接口、调参依据与实测证据见[Phase 8 Validation](docs/phase8_validation.md)。
 
-## 阶段9 前向双目动态导航与自动恢复
+## 阶段9 前向双目静态障碍导航与自动恢复
 
 阶段9默认地图和完整启动入口为：
 
 ```bash
 ./scripts/run_phase9_mapping.sh --map warehouse_v2_front
 ./scripts/run_phase9_navigation.sh --map warehouse_v2_front --rviz
-./scripts/run_phase9.sh --map warehouse_v2_front --headless --rviz
+./scripts/run_phase9.sh --map warehouse_v2_front --gui --rviz
 ./scripts/run_phase9_tests.sh warehouse_v2_front
 ```
 
-`run_phase9.sh`自动启动项目独占的本地Fast DDS发现服务器、Standalone仿真、前向双目cuVSLAM、前向双目cuVGL、dynamic nvblox、Nav2和可选RViz，并执行三目标路线。仿真在匿名session layer中驱动官方叉车以及项目创建的箱体和胶囊体；官方Warehouse和Nova Carter USD不会被保存或修改。
+`run_phase9.sh`默认启动项目独占的本地Fast DDS发现服务器、Standalone仿真、前向双目cuVSLAM、前向双目cuVGL、nvblox、Nav2和RViz，然后持续等待人工目标。使用RViz工具栏的`2D Goal Pose`在地图上按下并拖出朝向；目标经`/goal_pose`桥接到`/navigate_to_pose_resilient`，新目标会替换当前目标，按`Ctrl-C`结束。脚本本身不再预置或自动发送目标。它在匿名session layer中摆放三个静态碰撞障碍物，不再驱动动态障碍物；官方Warehouse和Nova Carter USD不会被保存或修改。MPPI与速度平滑器的前向/角速度上限为1.10 m/s、1.40 rad/s，最终硬限制为1.20 m/s、1.60 rad/s。
+
+原阶段9三目标自动验收仍由`run_phase9_tests.sh`显式调用`run_phase9.sh --auto`，用于回归而不是日常手动导航。
 
 定位恢复链路会先撤销`/localization/ready`使最终Command Guard归零，再触发前向cuVGL。通过位姿创新门限并连续恢复cuVSLAM tracking后，`resilient_navigation`自动重发同一个Nav2目标；最多三次仍失败则保持安全停车。局部地图由dynamic nvblox输出的`combined_map_slice`提供，并由原生深度LaserScan和PointCloud2承担低延迟安全响应。完整设计、接口、命令、测试矩阵和实测结果见[Phase 9 Validation](docs/phase9_validation.md)。
 

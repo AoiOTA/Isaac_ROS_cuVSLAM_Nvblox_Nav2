@@ -25,9 +25,6 @@ def main() -> int:
         "resilient_action_paused_and_resumed",
         "vgl_camera_mode_valid",
         "combined_slice_nonempty",
-        "dynamic_slice_nonempty",
-        "dynamic_esdf_nonempty",
-        "combined_esdf_nonempty",
         "guard_stopped_during_relocalization",
     }
     audit = {

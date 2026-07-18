@@ -78,6 +78,7 @@
 | `experiments/resilient_navigation.py` | 定位失效时取消Nav2目标，恢复后自动重发同一目标 |
 | `experiments/nav2_lifecycle_guard.py` | 确认8个Nav2 managed node全部active，失败则整栈干净重启 |
 | `experiments/navigation_test_runner.py` | 自动发送目标，采集终点、频率、时延、数据年龄、平滑性、轨迹和命令证据 |
+| `experiments/manual_goal_bridge.py` | 将RViz `/goal_pose`手动目标转发到可恢复导航action，新目标替换当前目标 |
 | `experiments/occupancy_saver.py` | 自动保存occupancy地图 |
 | `experiments/nvblox_map_saver.py` | 自动保存nvblox与PLY |
 
@@ -89,7 +90,7 @@
 |---|---|
 | `scripts/build.sh` | 干净终端环境/资产检查、语法检查和colcon构建 |
 | `scripts/bootstrap_baremetal.sh` | Isaac ROS裸机安装/预检；安装阶段可能需要sudo密码 |
-| `scripts/run_phase9.sh` | 日常一键前向双目动态导航，可选GUI/RViz |
+| `scripts/run_phase9.sh` | 日常一键前向双目静态障碍导航，默认由RViz手动选点；`--auto`用于回归 |
 | `scripts/run_mapping.sh` / `run_phase9_mapping.sh` | 自动采集与生成地图 |
 | `scripts/run_phase10_hardening.sh` | 重定位、depth stale、map stale真实故障硬化 |
 | `scripts/prepare_stage11_reference.sh` | 从实际USD生成理论路径参考 |

@@ -128,11 +128,16 @@ native front depth -> nvblox dynamic mapper
   -> dynamic ESDF/map slice + combined ESDF/map slice
   -> local NvbloxCostmapLayer
 
-/navigate_to_pose_resilient
+RViz 2D Goal Pose -> /goal_pose -> manual_goal_bridge
+  -> /navigate_to_pose_resilient
   -> stock /navigate_to_pose
   -> SmacPlanner2D + MPPI(DiffDrive)
   -> Velocity Smoother -> Collision Monitor -> Command Guard
 ```
+
+The daily Phase 9 runner uses this manual path and does not embed a goal list.
+The bounded acceptance runner calls the resilient action directly only when
+`run_phase9.sh --auto` is selected.
 
 Moving foreground features in a front-only warehouse view can momentarily
 perturb raw visual odometry. Phase 9 therefore separates global visual

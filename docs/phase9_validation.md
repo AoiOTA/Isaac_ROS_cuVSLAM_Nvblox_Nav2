@@ -1,5 +1,10 @@
 # 阶段9：前向双目动态导航与定位恢复验证
 
+> 历史验证记录：本页保留阶段9动态障碍自动验收的实现和测量证据。当前日常入口
+> `run_phase9.sh` 已调整为手动`2D Goal Pose`与三个静态碰撞障碍物；动态`nvblox`
+> 仍用于前向深度的局部感知，物理场景中不再驱动动态actor。当前操作方法见
+> [`docs/user_manual.md`](user_manual.md)。
+
 ## 1. 本阶段范围与结论
 
 阶段9按当前项目决策固定使用**前向Hawk双目、前向Hawk IMU和前左目原生深度**。侧向与后向Hawk不会在默认启动、运行时数据流或验收中启用。这样可以先把动态重建、动态避障、失锁安全停车、cuVGL重定位和Nav2任务恢复做成稳定闭环，同时控制RTX渲染、GPU推理和DDS带宽。
@@ -131,17 +136,26 @@ cd /home/lyb/Workspace/Isaac_ROS_cuVSLAM_Nvblox_Nav2
 ./scripts/run_phase9_tests.sh warehouse_v2_front
 ```
 
-只执行一次完整动态导航：
+只执行一次自动三目标完整动态导航：
 
 ```bash
-./scripts/run_phase9.sh --map warehouse_v2_front --headless --rviz
+./scripts/run_phase9.sh --map warehouse_v2_front --headless --rviz --auto
 ```
 
 不打开RViz的CI/诊断运行：
 
 ```bash
-./scripts/run_phase9.sh --map warehouse_v2_front --headless --no-rviz
+./scripts/run_phase9.sh --map warehouse_v2_front --headless --no-rviz --auto
 ```
+
+日常人工选点使用默认手动模式：
+
+```bash
+./scripts/run_phase9.sh --map warehouse_v2_front --gui --rviz
+```
+
+在RViz中用`2D Goal Pose`发布`/goal_pose`；手动目标桥接器将其发送到
+`/navigate_to_pose_resilient`。脚本不会预置目标，持续运行到`Ctrl-C`。
 
 分进程调试时，先启动本项目仿真，再启动ROS侧：
 

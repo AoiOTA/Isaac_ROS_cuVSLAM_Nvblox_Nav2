@@ -23,7 +23,7 @@ bt_navigator:
 controller_server:
   ros__parameters:
     use_sim_time: true
-    controller_frequency: 20.0
+    controller_frequency: 25.0
     costmap_update_timeout: 3.0
     min_x_velocity_threshold: 0.001
     min_y_velocity_threshold: 0.5
@@ -50,18 +50,18 @@ controller_server:
       model_dt: 0.05
       batch_size: 800
       iteration_count: 1
-      ax_max: 1.2
-      ax_min: -1.2
+      ax_max: 1.6
+      ax_min: -1.8
       ay_max: 0.0
       ay_min: 0.0
-      az_max: 2.4
-      vx_std: 0.30
+      az_max: 3.2
+      vx_std: 0.45
       vy_std: 0.0
-      wz_std: 0.55
-      vx_max: 0.55
-      vx_min: -0.15
+      wz_std: 0.75
+      vx_max: 1.10
+      vx_min: -0.20
       vy_max: 0.0
-      wz_max: 0.90
+      wz_max: 1.40
       prune_distance: 1.7
       transform_tolerance: 0.50
       temperature: 0.15
@@ -82,13 +82,16 @@ controller_server:
       CostCritic:
         enabled: true
         cost_power: 1
-        cost_weight: 3.0
+        # Give obstacle clearance priority over strict adherence to the global
+        # path.  Static session-layer obstacles are discovered online, so the
+        # initial global path can legitimately run through their footprint.
+        cost_weight: 5.0
         near_collision_cost: 253
         critical_cost: 300.0
         consider_footprint: true
         collision_cost: 1000000.0
         near_goal_distance: 0.5
-        trajectory_point_step: 2
+        trajectory_point_step: 1
       GoalCritic:
         enabled: true
         cost_power: 1
@@ -102,7 +105,7 @@ controller_server:
       PathAlignCritic:
         enabled: true
         cost_power: 1
-        cost_weight: 14.0
+        cost_weight: 8.0
         max_path_occupancy_ratio: 0.05
         trajectory_point_step: 4
         threshold_to_consider: 0.5
@@ -137,8 +140,8 @@ local_costmap:
   local_costmap:
     ros__parameters:
       use_sim_time: true
-      update_frequency: 8.0
-      publish_frequency: 4.0
+      update_frequency: 12.0
+      publish_frequency: 8.0
       global_frame: odom
       robot_base_frame: base_link
       rolling_window: true
@@ -171,8 +174,8 @@ local_costmap:
           data_type: LaserScan
           clearing: true
           marking: true
-          observation_persistence: 0.25
-          expected_update_rate: 1.00
+          observation_persistence: 0.35
+          expected_update_rate: 10.0
           obstacle_min_range: 0.15
           obstacle_max_range: 5.0
           raytrace_min_range: 0.0
@@ -180,15 +183,15 @@ local_costmap:
       inflation_layer:
         plugin: nav2_costmap_2d::InflationLayer
         enabled: true
-        inflation_radius: 0.80
-        cost_scaling_factor: 3.0
+        inflation_radius: 0.65
+        cost_scaling_factor: 4.0
 
 global_costmap:
   global_costmap:
     ros__parameters:
       use_sim_time: true
-      update_frequency: 2.0
-      publish_frequency: 2.0
+      update_frequency: 5.0
+      publish_frequency: 4.0
       global_frame: map
       robot_base_frame: base_link
       transform_tolerance: 0.30
@@ -201,17 +204,35 @@ global_costmap:
       # provide conservative online obstacle enforcement.
       track_unknown_space: false
       always_send_full_costmap: true
-      plugins: [static_layer, inflation_layer]
+      # Front depth observations make the static session-layer objects visible
+      # to Smac as soon as they enter view.  The default replan BT can then
+      # select a route around them instead of leaving all avoidance to MPPI.
+      plugins: [static_layer, obstacle_layer, inflation_layer]
       static_layer:
         plugin: nav2_costmap_2d::StaticLayer
         enabled: true
         map_subscribe_transient_local: true
         subscribe_to_updates: true
+      obstacle_layer:
+        plugin: nav2_costmap_2d::ObstacleLayer
+        enabled: true
+        observation_sources: depth_scan
+        depth_scan:
+          topic: /front_depth/scan
+          data_type: LaserScan
+          clearing: true
+          marking: true
+          observation_persistence: 0.50
+          expected_update_rate: 10.0
+          obstacle_min_range: 0.15
+          obstacle_max_range: 5.0
+          raytrace_min_range: 0.0
+          raytrace_max_range: 6.0
       inflation_layer:
         plugin: nav2_costmap_2d::InflationLayer
         enabled: true
-        inflation_radius: 0.80
-        cost_scaling_factor: 3.0
+        inflation_radius: 0.65
+        cost_scaling_factor: 4.0
 
 planner_server:
   ros__parameters:
@@ -264,9 +285,9 @@ behavior_server:
     robot_base_frame: base_link
     transform_tolerance: 0.20
     simulate_ahead_time: 2.0
-    max_rotational_vel: 0.9
-    min_rotational_vel: 0.2
-    rotational_acc_lim: 1.8
+    max_rotational_vel: 1.4
+    min_rotational_vel: 0.25
+    rotational_acc_lim: 3.0
 
 waypoint_follower:
   ros__parameters:
@@ -283,14 +304,14 @@ waypoint_follower:
 velocity_smoother:
   ros__parameters:
     use_sim_time: true
-    smoothing_frequency: 20.0
+    smoothing_frequency: 30.0
     stamp_smoothed_velocity_with_smoothing_time: false
     scale_velocities: true
     feedback: OPEN_LOOP
-    max_velocity: [0.55, 0.0, 0.90]
-    min_velocity: [-0.15, 0.0, -0.90]
-    max_accel: [0.80, 0.0, 1.60]
-    max_decel: [-1.00, 0.0, -2.00]
+    max_velocity: [1.10, 0.0, 1.40]
+    min_velocity: [-0.20, 0.0, -1.40]
+    max_accel: [1.40, 0.0, 2.80]
+    max_decel: [-1.80, 0.0, -3.20]
     odom_topic: /visual_slam/tracking/odometry
     odom_duration: 0.1
     deadband_velocity: [0.01, 0.0, 0.01]
@@ -306,7 +327,7 @@ collision_monitor:
     cmd_vel_out_topic: /cmd_vel_safe
     state_topic: /collision_monitor/state
     transform_tolerance: 0.20
-    source_timeout: 0.40
+    source_timeout: 0.75
     base_shift_correction: false
     stop_pub_timeout: 0.50
     polygons: [StopZone, SlowdownZone, FootprintApproach]
@@ -323,7 +344,7 @@ collision_monitor:
       points: "[[0.64, 0.36], [0.64, -0.36], [-0.88, -0.36], [-0.88, 0.36]]"
       action_type: slowdown
       min_points: 3
-      slowdown_ratio: 0.35
+      slowdown_ratio: 0.65
       visualize: true
       polygon_pub_topic: /collision_monitor/slowdown_zone
       enabled: true

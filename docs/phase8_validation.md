@@ -140,7 +140,8 @@ ros2_ws/src/nova_carter_bringup/config/nav2.yaml
 - 6 m × 6 m，0.05 m分辨率。
 - NvbloxCostmapLayer、PointCloud2 ObstacleLayer、InflationLayer。
 - MPPI `motion_model=DiffDrive`，20 Hz。
-- 最大线速度0.55 m/s、最大角速度0.90 rad/s。
+- 本次阶段8测量时的最大线速度为0.55 m/s、最大角速度0.90 rad/s。当前共享导航配置
+  已为手动阶段9提升至1.10 m/s、1.40 rad/s；本节数值保留为历史测量条件。
 - 56步、0.05秒模型步长、1000条采样轨迹。
 - `PoseProgressChecker`同时检查0.10 m平移和0.15 rad旋转进展。
 - `StoppedGoalChecker`使用0.20 m与10°容差。
@@ -163,7 +164,7 @@ ros2_ws/src/nova_carter_bringup/config/nav2.yaml
 Collision Monitor订阅`/front_depth/scan_raw`，固定三层策略：
 
 - StopZone：近障碍强制停车。
-- SlowdownZone：速度缩放为0.35。
+- SlowdownZone：历史测量时速度缩放为0.35；当前手动阶段9为0.65，并保留独立急停区。
 - FootprintApproach：按1.2秒碰撞时间预测减速/停车。
 
 机器人footprint固定为：
