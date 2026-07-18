@@ -25,6 +25,7 @@ setup(
             "sensor_test_runner = jackal_experiments.sensor_test_runner:main",
             "sensor_payload_probe = jackal_experiments.sensor_payload_probe:main",
             "visual_slam_test_runner = jackal_experiments.visual_slam_test_runner:main",
+            "visual_map_saver = jackal_experiments.visual_map_saver:main",
             "nvblox_map_saver = jackal_experiments.nvblox_map_saver:main",
             "nvblox_test_runner = jackal_experiments.nvblox_test_runner:main",
             "occupancy_saver = jackal_experiments.occupancy_saver:main",

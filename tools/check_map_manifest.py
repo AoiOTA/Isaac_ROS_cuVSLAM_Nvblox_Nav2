@@ -21,6 +21,8 @@ EXPECTED_MAPPING_PROFILE = {
     "name": "mapping_8cam",
     "active_stereo_pairs": ["front", "left", "right", "back"],
     "active_rgb_streams": 8,
+    "native_depth_min_range_m": 0.4,
+    "static_reconstruction_frame": "map",
 }
 EXPECTED_NAVIGATION_PROFILE = {
     "name": "navigation_6cam",
@@ -61,6 +63,14 @@ def validate_occupancy_yaml(map_dir: Path) -> None:
         raise RuntimeError(
             "occupancy YAML must reference the portable occupancy/map.pgm artifact"
         )
+    report_path = map_dir / "occupancy/save_report.json"
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    if report.get("status") != "passed" or report.get("frame_id") != "map":
+        raise RuntimeError("occupancy artifact must be a passed map-frame nvblox slice")
+    if float(report.get("obstacle_distance_m", float("nan"))) != 0.0:
+        raise RuntimeError("occupancy artifact must not pre-inflate the nvblox ESDF")
+    if report.get("conversion_policy") != "nvblox_distance_le_zero_is_occupied":
+        raise RuntimeError("occupancy artifact has an unknown ESDF conversion policy")
 
 
 def validate_assets(manifest: dict[str, object]) -> None:

@@ -29,7 +29,7 @@
 | 彩色 | 前左目RGB8，1280×800，30 Hz；nvblox最多5 Hz积分 |
 | 位姿 | cuVSLAM发布`odom→base_link`，静态URDF发布相机外参 |
 | nvblox模式 | `static_tsdf`，5 cm voxel，2D ESDF |
-| nvblox全局帧 | `odom` |
+| 静态 nvblox 全局帧 | `map`（导航动态层另用 `odom`） |
 
 阶段6不使用FoundationStereo、ESS、lidar、语义分割或仿真ground truth位姿。仿真真值深度只替代深度估计，机器人位姿仍来自cuVSLAM。
 
@@ -68,16 +68,16 @@ TF必须只有以下所有权：
 | `base_link→front_stereo_camera_link` | robot_state_publisher |
 | `front_stereo_camera_link→front_stereo_camera_left_optical` | robot_state_publisher |
 
-nvblox不发布机器人定位TF。它按每个深度时间戳查询：
+nvblox不发布机器人定位TF。静态建图按每个深度时间戳查询：
 
 ```text
-odom → base_link → front_stereo_camera_left_optical
+map → odom → base_link → front_stereo_camera_left_optical
 ```
 
-`global_frame=odom`有两个原因：
-
-1. `odom`连续，不受回环优化引起的`map→odom`离散修正影响。
-2. 阶段8的Nav2局部滚动代价地图也固定使用`odom`。
+持久静态地图固定使用`global_frame=map`，使 TSDF、occupancy、cuVSLAM 和 cuVGL
+处在同一全局解中。若在 `odom` 中保存静态图，局部轨迹会与回环优化后的视觉地图逐渐
+分离。导航的有界动态 nvblox 使用独立的`nvblox_dynamic.yaml`，继续留在连续`odom`，
+二者不能混为一份配置。
 
 ground truth不得进入这棵TF树，否则测试看起来会更准，但系统已经不再是视觉定位。
 
@@ -208,9 +208,9 @@ nvblox_node:
   ros__parameters:
     use_sim_time: true
 
-    # One native Isaac Sim depth camera. cuVSLAM supplies odom -> sensor TF.
+    # Persistent static reconstruction shares the optimized visual-map frame.
     mapping_type: static_tsdf
-    global_frame: odom
+    global_frame: map
     num_cameras: 1
     use_tf_transforms: true
     use_topic_transforms: false
@@ -219,7 +219,7 @@ nvblox_node:
     use_lidar: false
     use_segmentation: false
 
-    # RTX 4090 baseline: 5 cm voxels are sufficient for Nova Carter navigation.
+    # Five-centimetre voxels preserve the Jackal footprint and doorway margins.
     voxel_size: 0.05
     cuda_stream_type: 1
     tick_period_ms: 10
@@ -227,8 +227,8 @@ nvblox_node:
     input_qos: SENSOR_DATA
 
     # Input and reconstruction rates. Non-positive values disable a stage.
-    integrate_depth_rate_hz: 30.0
-    integrate_color_rate_hz: 5.0
+    integrate_depth_rate_hz: 10.0
+    integrate_color_rate_hz: 3.0
     integrate_lidar_rate_hz: 0.0
     update_esdf_rate_hz: 10.0
     update_mesh_rate_hz: 1.0
@@ -242,7 +242,7 @@ nvblox_node:
     map_clearing_radius_m: -1.0
     map_clearing_frame_id: base_link
 
-    # A 2D ESDF slice spanning Nova Carter's collision body feeds Nav2 later.
+    # A 2D ESDF slice spanning Jackal's collision body feeds Nav2 later.
     esdf_mode: 2d
     publish_esdf_distance_slice: true
     output_pessimistic_distance_map: true
@@ -888,7 +888,7 @@ df -h
 | TF/输出帧 | 全部`odom` |
 | 意外PhysX碰撞 | 0 |
 
-配置中的30/5/10 Hz是处理上限；上表是Isaac Sim、cuVSLAM、nvblox和自动观测同时运行时的实测速率。实际部署应以目标电脑的`nvblox_rates.txt`为准。
+配置中的10/3/10 Hz是处理上限；实际部署应以目标电脑的`nvblox_rates.txt`为准。
 
 详细证据见[阶段6验证报告](phase6_validation.md)。
 
@@ -902,11 +902,11 @@ df -h
 - [ ] 四个输入remap与实际相机话题一致。
 - [ ] 图像发布/订阅QoS兼容。
 - [ ] 所有节点使用同一个时钟策略。
-- [ ] `odom→base_link→camera_optical`在图像时间戳可查。
-- [ ] `global_frame=odom`与后续局部costmap一致。
+- [ ] `map→odom→base_link→camera_optical`在图像时间戳可查。
+- [ ] 持久静态 reconstruction 输出 `map`，导航动态层另用 `odom`。
 - [ ] runtime param dump与预期一致。
 - [ ] TSDF、Mesh、ESDF和map slice全部非空。
-- [ ] 输出frame全部为`odom`。
+- [ ] 静态建图输出 frame 全部为`map`。
 - [ ] 2D模式不调用3D专用ESDF查询服务。
 - [ ] map、PLY、rates和timings能写入绝对路径。
 - [ ] rates达到目标电脑可接受的实时门槛。

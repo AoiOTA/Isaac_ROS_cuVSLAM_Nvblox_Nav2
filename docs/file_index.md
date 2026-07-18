@@ -8,7 +8,7 @@
 | `config/environment.env` | Isaac Sim、ROS 2、Isaac ROS 与 DDS 环境 |
 | `config/simulation.yaml` | 单次 stage、固定出生点、60 Hz physics/update 与 RTX 4090 RT2 配置 |
 | `config/control.yaml` | 有效轮距、四轮关节、速度限制、PhysX、idle brake、motion assist |
-| `config/sensors.yaml` | 四组 Hawk prim、8 路图像话题、分辨率、频率和外参 |
+| `config/sensors.yaml` | 四组 Hawk prim、8 路图像话题、分辨率、频率、外参和 0.40 m depth 自车裁剪 |
 | `config/acceptance.yaml` | 静态 20 次 / 95% 口径、候选目标、路线验证和自适应性能策略 |
 | `.gitattributes` | `kujiale_jackal_8cam` 运行时地图的 Git LFS 规则 |
 | `.gitignore` | raw bag、中间产物、模型 cache、日志、run 和其他地图排除规则 |
@@ -48,7 +48,7 @@
 | `config/vgl_mapping_8cam.yaml` | 8 相机 cuVGL 配置 |
 | `config/vgl_navigation_6cam.yaml` | front/left/right 共 6 相机 cuVGL 配置 |
 | `config/mapping_topics_8cam.yaml` | 离线建图固定话题顺序 |
-| `config/nvblox.yaml` | front native depth 的 static TSDF/ESDF |
+| `config/nvblox.yaml` | front native depth 的 map-frame static TSDF/ESDF |
 | `config/nav2.yaml` | forward-only Smac/MPPI、costmaps、Collision Monitor 与 smoother |
 | `behavior_trees/navigate_forward_only.xml` | 无倒车恢复的 Nav2 行为树 |
 | `launch/phase8.launch.py` | 强制 `navigation_6cam` 的完整导航入口 |
@@ -60,7 +60,7 @@
 | `scripts/build.sh` | 环境、资产、语法与 ROS build 检查 |
 | `scripts/run_sim.sh` | 单独启动 GUI/headless simulator，可选 camera profile |
 | `scripts/run_mapping.sh` | 自动闭环或人工四 Hawk / 8 路图像建图，完整成功后清理 raw/intermediate |
-| `scripts/create_vgl_map.sh` | 从临时 MCAP 生成对齐的 cuVSLAM/cuVGL runtime map |
+| `scripts/create_vgl_map.sh` | 用在线 cuVSLAM 优化 TUM 从临时 MCAP 生成同坐标系 cuVGL map |
 | `scripts/run_navigation.sh` | 检查 manifest 并启动 6 路 ROS 导航 |
 | `scripts/run_all.sh` | 启动 simulator + ROS 导航 + 自动路线 runner |
 | `scripts/run_static_trial.sh` | 一次静态有效/无效实验与最终分类 |
@@ -68,7 +68,8 @@
 | `scripts/run_performance_benchmark.sh` | 真实 8 路/6 路负载的自适应性能观测 |
 
 自动建图折线与控制门限在 `config/mapping_coverage.yaml`；运行时驱动为
-`jackal_experiments/mapping_coverage_driver.py`，最终门禁为 `tools/validate_mapping_run.py`。
+`jackal_experiments/mapping_coverage_driver.py`；在线数据库与闭环/平面质量门禁为
+`jackal_experiments/visual_map_saver.py`，拓扑/碰撞门禁为 `tools/validate_mapping_run.py`。
 
 性能配置依据、A/B 数据和回退实验见 `docs/performance_optimization.md`。
 

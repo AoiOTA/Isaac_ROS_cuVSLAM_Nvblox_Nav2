@@ -150,6 +150,8 @@ def main() -> int:
             "resolution": [1280, 800],
             "nominal_rate_hz": 10.0,
             "native_depth_source": "front_hawk_left",
+            "native_depth_min_range_m": 0.4,
+            "static_reconstruction_frame": "map",
         },
         "navigation_profile": {
             "name": "navigation_6cam",

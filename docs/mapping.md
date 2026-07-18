@@ -10,6 +10,8 @@
 4. back left / right
 
 四组 Hawk 均为 `1280×800 @ 10 Hz`，front IMU 为 `120 Hz`。nvblox 只接收 front Hawk 左目的 `640×400` 原生模拟深度；视觉建图与 nvblox 不共享合成双目深度。
+front Hawk 深度的近裁剪面固定为 `0.40 m`，用于在渲染源头排除相机下方的 Jackal
+车体；它不是雷达量程，也不会创建任何 LiDAR 资源。
 
 Jackal LiDAR 明确关闭，模拟器不会创建 LiDAR prim、render product 或 ROS publisher。
 导航中名为 `/front_depth/scan[_raw]` 的 `LaserScan` 是由 front Hawk 原生深度投影
@@ -31,6 +33,9 @@ Jackal LiDAR 明确关闭，模拟器不会创建 LiDAR prim、render product �
 - cuVSLAM 跟踪、路线进度和最大横向偏差；
 - 每个开放区域的定点扫描与最终闭环；
 - simulator 报告中的四 Hawk/八路拓扑、LiDAR 关闭和 PhysX 零碰撞。
+- 在线全局优化轨迹至少 500 个位姿、覆盖至少 80% 驾驶时长；
+- 优化轨迹相对 ground truth 路程比在 `[0.85, 1.15]`、闭环误差不超过 `0.50 m`；
+- 高度范围不超过 `0.10 m`，三维/平面路程比不超过 `1.01`。
 
 人工建图仍可用：
 
@@ -58,21 +63,41 @@ GUI 出现后用 `W/S/A/D` 驾驶，`Space` 停车，`Q` 保存。建议缓慢�
 ## 生成流程
 
 ```text
-8 RGB + 8 CameraInfo + IMU + TF + clock
+8 RGB + 8 CameraInfo + front depth + IMU + TF + clock
   -> temporary MCAP
-  -> offline cuVSLAM pose/map
+
+live 8-camera VIO/cuVSLAM
+  -> save_map: cuVSLAM database
+  -> get_all_poses: globally optimized TUM trajectory
+  -> planar/path/closure quality gate
+  -> TUM-selected rectified MCAP frames
   -> ALIKED features + cuVGL vocabulary/BoW index
 
-front native depth + TF
+same live cuVSLAM map-frame pose + front native depth (near clip 0.40 m)
   -> nvblox static map + mesh + 2D ESDF
-  -> occupancy map
+  -> occupancy map (ESDF distance <= 0 only; Nav2 applies footprint/inflation)
 
 all runtime groups
   -> manifest.json
   -> delete temporary MCAP and offline workspace
 ```
 
-cuVSLAM 与 cuVGL 必须来自同一份 MCAP。`create_vgl_map.sh` 默认使用 `40000 µs` 同步窗，并把同一值写入地图内冻结的 cuVGL runtime config；不要在导航时另行使用不匹配的同步配置。
+cuVSLAM、cuVGL、nvblox 和 occupancy 必须来自同一次在线 SLAM 解。项目不再用
+离线纯视觉 cuVSLAM 覆盖在线 VIO 数据库；这种混用在平面 A/B 中曾产生 `1.92 m`
+闭环误差。`create_vgl_map.sh` 使用在线 `GetAllPoses` 导出的 TUM 轨迹选帧，默认使用
+`40000 µs` 同步窗，并把同一值写入地图内冻结的 cuVGL runtime config。Isaac ROS 4.5
+的 `GetAllPoses` 会把全局优化位姿的 `PoseStamped.frame_id` 留空；保存报告明确记录这一
+版本策略，几何门槛仍全部执行。官方接口说明见
+[Isaac ROS Visual SLAM API](https://nvidia-isaac-ros.github.io/repositories_and_packages/isaac_ros_visual_slam/isaac_ros_visual_slam/index.html)
+与 [Isaac Mapping ROS](https://nvidia-isaac-ros.github.io/repositories_and_packages/isaac_ros_mapping_and_localization/isaac_mapping_ros/index.html)。
+
+静态 nvblox 使用 `global_frame=map`，否则连续 `odom` 轨迹会与回环优化后的 cuVSLAM/
+cuVGL 地图逐渐分离。导航时的动态滚动 nvblox 是另一份配置，仍使用连续 `odom`。
+PGM 保存器遵循官方 nvblox Nav2 layer 的语义，只把 `distance <= 0` 记为实体障碍；
+车体 footprint 和 inflation 只由 Nav2/路线验证层施加一次。
+
+任一门槛失败时，目标地图不会写 manifest，临时 MCAP 也不会删除，便于从同一原始
+数据复盘。只有所有运行时组、轨迹门槛和 artifact hash 都成功后才清理 raw 数据。
 
 ## 运行时地图
 
@@ -80,7 +105,7 @@ cuVSLAM 与 cuVGL 必须来自同一份 MCAP。`create_vgl_map.sh` 默认使用 
 data/maps/kujiale_jackal_8cam/
 ├── config/       cuVGL runtime pb.txt
 ├── cuvgl/        keyframes, vocabulary, bow_index
-├── cuvslam/      cuVSLAM database
+├── cuvslam/      在线 cuVSLAM database、optimized_poses.tum、质量报告
 ├── mesh/         PLY
 ├── nvblox/       .nvblx, PLY, rates/timings
 ├── occupancy/    map.yaml, map.pgm

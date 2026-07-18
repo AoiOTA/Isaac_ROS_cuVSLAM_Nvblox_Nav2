@@ -26,6 +26,9 @@ def test_visual_slam_profiles_share_saved_rig_and_tf_contract() -> None:
         assert config["publish_map_to_odom_tf"] is True
         assert config["publish_odom_to_base_tf"] is True
         assert config["override_publishing_stamp"] is False
+        assert config["enable_ground_constraint_in_odometry"] is True
+        assert config["enable_ground_constraint_in_slam"] is True
+        assert config["slam_max_map_size"] >= 4000
 
 
 def test_live_nav2_overrides_cuvslam_output_stamp_only_in_phase8() -> None:

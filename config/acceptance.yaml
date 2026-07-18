@@ -42,7 +42,7 @@ success_requires:
 # around occupied cells. Adjust only after the real four-Hawk/eight-stream map is generated.
 goals:
   - name: north_room
-    pose: [-2.10, 2.85, 1.570796327]
+    pose: [-0.85, 3.50, 1.570796327]
   - name: south_corridor
     pose: [0.40, -5.10, -1.570796327]
   - name: east_room
@@ -50,7 +50,10 @@ goals:
 
 route_validation:
   start_pose: [0.0, 0.0]
-  collision_radius_m: 0.34
+  # Conservative point-robot proxy for the 0.485 x 0.420 m oriented Jackal
+  # footprint.  The former 0.34 m circumscribed circle rejected doorways that
+  # the real rectangular footprint traversed collision-free during mapping.
+  collision_radius_m: 0.28
   require_known_free: true
   require_direct_line_obstructed: true
 

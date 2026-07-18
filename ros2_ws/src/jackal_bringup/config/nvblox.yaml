@@ -2,9 +2,11 @@ nvblox_node:
   ros__parameters:
     use_sim_time: true
 
-    # One native Isaac Sim depth camera. cuVSLAM supplies odom -> sensor TF.
+    # One native Isaac Sim depth camera.  The persistent static artifact must
+    # share cuVSLAM's globally optimized map frame.  Navigation's bounded
+    # dynamic nvblox configuration remains in the continuous odom frame.
     mapping_type: static_tsdf
-    global_frame: odom
+    global_frame: map
     num_cameras: 1
     use_tf_transforms: true
     use_topic_transforms: false

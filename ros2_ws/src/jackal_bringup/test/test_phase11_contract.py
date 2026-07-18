@@ -59,6 +59,13 @@ def test_map_manifest_requires_all_runtime_groups_and_no_capture_leaks() -> None
     assert 'FORBIDDEN_CAPTURE_NAMES' in checker
     assert '{".mcap", ".db3"}' in checker
     assert '"rear_render_products_created": False' in checker
+    mapping_runner = (ROOT / "scripts/run_mapping.sh").read_text()
+    assert "--generation-command" in mapping_runner
+    expected_command = (
+        '"./scripts/run_mapping.sh --map {map_name} '
+        '--${MAPPING_MODE} ${SIM_MODE}"'
+    )
+    assert expected_command in mapping_runner
 
 
 def test_offline_map_generation_uses_temporary_ignored_workspace() -> None:
@@ -66,6 +73,10 @@ def test_offline_map_generation_uses_temporary_ignored_workspace() -> None:
     assert 'mktemp -d "${PROJECT_ROOT}/data/bags/.vgl-work.XXXXXX"' in script
     assert "mapping_topics_8cam.yaml" in script
     assert '--sample_sync_threshold_microseconds="${MAX_SYNC_US}"' in script
+    assert '--tum_pose_file="${TUM_POSE_FILE}"' in script
+    assert '--rectify_images=True' in script
+    assert "create_map_offline.py" not in script
+    assert 'require_file "${MAP_DIR}/cuvslam/data.mdb"' in script
     assert "prepare_vgl_runtime_config.py" in script
     assert 'rm -rf -- "${WORK}"' in script
 

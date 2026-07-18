@@ -384,9 +384,9 @@ visual_slam_node:
     invert_odom_to_base_tf: false
     override_publishing_stamp: false
 
-    enable_ground_constraint_in_odometry: false
-    enable_ground_constraint_in_slam: false
-    slam_max_map_size: 1000
+    enable_ground_constraint_in_odometry: true
+    enable_ground_constraint_in_slam: true
+    slam_max_map_size: 4000
     slam_throttling_time_ms: 500
     save_map_folder_path: ""
     load_map_folder_path: ""
@@ -414,10 +414,10 @@ visual_slam_node:
 | `imu_buffer_size` | 400 | 应覆盖若干秒IMU；120 Hz下约3.3秒 |
 | `image_qos`/`imu_qos` | SENSOR_DATA | 必须与传感器发布QoS兼容 |
 | `enable_localization_n_mapping` | true | 只需VO且不要地图时可设false |
-| `slam_max_map_size` | 1000 | 大场景或长路线增加；同时增加内存和优化负载 |
+| `slam_max_map_size` | 4000 | 当前 38 m 闭环保留全部优化位姿；更大场景按实测增加 |
 | `slam_throttling_time_ms` | 500 | 调整图优化/关键帧节奏前先做基准测试 |
 | `enable_image_denoising` | false | 弱光噪声明显时做A/B测试后开启 |
-| ground constraints | false | 确认机器人严格平面运动后再分别测试 |
+| ground constraints | true | 当前平坦酷家乐地面启用；坡道/明显起伏必须重新 A/B |
 | TF publish flags | true/true | 只有外部定位器明确接管相同TF边时才关闭 |
 | invert TF flags | false/false | 不要用它修复错误的TF树或外参 |
 | `override_publishing_stamp` | false | 仿真/传感器时间正常时保持false |

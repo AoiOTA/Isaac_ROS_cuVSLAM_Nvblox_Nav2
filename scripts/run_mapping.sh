@@ -147,6 +147,8 @@ ros2 topic echo --no-daemon --once --timeout 30 \
   die "nvblox static map slice has no live sample"
 
 BAG_TOPICS=("${IMAGE_TOPICS[@]}" "${CAMERA_INFO_TOPICS[@]}" \
+  /front_stereo_camera/depth/image_raw \
+  /front_stereo_camera/depth/camera_info \
   /front_stereo_imu/imu /tf /tf_static /clock)
 setsid ros2 bag record --storage mcap --storage-preset-profile fastwrite \
   --disable-keyboard-controls --output "${BAG_DIR}" --topics "${BAG_TOPICS[@]}" \
@@ -178,7 +180,33 @@ ros2 run jackal_experiments nvblox_map_saver --ros-args \
 install -m 0644 "${MAP_DIR}/nvblox/kujiale.ply" "${MAP_DIR}/mesh/kujiale.ply"
 ros2 run jackal_experiments occupancy_saver --ros-args \
   -p use_sim_time:=true -p output_dir:="${MAP_DIR}/occupancy" \
+  -p obstacle_distance_m:=0.0 \
   >"${LOG_DIR}/save-occupancy.log" 2>&1
+
+VISUAL_SAVE_ARGS=(
+  -p output_dir:="${MAP_DIR}/cuvslam"
+)
+if [[ "${MAPPING_MODE}" == "auto" ]]; then
+  read -r EXPECTED_PATH MINIMUM_POSE_DURATION < <(
+    python3 - "${LOG_DIR}/coverage.json" <<'PY'
+import json
+import sys
+
+report = json.load(open(sys.argv[1], encoding="utf-8"))
+path = float(report["route"]["ground_truth_path_length_m"])
+duration = 0.80 * float(report["simulation_duration_s"])
+print(f"{path:.9f} {duration:.9f}")
+PY
+  )
+  VISUAL_SAVE_ARGS+=(
+    -p expected_path_length_m:="${EXPECTED_PATH}"
+    -p minimum_pose_count:=500
+    -p minimum_duration_s:="${MINIMUM_POSE_DURATION}"
+  )
+fi
+info "Saving the live cuVSLAM database and globally optimized map-frame trajectory"
+ros2 run jackal_experiments visual_map_saver --ros-args \
+  "${VISUAL_SAVE_ARGS[@]}" >"${LOG_DIR}/save-cuvslam.log" 2>&1
 
 stop_group "${BRINGUP_PID}"
 BRINGUP_PID=""
@@ -196,10 +224,13 @@ python3 "${PROJECT_ROOT}/tools/validate_mapping_run.py" \
   >"${LOG_DIR}/model-export.log" 2>&1
 "${PROJECT_ROOT}/scripts/create_vgl_map.sh" "${BAG_DIR}" "${MAP_DIR}" \
   --topic-config "${PROJECT_ROOT}/ros2_ws/src/jackal_bringup/config/mapping_topics_8cam.yaml" \
+  --tum-pose-file "${MAP_DIR}/cuvslam/optimized_poses.tum" \
   --max-sync-us "${MAPPING_MAX_SYNC_US:-40000}" \
   >"${LOG_DIR}/offline-map.log" 2>&1
 python3 "${PROJECT_ROOT}/tools/write_map_manifest.py" "${MAP_DIR}" "${BAG_DIR}" \
-  --run-id "${RUN_ID}"
+  --run-id "${RUN_ID}" \
+  --generation-command \
+  "./scripts/run_mapping.sh --map {map_name} --${MAPPING_MODE} ${SIM_MODE}"
 
 case "${BAG_ROOT}" in
   "${PROJECT_ROOT}/data/bags/.${MAP_NAME}."*) rm -rf -- "${BAG_ROOT}" ;;

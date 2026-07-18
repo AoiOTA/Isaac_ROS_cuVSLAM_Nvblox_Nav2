@@ -45,9 +45,13 @@ visual_slam_node:
     invert_odom_to_base_tf: false
     override_publishing_stamp: false
 
-    enable_ground_constraint_in_odometry: false
-    enable_ground_constraint_in_slam: false
-    slam_max_map_size: 1000
+    # Jackal remains on the flat Kujiale floor.  Keep both the live odometry
+    # used by nvblox and the globally optimized map poses on that plane.
+    enable_ground_constraint_in_odometry: true
+    enable_ground_constraint_in_slam: true
+    # A complete coverage run returns roughly 2,000-3,000 optimized poses.
+    # Retaining 4,000 avoids trimming the first half before loop closure.
+    slam_max_map_size: 4000
     slam_throttling_time_ms: 500
     save_map_folder_path: ""
     load_map_folder_path: ""

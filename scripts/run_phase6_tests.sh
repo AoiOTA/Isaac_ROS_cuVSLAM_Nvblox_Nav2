@@ -105,15 +105,15 @@ import yaml
 params = yaml.safe_load(open(sys.argv[1], encoding="utf-8"))["/nvblox_node"]["ros__parameters"]
 expected = {
     "mapping_type": "static_tsdf",
-    "global_frame": "odom",
+    "global_frame": "map",
     "num_cameras": 1,
     "use_tf_transforms": True,
     "use_depth": True,
     "use_color": True,
     "use_lidar": False,
     "voxel_size": 0.05,
-    "integrate_depth_rate_hz": 30.0,
-    "integrate_color_rate_hz": 5.0,
+    "integrate_depth_rate_hz": 10.0,
+    "integrate_color_rate_hz": 3.0,
     "update_esdf_rate_hz": 10.0,
     "update_mesh_rate_hz": 1.0,
 }

@@ -12,7 +12,7 @@ def test_phase6_nvblox_configuration_contract() -> None:
         "ros__parameters"
     ]
     assert params["mapping_type"] == "static_tsdf"
-    assert params["global_frame"] == "odom"
+    assert params["global_frame"] == "map"
     assert params["num_cameras"] == 1
     assert params["use_tf_transforms"] is True
     assert params["use_depth"] is True

@@ -13,6 +13,7 @@ def test_sensor_topics_frames_and_rates_are_fixed() -> None:
     front = config["front_stereo"]
     assert (front["image_width"], front["image_height"]) == (1280, 800)
     assert (front["depth_width"], front["depth_height"]) == (640, 400)
+    assert front["depth_min_range_m"] == 0.40
     assert front["image_rate_hz"] == 10.0
     assert front["imu_rate_hz"] == 120.0
     assert front["navigation_projection"] == "pinhole"
@@ -21,6 +22,13 @@ def test_sensor_topics_frames_and_rates_are_fixed() -> None:
     assert config["extrinsics"]["stereo_baseline_m"] == 0.15
     assert list(config["surround_stereo"]["cameras"]) == ["left", "right", "back"]
     assert config["surround_stereo"]["image_rate_hz"] == 10.0
+
+
+def test_front_depth_excludes_jackal_self_returns_at_the_camera() -> None:
+    source = (ROOT / "isaac_sim/jackal_sim/sensors.py").read_text(encoding="utf-8")
+    assert "_configure_front_depth_near_clip(stage, sensor)" in source
+    assert "GetClippingRangeAttr" in source
+    assert "Gf.Vec2f(minimum" in source
 
 
 def test_xacro_contains_the_usd_extracted_sensor_chain() -> None:

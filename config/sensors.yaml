@@ -8,6 +8,10 @@ front_stereo:
   image_height: 800
   depth_width: 640
   depth_height: 400
+  # The Hawk is mounted over the middle of the chassis.  Reject geometry
+  # closer than the Jackal body before the native depth render reaches
+  # nvblox; otherwise the static TSDF records a black "robot trail".
+  depth_min_range_m: 0.40
   image_rate_hz: 10.0
   imu_rate_hz: 120.0
   # Isaac Sim 6.0.1 publishes zero distortion in CameraInfo for the legacy

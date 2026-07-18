@@ -19,7 +19,10 @@ class OccupancySaver(Node):
         self.declare_parameter(
             "output_dir", "data/maps/kujiale_jackal_8cam/occupancy"
         )
-        self.declare_parameter("obstacle_distance_m", 0.28)
+        # Match the official nvblox Nav2 layer: only zero/negative ESDF
+        # distance is lethal.  Robot footprint and inflation are applied by
+        # Nav2 later; using the robot radius here would inflate obstacles twice.
+        self.declare_parameter("obstacle_distance_m", 0.0)
         self.output_dir = Path(str(self.get_parameter("output_dir").value)).resolve()
         self.obstacle_distance = float(self.get_parameter("obstacle_distance_m").value)
         self.latest: DistanceMapSlice | None = None
@@ -80,6 +83,7 @@ class OccupancySaver(Node):
             "resolution": message.resolution,
             "origin": [message.origin.x, message.origin.y, message.origin.z],
             "obstacle_distance_m": self.obstacle_distance,
+            "conversion_policy": "nvblox_distance_le_zero_is_occupied",
             "counts": counts,
             "pgm": str(pgm),
             "yaml": str(yaml_path),

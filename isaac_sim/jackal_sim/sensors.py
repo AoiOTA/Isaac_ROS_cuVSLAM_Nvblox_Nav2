@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass
 
 import omni.graph.core as og
 import usdrt.Sdf
-from pxr import Usd
+from pxr import Gf, Usd, UsdGeom
 
 from .graphs import GRAPH_ROOT
 
@@ -28,6 +28,7 @@ class SensorGraphSummary:
     camera_prims: dict[str, dict[str, str]]
     stereo_resolution: tuple[int, int]
     depth_resolution: tuple[int, int]
+    depth_min_range_m: float
     image_rate_hz: float
     imu_rate_hz: float
     topics: dict[str, str]
@@ -87,6 +88,24 @@ def _configure_camera(prim: object, rate_hz: float, projection_name: str) -> Non
         distortion.Set([0.0] * len(distortion.Get()))
 
 
+def _configure_front_depth_near_clip(stage: object, sensor: dict[str, object]) -> float:
+    front = sensor["front_stereo"]
+    minimum = float(front["depth_min_range_m"])
+    if minimum <= 0.0:
+        raise RuntimeError("front Hawk depth_min_range_m must be positive")
+    prim = stage.GetPrimAtPath(str(front["left_camera_prim"]))
+    if not prim.IsValid() or not prim.IsA(UsdGeom.Camera):
+        raise RuntimeError(f"front Hawk depth camera is invalid: {prim.GetPath()}")
+    clipping = UsdGeom.Camera(prim).GetClippingRangeAttr()
+    current = clipping.Get()
+    if current is None or float(current[1]) <= minimum:
+        raise RuntimeError(
+            f"front Hawk far clipping plane must exceed {minimum:.3f} m"
+        )
+    clipping.Set(Gf.Vec2f(minimum, float(current[1])))
+    return minimum
+
+
 def _configure_sensor_rates(
     stage: object, sensor: dict[str, object], active_pairs: tuple[str, ...]
 ) -> None:
@@ -102,6 +121,7 @@ def _configure_sensor_rates(
                     float(pair["image_rate_hz"]),
                     str(pair["navigation_projection"]),
                 )
+        _configure_front_depth_near_clip(stage, sensor)
         imu_path = str(sensor["front_stereo"]["imu_prim"])
         imu = stage.GetPrimAtPath(imu_path)
         period = imu.GetAttribute("sensorPeriod")
@@ -301,6 +321,7 @@ def create_sensor_graphs(
         camera_prims=camera_prims,
         stereo_resolution=(int(front["image_width"]), int(front["image_height"])),
         depth_resolution=(int(front["depth_width"]), int(front["depth_height"])),
+        depth_min_range_m=float(front["depth_min_range_m"]),
         image_rate_hz=float(front["image_rate_hz"]),
         imu_rate_hz=float(front["imu_rate_hz"]),
         topics={key: str(value) for key, value in sensor["topics"].items()},
