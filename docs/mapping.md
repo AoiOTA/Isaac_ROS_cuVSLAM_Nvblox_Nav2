@@ -11,6 +11,10 @@
 
 四组 Hawk 均为 `1280×800 @ 10 Hz`，front IMU 为 `120 Hz`。nvblox 只接收 front Hawk 左目的 `640×400` 原生模拟深度；视觉建图与 nvblox 不共享合成双目深度。
 
+Jackal LiDAR 明确关闭，模拟器不会创建 LiDAR prim、render product 或 ROS publisher。
+导航中名为 `/front_depth/scan[_raw]` 的 `LaserScan` 是由 front Hawk 原生深度投影
+得到的二维安全表示，不是雷达数据。
+
 话题清单在 `ros2_ws/src/jackal_bringup/config/mapping_topics_8cam.yaml`。cuVSLAM 建图要求 `num_cameras=8` 且 `min_num_images=8`，因此任一路缺帧都不能悄悄退化为少相机地图。
 
 ## 建图命令

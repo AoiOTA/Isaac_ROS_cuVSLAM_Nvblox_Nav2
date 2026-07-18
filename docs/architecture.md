@@ -51,7 +51,7 @@ front 32FC1 depth ──> nvblox static TSDF/ESDF/static_map_slice
 
 所有 Hawk 相机在 session layer 中使用与 `rectified_images=true` 一致的 pinhole 投影。源 Hawk USD 保持不变。图像为 `1280×800 @ 10 Hz`，front depth 为 `640×400 @ 10 Hz`，front IMU 为 `120 Hz`。
 
-nvblox 配置为 `static_tsdf`、5 cm voxel、2D ESDF，深度集成 10 Hz、颜色 3 Hz、ESDF 10 Hz；只接 front native depth，不使用 lidar 或双目深度网络。
+nvblox 配置为 `static_tsdf`、5 cm voxel、2D ESDF，深度集成 10 Hz、颜色 3 Hz、ESDF 10 Hz；只接 front native depth，不使用 LiDAR 或双目深度网络。`/front_depth/scan[_raw]` 虽采用 ROS `LaserScan` 消息类型，但数据由 Hawk 深度图投影产生；Jackal LiDAR prim、render product 和 publisher 均不创建。
 
 ## 导航与控制
 
