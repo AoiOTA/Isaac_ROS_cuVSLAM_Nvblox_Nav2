@@ -31,6 +31,23 @@ def is_nonimpact_proximity_contact(
     return True
 
 
+def partition_contact_records(
+    records: list[object],
+) -> tuple[list[object], list[object]]:
+    """Split physically active records from zero-impulse proximity records."""
+
+    physical: list[object] = []
+    proximity: list[object] = []
+    for record in records:
+        destination = (
+            proximity
+            if is_nonimpact_proximity_contact([record])
+            else physical
+        )
+        destination.append(record)
+    return physical, proximity
+
+
 def is_wheel_support_contact(
     robot_path: str,
     records: list[object],

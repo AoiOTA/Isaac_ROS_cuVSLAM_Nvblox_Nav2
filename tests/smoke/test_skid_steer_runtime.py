@@ -16,6 +16,7 @@ from jackal_sim.idle_brake import IdleBrake, IdleBrakeError, IdleBrakeState  # n
 from jackal_sim.contact_classification import (  # noqa: E402
     is_nonimpact_proximity_contact,
     is_wheel_support_contact,
+    partition_contact_records,
 )
 from jackal_sim.skid_steer_motion_assist import (  # noqa: E402
     SkidSteerMotionAssistError,
@@ -209,3 +210,50 @@ def test_contact_filter_separates_nonimpact_proximity_from_collision() -> None:
     assert is_nonimpact_proximity_contact(separated)
     assert not is_nonimpact_proximity_contact(penetrating)
     assert not is_nonimpact_proximity_contact(impacted)
+
+
+def test_contact_filter_ignores_speculative_points_in_support_event() -> None:
+    class Contact:
+        def __init__(
+            self,
+            position: tuple[float, float, float],
+            normal: tuple[float, float, float],
+            separation: float,
+            impulse: tuple[float, float, float],
+        ) -> None:
+            self.position = position
+            self.normal = normal
+            self.separation = separation
+            self.impulse = impulse
+
+    supported = Contact(
+        (4.68, -0.30, 0.002),
+        (0.0, 0.06, 0.998),
+        0.0001,
+        (0.0, 0.10, 1.54),
+    )
+    speculative_edge = Contact(
+        (4.72, -0.36, 0.013),
+        (-0.10, 0.66, 0.74),
+        0.032,
+        (0.0, 0.0, 0.0),
+    )
+    physical, proximity = partition_contact_records(
+        [supported, speculative_edge]
+    )
+    assert physical == [supported]
+    assert proximity == [speculative_edge]
+    assert is_wheel_support_contact(
+        "/World/Jackal/front_right_wheel_link", physical, 0.0
+    )
+
+    wall_impact = Contact(
+        (4.72, -0.36, 0.08),
+        (0.0, 1.0, 0.0),
+        0.0,
+        (0.0, 0.2, 0.0),
+    )
+    physical, _ = partition_contact_records([wall_impact])
+    assert not is_wheel_support_contact(
+        "/World/Jackal/front_right_wheel_link", physical, 0.0
+    )

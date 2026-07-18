@@ -10,8 +10,8 @@ from omni.physx import get_physx_simulation_interface
 from pxr import PhysicsSchemaTools, PhysxSchema, Usd, UsdPhysics
 
 from .contact_classification import (
-    is_nonimpact_proximity_contact,
     is_wheel_support_contact,
+    partition_contact_records,
 )
 
 
@@ -71,6 +71,7 @@ class RobotContactMonitor:
         self.events = 0
         self.filtered_floor_events = 0
         self.filtered_proximity_events = 0
+        self.filtered_proximity_records = 0
         self.filtered_support_events = 0
         self.empty_contact_events = 0
         self.pairs: Counter[tuple[str, str]] = Counter()
@@ -112,14 +113,16 @@ class RobotContactMonitor:
                 self.empty_contact_events += 1
                 continue
             records = [data[index] for index in range(offset, offset + count)]
-            self._audit_records(pair, records)
-            if is_nonimpact_proximity_contact(records):
+            physical_records, proximity_records = partition_contact_records(records)
+            self.filtered_proximity_records += len(proximity_records)
+            self._audit_records(pair, records, physical_records, proximity_records)
+            if not physical_records:
                 self.filtered_proximity_events += 1
                 self.proximity_pairs[pair] += 1
                 continue
             if is_wheel_support_contact(
                 robot_actor,
-                records,
+                physical_records,
                 self.support_surface_z,
             ):
                 self.filtered_support_events += 1
@@ -147,20 +150,34 @@ class RobotContactMonitor:
         self,
         pair: tuple[str, str],
         records: list[object],
+        physical_records: list[object],
+        proximity_records: list[object],
     ) -> None:
         audit = self.pair_audits.setdefault(
             pair,
             {
                 "event_count": 0,
                 "record_count": 0,
+                "physical_record_count": 0,
+                "nonimpact_proximity_record_count": 0,
                 "minimum_separation_m": math.inf,
                 "maximum_impulse_norm": 0.0,
                 "maximum_contact_z_m": -math.inf,
                 "minimum_absolute_normal_z": math.inf,
+                "physical_minimum_separation_m": math.inf,
+                "physical_maximum_impulse_norm": 0.0,
+                "physical_maximum_contact_z_m": -math.inf,
+                "physical_minimum_absolute_normal_z": math.inf,
             },
         )
         audit["event_count"] = int(audit["event_count"]) + 1
         audit["record_count"] = int(audit["record_count"]) + len(records)
+        audit["physical_record_count"] = (
+            int(audit["physical_record_count"]) + len(physical_records)
+        )
+        audit["nonimpact_proximity_record_count"] = (
+            int(audit["nonimpact_proximity_record_count"]) + len(proximity_records)
+        )
         for record in records:
             audit["minimum_separation_m"] = min(
                 float(audit["minimum_separation_m"]),
@@ -178,12 +195,30 @@ class RobotContactMonitor:
                 float(audit["minimum_absolute_normal_z"]),
                 abs(float(record.normal[2])),
             )
+        for record in physical_records:
+            audit["physical_minimum_separation_m"] = min(
+                float(audit["physical_minimum_separation_m"]),
+                float(record.separation),
+            )
+            audit["physical_maximum_impulse_norm"] = max(
+                float(audit["physical_maximum_impulse_norm"]),
+                math.sqrt(sum(float(value) ** 2 for value in record.impulse)),
+            )
+            audit["physical_maximum_contact_z_m"] = max(
+                float(audit["physical_maximum_contact_z_m"]),
+                float(record.position[2]),
+            )
+            audit["physical_minimum_absolute_normal_z"] = min(
+                float(audit["physical_minimum_absolute_normal_z"]),
+                abs(float(record.normal[2])),
+            )
 
     def summary(self) -> dict[str, object]:
         return {
             "collision_event_count": self.events,
             "filtered_floor_event_count": self.filtered_floor_events,
             "filtered_nonimpact_proximity_event_count": self.filtered_proximity_events,
+            "filtered_nonimpact_proximity_record_count": self.filtered_proximity_records,
             "filtered_support_event_count": self.filtered_support_events,
             "empty_contact_event_count": self.empty_contact_events,
             "reporter_count": len(self.reporter_paths),
