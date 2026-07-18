@@ -163,7 +163,9 @@ run_profile() {
     --performance-min-sample-s "${MIN_SAMPLE}"
     --performance-max-sample-s "${MAX_SAMPLE}"
     --stop-file "${PROFILE_SIM_STOP}" --report "${sim_report}")
-  [[ "${camera_profile}" == "mapping_8cam" ]] && sim_args+=(--reliable-sensor-qos)
+  # Both profiles feed GPU image-normalization and localization graphs. Keep
+  # the measured workload on the same lossless camera transport as runtime.
+  sim_args+=(--reliable-sensor-qos)
   info "Starting ${workload} workload with ${camera_profile}; adaptive wall-time sampling"
   setsid "${ISAAC_SIM_PYTHON}" "${PROJECT_ROOT}/isaac_sim/navigation_sim.py" \
     "${sim_args[@]}" >"${profile_dir}/simulator.log" 2>&1 & PROFILE_SIM_PID=$!

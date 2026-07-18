@@ -119,6 +119,7 @@ setsid "${ISAAC_SIM_PYTHON}" "${PROJECT_ROOT}/isaac_sim/navigation_sim.py" \
   "${SIM_MODE}" --duration 0 \
   --update-hz "${NAVIGATION_SIM_UPDATE_HZ:-120}" \
   --camera-profile navigation_6cam \
+  --reliable-sensor-qos \
   --stop-file "${SIM_STOP}" \
   --report "${LOG_DIR}/simulator.json" >"${LOG_DIR}/simulator.log" 2>&1 & SIM_PID=$!
 for _ in {1..240}; do

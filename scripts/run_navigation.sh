@@ -46,6 +46,7 @@ exec ros2 launch jackal_bringup phase8.launch.py \
   vgl_model_dir:="${MODEL_DIR}" \
   cuvslam_map_dir:="${MAP_DIR}/cuvslam" \
   camera_profile:=navigation_6cam \
+  image_qos:=DEFAULT \
   visual_slam_params:="${BRINGUP_SHARE}/config/visual_slam_navigation_6cam.yaml" \
   vgl_params:="${BRINGUP_SHARE}/config/vgl_navigation_6cam.yaml" \
   rviz:="${RVIZ}"

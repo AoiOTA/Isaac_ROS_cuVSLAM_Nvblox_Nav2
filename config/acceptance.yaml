@@ -42,7 +42,10 @@ success_requires:
 # around occupied cells. Adjust only after the real four-Hawk/eight-stream map is generated.
 goals:
   - name: north_room
-    pose: [-0.85, 3.50, 1.570796327]
+    # The former x=-0.85 endpoint had only 0.316 m of map clearance. The
+    # 0.337 m circumscribed Jackal footprint could follow the route but could
+    # not settle at that pose; x=-0.50 retains the route and 0.54 m clearance.
+    pose: [-0.50, 3.50, 1.570796327]
   - name: south_corridor
     pose: [0.40, -5.10, -1.570796327]
   - name: east_room
@@ -54,6 +57,9 @@ route_validation:
   # footprint.  The former 0.34 m circumscribed circle rejected doorways that
   # the real rectangular footprint traversed collision-free during mapping.
   collision_radius_m: 0.28
+  # Endpoints must accommodate every footprint orientation even though the
+  # rectangular robot can traverse narrower, orientation-constrained doors.
+  goal_clearance_radius_m: 0.34
   require_known_free: true
   require_direct_line_obstructed: true
 

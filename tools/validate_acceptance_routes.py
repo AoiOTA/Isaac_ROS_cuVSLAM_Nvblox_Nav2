@@ -108,6 +108,30 @@ def reachable(
     return False
 
 
+def inflate_mask(
+    occupied: list[bool],
+    width: int,
+    height: int,
+    radius_cells: int,
+) -> list[bool]:
+    inflated = occupied.copy()
+    offsets = [
+        (row, column)
+        for row in range(-radius_cells, radius_cells + 1)
+        for column in range(-radius_cells, radius_cells + 1)
+        if row * row + column * column <= radius_cells * radius_cells
+    ]
+    for index, value in enumerate(occupied):
+        if not value:
+            continue
+        row, column = divmod(index, width)
+        for delta_row, delta_column in offsets:
+            target_row, target_column = row + delta_row, column + delta_column
+            if 0 <= target_row < height and 0 <= target_column < width:
+                inflated[target_row * width + target_column] = True
+    return inflated
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("map_dir", type=Path)
@@ -129,7 +153,17 @@ def main() -> int:
     occupied_threshold = float(map_yaml.get("occupied_thresh", 0.65))
     free_threshold = float(map_yaml.get("free_thresh", 0.196))
     route_config = config["route_validation"]
-    radius_cells = math.ceil(float(route_config["collision_radius_m"]) / resolution)
+    collision_radius = float(route_config["collision_radius_m"])
+    goal_clearance_radius = float(
+        route_config.get("goal_clearance_radius_m", collision_radius)
+    )
+    if goal_clearance_radius < collision_radius:
+        raise RuntimeError(
+            "goal_clearance_radius_m must be greater than or equal to "
+            "collision_radius_m"
+        )
+    radius_cells = math.ceil(collision_radius / resolution)
+    goal_radius_cells = math.ceil(goal_clearance_radius / resolution)
 
     occupied = [False] * (width * height)
     known_free = [False] * (width * height)
@@ -137,25 +171,16 @@ def main() -> int:
         occupancy = (pixel / 255.0) if negate else ((255 - pixel) / 255.0)
         occupied[index] = occupancy > occupied_threshold
         known_free[index] = occupancy < free_threshold
-    inflated = occupied.copy()
-    offsets = [
-        (row, column)
-        for row in range(-radius_cells, radius_cells + 1)
-        for column in range(-radius_cells, radius_cells + 1)
-        if row * row + column * column <= radius_cells * radius_cells
-    ]
-    for index, value in enumerate(occupied):
-        if not value:
-            continue
-        row, column = divmod(index, width)
-        for delta_row, delta_column in offsets:
-            target_row, target_column = row + delta_row, column + delta_column
-            if 0 <= target_row < height and 0 <= target_column < width:
-                inflated[target_row * width + target_column] = True
+    inflated = inflate_mask(occupied, width, height, radius_cells)
+    goal_inflated = inflate_mask(occupied, width, height, goal_radius_cells)
     if bool(route_config.get("require_known_free", True)):
         inflated = [
             blocked or not known
             for blocked, known in zip(inflated, known_free)
+        ]
+        goal_inflated = [
+            blocked or not known
+            for blocked, known in zip(goal_inflated, known_free)
         ]
 
     start_xy = tuple(float(value) for value in route_config["start_pose"])
@@ -170,7 +195,7 @@ def main() -> int:
         pose = [float(value) for value in goal["pose"]]
         cell = map_cell(pose[0], pose[1], origin, resolution, width, height)
         inside = 0 <= cell[0] < height and 0 <= cell[1] < width
-        clear = inside and not inflated[cell[0] * width + cell[1]]
+        clear = inside and not goal_inflated[cell[0] * width + cell[1]]
         connected = clear and reachable(start, cell, inflated, width, height)
         straight = line_cells(start, cell) if inside else []
         direct_obstructed = bool(straight) and any(
@@ -196,7 +221,8 @@ def main() -> int:
         "status": "passed" if routes and all(route["passed"] for route in routes) else "failed",
         "map_name": map_dir.name,
         "map_resolution_m": resolution,
-        "collision_radius_m": float(route_config["collision_radius_m"]),
+        "collision_radius_m": collision_radius,
+        "goal_clearance_radius_m": goal_clearance_radius,
         "start_pose": list(start_xy),
         "start_cell": list(start),
         "routes": routes,

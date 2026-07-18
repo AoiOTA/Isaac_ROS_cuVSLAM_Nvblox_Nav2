@@ -62,6 +62,7 @@ export ROS_DOMAIN_ID="$((88 + (ATTEMPT_INDEX - 1) % 100))"
 SIM_STOP="${RUN_DIR}/stop-simulator"
 SIM_PID=""
 NAV_PID=""
+DISCOVERY_PID=""
 RUNNER_INVOKED="false"
 RUNNER_STATUS=99
 
@@ -89,6 +90,7 @@ stop_simulator() {
 cleanup() {
   stop_group "${NAV_PID}"
   stop_simulator
+  stop_group "${DISCOVERY_PID}"
 }
 on_exit() {
   local original_status=$?
@@ -111,9 +113,37 @@ on_exit() {
 }
 trap on_exit EXIT INT TERM
 
+DEFAULT_DISCOVERY_PORT="$((13100 + (ATTEMPT_INDEX - 1) % 100))"
+DISCOVERY_PORT="${STATIC_ACCEPTANCE_DISCOVERY_PORT:-${DEFAULT_DISCOVERY_PORT}}"
+[[ "${DISCOVERY_PORT}" =~ ^[0-9]+$ ]] || \
+  die "STATIC_ACCEPTANCE_DISCOVERY_PORT must be an integer"
+DISCOVERY_PORT="$((10#${DISCOVERY_PORT}))"
+(( DISCOVERY_PORT >= 1024 && DISCOVERY_PORT <= 65535 )) || \
+  die "STATIC_ACCEPTANCE_DISCOVERY_PORT must be in 1024..65535"
+command -v fastdds >/dev/null || die "fastdds discovery executable not found"
+if ss -H -lun "sport = :${DISCOVERY_PORT}" 2>/dev/null | grep -q .; then
+  die "Fast DDS discovery port ${DISCOVERY_PORT} is already in use"
+fi
+export ROS_DISCOVERY_SERVER="127.0.0.1:${DISCOVERY_PORT}"
+# ROS_LOCALHOST_ONLY takes precedence over discovery-server mode in the ROS 2
+# Jazzy/Fast DDS runtime used here. The server itself remains loopback-only.
+unset ROS_LOCALHOST_ONLY
+info "Starting trial-local Fast DDS discovery server on ${ROS_DISCOVERY_SERVER}"
+setsid fastdds discovery -i 0 -l 127.0.0.1 -p "${DISCOVERY_PORT}" \
+  >"${RUN_DIR}/fastdds-discovery.log" 2>&1 & DISCOVERY_PID=$!
+for _ in {1..30}; do
+  ss -H -lun "sport = :${DISCOVERY_PORT}" 2>/dev/null | grep -q . && break
+  process_alive "${DISCOVERY_PID}" || \
+    die "Fast DDS discovery server exited; see ${RUN_DIR}/fastdds-discovery.log"
+  sleep 0.1
+done
+ss -H -lun "sport = :${DISCOVERY_PORT}" 2>/dev/null | grep -q . || \
+  die "Fast DDS discovery server did not bind UDP port ${DISCOVERY_PORT}"
+
 info "Starting static Kujiale attempt ${ATTEMPT_INDEX}, goal ${GOAL_INDEX}, ROS domain ${ROS_DOMAIN_ID}"
 setsid "${ISAAC_SIM_PYTHON}" "${PROJECT_ROOT}/isaac_sim/navigation_sim.py" \
   "${SIM_MODE}" --duration 0 --camera-profile navigation_6cam \
+  --reliable-sensor-qos \
   --stop-file "${SIM_STOP}" --report "${RUN_DIR}/simulator.json" \
   >"${RUN_DIR}/simulator.log" 2>&1 & SIM_PID=$!
 STARTUP_POLLS="$(python3 -c 'import math,sys; print(math.ceil(float(sys.argv[1])*2))' "${STARTUP_TIMEOUT}")"

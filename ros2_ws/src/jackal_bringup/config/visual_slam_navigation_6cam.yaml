@@ -30,7 +30,9 @@ visual_slam_node:
     imu_jitter_threshold_ms: 10.0
     image_buffer_size: 160
     imu_buffer_size: 400
-    image_qos: SENSOR_DATA
+    # Match the reliable Isaac camera publishers. Dropping any one member of
+    # the six-image set breaks multi-camera synchronization and tracking.
+    image_qos: DEFAULT
     imu_qos: SENSOR_DATA
     gyro_noise_density: 0.000244
     gyro_random_walk: 0.000019393

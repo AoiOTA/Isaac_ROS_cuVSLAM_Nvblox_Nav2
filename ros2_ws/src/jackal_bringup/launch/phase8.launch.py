@@ -31,6 +31,7 @@ def generate_launch_description() -> LaunchDescription:
                 default_value="navigation_6cam",
                 choices=["navigation_6cam"],
             ),
+            DeclareLaunchArgument("image_qos", default_value="DEFAULT"),
             DeclareLaunchArgument(
                 "visual_slam_params",
                 default_value=str(share / "config/visual_slam_navigation_6cam.yaml"),
@@ -59,6 +60,7 @@ def generate_launch_description() -> LaunchDescription:
                     "override_publishing_stamp": "true",
                     "publish_map_to_odom_tf": "false",
                     "camera_profile": LaunchConfiguration("camera_profile"),
+                    "image_qos": LaunchConfiguration("image_qos"),
                     "visual_slam_params": LaunchConfiguration(
                         "visual_slam_params"
                     ),

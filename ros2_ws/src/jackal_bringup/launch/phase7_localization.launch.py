@@ -25,6 +25,7 @@ def generate_launch_description() -> LaunchDescription:
             DeclareLaunchArgument("cuvslam_map_dir"),
             DeclareLaunchArgument("require_navigation_health", default_value="false"),
             DeclareLaunchArgument("camera_profile", default_value="navigation_6cam"),
+            DeclareLaunchArgument("image_qos", default_value="DEFAULT"),
             DeclareLaunchArgument(
                 "visual_slam_params",
                 default_value=str(share / "config/visual_slam_navigation_6cam.yaml"),
@@ -59,6 +60,7 @@ def generate_launch_description() -> LaunchDescription:
                         "publish_map_to_odom_tf"
                     ),
                     "camera_profile": LaunchConfiguration("camera_profile"),
+                    "image_qos": LaunchConfiguration("image_qos"),
                     "visual_slam_params": LaunchConfiguration("visual_slam_params"),
                 },
             ),
