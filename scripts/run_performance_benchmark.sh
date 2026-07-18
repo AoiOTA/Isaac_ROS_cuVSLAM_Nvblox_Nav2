@@ -1,0 +1,232 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+load_ros
+
+ACCEPTANCE_CONFIG="${PROJECT_ROOT}/config/acceptance.yaml"
+PROFILE="all"
+MAP_NAME="kujiale_jackal_8cam"
+SIM_MODE="--headless"
+OUTPUT_DIR=""
+TELEMETRY_PERIOD="1.0"
+MIN_WARMUP=""
+MAX_WARMUP=""
+WINDOW=""
+STABLE_WINDOWS=""
+MAX_MEAN_CHANGE=""
+MAX_CV=""
+MIN_SAMPLE=""
+MAX_SAMPLE=""
+while (($#)); do
+  case "$1" in
+    --config) ACCEPTANCE_CONFIG="${2:?missing config}"; shift 2 ;;
+    --profile) PROFILE="${2:?missing profile}"; shift 2 ;;
+    --map) MAP_NAME="${2:?missing map name}"; shift 2 ;;
+    --headless|--gui) SIM_MODE="$1"; shift ;;
+    --output-dir) OUTPUT_DIR="${2:?missing output directory}"; shift 2 ;;
+    --min-warmup-s) MIN_WARMUP="${2:?missing value}"; shift 2 ;;
+    --max-warmup-s) MAX_WARMUP="${2:?missing value}"; shift 2 ;;
+    --window-s) WINDOW="${2:?missing value}"; shift 2 ;;
+    --stable-windows) STABLE_WINDOWS="${2:?missing value}"; shift 2 ;;
+    --max-mean-change) MAX_MEAN_CHANGE="${2:?missing value}"; shift 2 ;;
+    --max-cv) MAX_CV="${2:?missing value}"; shift 2 ;;
+    --min-sample-s) MIN_SAMPLE="${2:?missing value}"; shift 2 ;;
+    --max-sample-s) MAX_SAMPLE="${2:?missing value}"; shift 2 ;;
+    --telemetry-period-s) TELEMETRY_PERIOD="${2:?missing value}"; shift 2 ;;
+    -h|--help)
+      echo "Usage: ./scripts/run_performance_benchmark.sh [--profile all|mapping_8cam|navigation_6cam] [adaptive wall-time options]"
+      echo "No frame-count baseline or documentation KPI gate is applied."
+      exit 0 ;;
+    *) die "unknown argument: $1" ;;
+  esac
+done
+require_file "${ACCEPTANCE_CONFIG}"
+mapfile -t PERFORMANCE_VALUES < <(python3 - "${ACCEPTANCE_CONFIG}" <<'PY'
+import sys, yaml
+value = yaml.safe_load(open(sys.argv[1]))["performance"]["adaptive_sampling"]
+for name in (
+    "minimum_warmup_s", "maximum_warmup_s", "stability_window_s",
+    "stable_windows_required", "maximum_mean_change_ratio",
+    "maximum_coefficient_of_variation", "minimum_sample_s", "maximum_sample_s",
+):
+    print(value[name])
+PY
+)
+MIN_WARMUP="${MIN_WARMUP:-${PERFORMANCE_VALUES[0]}}"
+MAX_WARMUP="${MAX_WARMUP:-${PERFORMANCE_VALUES[1]}}"
+WINDOW="${WINDOW:-${PERFORMANCE_VALUES[2]}}"
+STABLE_WINDOWS="${STABLE_WINDOWS:-${PERFORMANCE_VALUES[3]}}"
+MAX_MEAN_CHANGE="${MAX_MEAN_CHANGE:-${PERFORMANCE_VALUES[4]}}"
+MAX_CV="${MAX_CV:-${PERFORMANCE_VALUES[5]}}"
+MIN_SAMPLE="${MIN_SAMPLE:-${PERFORMANCE_VALUES[6]}}"
+MAX_SAMPLE="${MAX_SAMPLE:-${PERFORMANCE_VALUES[7]}}"
+case "${PROFILE}" in
+  all|mapping_8cam|navigation_6cam) ;;
+  *) die "--profile must be all, mapping_8cam, or navigation_6cam" ;;
+esac
+
+RUN_ID="$(date -u +%Y%m%dT%H%M%S)-adaptive-performance"
+OUTPUT_DIR="${OUTPUT_DIR:-${PROJECT_ROOT}/data/reports/performance/${RUN_ID}}"
+[[ ! -e "${OUTPUT_DIR}" ]] || die "output directory already exists: ${OUTPUT_DIR}"
+mkdir -p "${OUTPUT_DIR}" "${PROJECT_ROOT}/data/locks"
+exec 9>"${PROJECT_ROOT}/data/locks/performance-benchmark.lock"
+flock -n 9 || die "another performance benchmark is already running"
+
+PROFILE_SIM_PID=""
+PROFILE_ROS_PID=""
+PROFILE_METRICS_PID=""
+PROFILE_SIM_STOP=""
+PROFILE_METRICS_STOP=""
+process_alive() { [[ -n "$1" ]] && kill -0 "$1" 2>/dev/null; }
+group_alive() { [[ -n "$1" ]] && kill -0 -- "-$1" 2>/dev/null; }
+stop_group() {
+  local pid="$1"
+  [[ -n "${pid}" ]] || return 0
+  if group_alive "${pid}"; then
+    kill -INT -- "-${pid}" 2>/dev/null || true
+    for _ in {1..60}; do group_alive "${pid}" || break; sleep 0.25; done
+    group_alive "${pid}" && kill -TERM -- "-${pid}" 2>/dev/null || true
+    for _ in {1..20}; do group_alive "${pid}" || break; sleep 0.25; done
+    group_alive "${pid}" && kill -KILL -- "-${pid}" 2>/dev/null || true
+  fi
+  wait "${pid}" 2>/dev/null || true
+}
+cleanup_profile() {
+  [[ -z "${PROFILE_METRICS_STOP}" ]] || touch "${PROFILE_METRICS_STOP}" 2>/dev/null || true
+  stop_group "${PROFILE_METRICS_PID}"
+  stop_group "${PROFILE_ROS_PID}"
+  if process_alive "${PROFILE_SIM_PID}"; then
+    [[ -z "${PROFILE_SIM_STOP}" ]] || touch "${PROFILE_SIM_STOP}" 2>/dev/null || true
+  fi
+  stop_group "${PROFILE_SIM_PID}"
+  PROFILE_SIM_PID=""
+  PROFILE_ROS_PID=""
+  PROFILE_METRICS_PID=""
+}
+trap cleanup_profile EXIT INT TERM
+
+BRINGUP_SHARE="$(ros2 pkg prefix jackal_bringup --share)"
+STARTUP_TIMEOUT="$(python3 -c 'import sys,yaml; print(float(yaml.safe_load(open(sys.argv[1]))["trials"]["startup_timeout_s"]))' "${ACCEPTANCE_CONFIG}")"
+STARTUP_POLLS="$(python3 -c 'import math,sys; print(math.ceil(float(sys.argv[1])*2))' "${STARTUP_TIMEOUT}")"
+
+run_profile() {
+  local camera_profile="$1"
+  local workload="$2"
+  local domain_id="$3"
+  local profile_dir="${OUTPUT_DIR}/${camera_profile}"
+  local ready_file="${profile_dir}/start-adaptive-warmup"
+  local sim_report="${profile_dir}/simulator.json"
+  local telemetry="${profile_dir}/telemetry.csv"
+  local normalized="${profile_dir}/performance.json"
+  mkdir -p "${profile_dir}"
+  rm -f "${ready_file}"
+  PROFILE_SIM_STOP="${profile_dir}/stop-simulator"
+  PROFILE_METRICS_STOP="${profile_dir}/stop-telemetry"
+  rm -f "${PROFILE_SIM_STOP}" "${PROFILE_METRICS_STOP}"
+  export ROS_DOMAIN_ID="${domain_id}"
+
+  sim_args=("${SIM_MODE}" --duration 0 --camera-profile "${camera_profile}"
+    --benchmark-performance --performance-start-file "${ready_file}"
+    --performance-min-warmup-s "${MIN_WARMUP}"
+    --performance-max-warmup-s "${MAX_WARMUP}"
+    --performance-window-s "${WINDOW}"
+    --performance-stable-windows "${STABLE_WINDOWS}"
+    --performance-max-mean-change "${MAX_MEAN_CHANGE}"
+    --performance-max-cv "${MAX_CV}"
+    --performance-min-sample-s "${MIN_SAMPLE}"
+    --performance-max-sample-s "${MAX_SAMPLE}"
+    --stop-file "${PROFILE_SIM_STOP}" --report "${sim_report}")
+  [[ "${camera_profile}" == "mapping_8cam" ]] && sim_args+=(--reliable-sensor-qos)
+  info "Starting ${workload} workload with ${camera_profile}; adaptive wall-time sampling"
+  setsid "${ISAAC_SIM_PYTHON}" "${PROJECT_ROOT}/isaac_sim/navigation_sim.py" \
+    "${sim_args[@]}" >"${profile_dir}/simulator.log" 2>&1 & PROFILE_SIM_PID=$!
+  for ((poll=0; poll<STARTUP_POLLS; poll++)); do
+    grep -Fq "JACKAL_PERFORMANCE_READY profile=${camera_profile} fixed_frames=none" \
+      "${profile_dir}/simulator.log" 2>/dev/null && break
+    process_alive "${PROFILE_SIM_PID}" || die "simulator exited during ${camera_profile} startup"
+    sleep 0.5
+  done
+  grep -Fq "JACKAL_PERFORMANCE_READY profile=${camera_profile} fixed_frames=none" \
+    "${profile_dir}/simulator.log" || die "performance simulator startup timeout"
+
+  if [[ "${workload}" == "mapping" ]]; then
+    setsid ros2 launch jackal_bringup phase6.launch.py \
+      camera_profile:=mapping_8cam image_qos:=DEFAULT \
+      visual_slam_params:="${BRINGUP_SHARE}/config/visual_slam_mapping_8cam.yaml" \
+      >"${profile_dir}/ros.log" 2>&1 & PROFILE_ROS_PID=$!
+    ros2 topic echo --no-daemon --once --no-arr --timeout "${STARTUP_TIMEOUT}" \
+      /back_stereo_camera/right/image_raw sensor_msgs/msg/Image >/dev/null
+  else
+    python3 "${PROJECT_ROOT}/tools/check_map_manifest.py" \
+      "${PROJECT_ROOT}/data/maps/${MAP_NAME}"
+    setsid "${PROJECT_ROOT}/scripts/run_navigation.sh" --map "${MAP_NAME}" --no-rviz \
+      >"${profile_dir}/ros.log" 2>&1 & PROFILE_ROS_PID=$!
+    ros2 topic echo --no-daemon --once --timeout "${STARTUP_TIMEOUT}" \
+      --qos-durability transient_local --filter 'm.data' \
+      /localization/ready std_msgs/msg/Bool >/dev/null
+    topic_list="$(ros2 topic list --no-daemon --spin-time 3)"
+    if grep -Fq '/back_stereo_camera/' <<<"${topic_list}"; then
+      die "rear camera topics are present in navigation_6cam"
+    fi
+  fi
+  process_alive "${PROFILE_ROS_PID}" || die "${workload} ROS workload exited during readiness checks"
+  ros2 topic echo --no-daemon --once --timeout "${STARTUP_TIMEOUT}" \
+    /visual_slam/status isaac_ros_visual_slam_interfaces/msg/VisualSlamStatus >/dev/null
+  ros2 topic echo --no-daemon --once --timeout "${STARTUP_TIMEOUT}" \
+    /nvblox_node/static_map_slice nvblox_msgs/msg/DistanceMapSlice >/dev/null
+  if [[ "${workload}" == "navigation" ]]; then
+    action_ready="false"
+    for ((poll=0; poll<STARTUP_POLLS; poll++)); do
+      if ros2 action list 2>/dev/null | grep -Fxq /navigate_to_pose; then
+        action_ready="true"
+        break
+      fi
+      process_alive "${PROFILE_ROS_PID}" || die "navigation workload exited before action readiness"
+      sleep 0.5
+    done
+    [[ "${action_ready}" == "true" ]] || die "NavigateToPose action startup timeout"
+  fi
+
+  setsid python3 "${PROJECT_ROOT}/tools/record_performance_metrics.py" \
+    --output "${telemetry}" --stop-file "${PROFILE_METRICS_STOP}" \
+    --period "${TELEMETRY_PERIOD}" --pid "${PROFILE_SIM_PID}" --pid "${PROFILE_ROS_PID}" \
+    >"${profile_dir}/telemetry.log" 2>&1 & PROFILE_METRICS_PID=$!
+  touch "${ready_file}"
+  info "${camera_profile} workload is ready; adaptive warmup has started"
+  while process_alive "${PROFILE_SIM_PID}"; do
+    process_alive "${PROFILE_ROS_PID}" || die "${workload} ROS workload exited during sampling"
+    process_alive "${PROFILE_METRICS_PID}" || die "performance telemetry recorder exited"
+    sleep 1
+  done
+  set +e
+  wait "${PROFILE_SIM_PID}"
+  sim_status=$?
+  set -e
+  PROFILE_SIM_PID=""
+  touch "${PROFILE_METRICS_STOP}"
+  stop_group "${PROFILE_METRICS_PID}"; PROFILE_METRICS_PID=""
+  stop_group "${PROFILE_ROS_PID}"; PROFILE_ROS_PID=""
+  (( sim_status == 0 )) || die "${camera_profile} performance simulator failed"
+  python3 "${PROJECT_ROOT}/tools/summarize_performance.py" \
+    --sim-report "${sim_report}" --telemetry "${telemetry}" \
+    --output "${normalized}" --workload "${workload}" \
+    >"${profile_dir}/summary.log"
+  profile_reports+=("${normalized}")
+  info "Recorded ${camera_profile}: ${normalized}"
+}
+
+profile_reports=()
+if [[ "${PROFILE}" == "all" || "${PROFILE}" == "mapping_8cam" ]]; then
+  run_profile mapping_8cam mapping 130
+fi
+if [[ "${PROFILE}" == "all" || "${PROFILE}" == "navigation_6cam" ]]; then
+  run_profile navigation_6cam navigation 131
+fi
+python3 "${PROJECT_ROOT}/tools/compare_performance_profiles.py" \
+  --output "${OUTPUT_DIR}/summary.json" "${profile_reports[@]}" \
+  >"${OUTPUT_DIR}/comparison.log"
+trap - EXIT INT TERM
+info "Performance observation complete (no preset KPI gate): ${OUTPUT_DIR}/summary.md"

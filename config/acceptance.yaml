@@ -1,22 +1,76 @@
-trial_counts:
-  static: 10
-  dynamic: 10
-  heterogeneous: 10
+schema_version: 1
+workflow: kujiale_jackal_static_avoidance
 
-preacceptance_trial_counts:
-  static: 20
-  dynamic: 20
+map:
+  name: kujiale_jackal_8cam
+  frame: map
+  mapping_camera_profile: mapping_8cam
+  navigation_camera_profile: navigation_6cam
 
-thresholds:
-  static_success_rate: 0.95
-  dynamic_success_rate: 0.90
-  heterogeneous_success_rate: 0.90
-  path_stretch_p95: 0.20
+scope:
+  environment_motion: static
+  dynamic_obstacles: false
+  lighting_randomization: false
+  color_randomization: false
+
+trials:
+  minimum_valid_trials: 20
+  minimum_collision_free_passage_rate: 0.95
+  route_schedule: round_robin
+  valid_trial_begins: navigation_test_runner_invoked
+  infrastructure_attempts_are_reported: true
+  maximum_consecutive_infrastructure_failures: 5
+  goal_timeout_s: 180.0
+  startup_timeout_s: 180.0
   goal_position_tolerance_m: 0.25
   goal_yaw_tolerance_deg: 10.0
+  minimum_ground_truth_motion_m: 0.50
 
-navigation_success_requires:
+success_requires:
   goal_reached: true
-  collision_free: true
+  physical_collision_count: 0
   localization_healthy: true
   no_manual_intervention: true
+  forward_only_motion: true
+  simulator_status: passed
+  navigation_camera_streams: 6
+  rear_camera_render_products_created: false
+
+# These Map-frame candidates are intentionally checked against the generated
+# occupancy map before any batch starts.  The validator requires each goal to
+# be known-free, footprint-clear, connected to spawn, and to require a detour
+# around occupied cells.  Adjust only after the real 8-camera map is generated.
+goals:
+  - name: north_room
+    pose: [-2.10, 2.85, 1.570796327]
+  - name: south_corridor
+    pose: [0.40, -5.10, -1.570796327]
+  - name: east_room
+    pose: [0.98, 4.93, 1.570796327]
+
+route_validation:
+  start_pose: [0.0, 0.0]
+  collision_radius_m: 0.34
+  require_known_free: true
+  require_direct_line_obstructed: true
+
+performance:
+  policy: observation_only_until_local_baseline_is_recorded
+  fixed_frame_count: null
+  fixed_kpi_thresholds: null
+  profiles: [mapping_8cam, navigation_6cam]
+  adaptive_sampling:
+    minimum_warmup_s: 10.0
+    maximum_warmup_s: 90.0
+    stability_window_s: 5.0
+    stable_windows_required: 3
+    maximum_mean_change_ratio: 0.03
+    maximum_coefficient_of_variation: 0.10
+    minimum_sample_s: 30.0
+    maximum_sample_s: 180.0
+  record:
+    - fps
+    - real_time_factor
+    - app_update_frame_time_ms
+    - process_memory
+    - gpu_telemetry

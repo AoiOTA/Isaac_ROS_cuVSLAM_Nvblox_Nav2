@@ -6,28 +6,44 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 load_ros
 
-MAP_NAME="warehouse_v1"
+MAP_NAME="kujiale_jackal_8cam"
 SIM_MODE="--headless"
 RVIZ="false"
 REPORT=""
+RUN_MODE="auto"
+ACCEPTANCE_CONFIG="${PROJECT_ROOT}/config/acceptance.yaml"
 while (($#)); do
   case "$1" in
     --map) MAP_NAME="${2:?missing map name}"; shift 2 ;;
     --headless|--gui) SIM_MODE="$1"; shift ;;
     --rviz) RVIZ="true"; shift ;;
     --no-rviz) RVIZ="false"; shift ;;
+    --auto) RUN_MODE="auto"; shift ;;
+    --manual) RUN_MODE="manual"; shift ;;
+    --acceptance-config) ACCEPTANCE_CONFIG="${2:?missing config path}"; shift 2 ;;
     --report) REPORT="${2:?missing report path}"; shift 2 ;;
     -h|--help)
-      echo "Usage: ./scripts/run_all.sh [--map NAME] [--headless|--gui] [--rviz|--no-rviz] [--report FILE]"
+      echo "Usage: ./scripts/run_all.sh [--map NAME] [--headless|--gui] [--rviz|--no-rviz] [--auto|--manual] [--report FILE]"
       exit 0 ;;
     *) die "unknown argument: $1" ;;
   esac
 done
 
-export ROS_DOMAIN_ID="${PHASE8_ROS_DOMAIN_ID:-49}"
+require_file "${ACCEPTANCE_CONFIG}"
+MAP_DIR="${PROJECT_ROOT}/data/maps/${MAP_NAME}"
+python3 "${PROJECT_ROOT}/tools/check_map_manifest.py" "${MAP_DIR}"
+if [[ "${RUN_MODE}" == "auto" ]]; then
+  CONFIG_MAP_NAME="$(python3 -c 'import sys,yaml; print(yaml.safe_load(open(sys.argv[1]))["map"]["name"])' "${ACCEPTANCE_CONFIG}")"
+  [[ "${MAP_NAME}" == "${CONFIG_MAP_NAME}" ]] || \
+    die "automatic goals are locked to map ${CONFIG_MAP_NAME}, not ${MAP_NAME}"
+  python3 "${PROJECT_ROOT}/tools/validate_acceptance_routes.py" "${MAP_DIR}" \
+    --config "${ACCEPTANCE_CONFIG}" >/dev/null
+fi
+
+export ROS_DOMAIN_ID="${NAVIGATION_ROS_DOMAIN_ID:-49}"
 RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)"
-LOG_DIR="${PROJECT_ROOT}/data/logs/stage8/${RUN_ID}"
-REPORT="${REPORT:-${PROJECT_ROOT}/data/reports/phase8/navigation-${RUN_ID}.json}"
+LOG_DIR="${PROJECT_ROOT}/data/logs/navigation/${RUN_ID}"
+REPORT="${REPORT:-${PROJECT_ROOT}/data/reports/navigation/navigation-${RUN_ID}.json}"
 SIM_STOP="${LOG_DIR}/stop-simulator"
 mkdir -p "${LOG_DIR}" "$(dirname "${REPORT}")"
 SIM_PID=""; NAV_PID=""
@@ -64,18 +80,20 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-info "Starting Stage 8 simulator (${SIM_MODE}) in ROS domain ${ROS_DOMAIN_ID}"
+info "Starting Kujiale/Jackal navigation simulator (${SIM_MODE}) in ROS domain ${ROS_DOMAIN_ID}"
 setsid "${ISAAC_SIM_PYTHON}" "${PROJECT_ROOT}/isaac_sim/navigation_sim.py" \
-  "${SIM_MODE}" --duration "${PHASE8_SIM_DURATION_S:-900}" \
-  --update-hz "${PHASE8_SIM_UPDATE_HZ:-120}" \
+  "${SIM_MODE}" --duration 0 \
+  --update-hz "${NAVIGATION_SIM_UPDATE_HZ:-120}" \
+  --camera-profile navigation_6cam \
   --stop-file "${SIM_STOP}" \
   --report "${LOG_DIR}/simulator.json" >"${LOG_DIR}/simulator.log" 2>&1 & SIM_PID=$!
 for _ in {1..240}; do
-  grep -Fq NOVA_CARTER_SENSORS_READY "${LOG_DIR}/simulator.log" 2>/dev/null && break
+  grep -Fq JACKAL_SENSORS_READY "${LOG_DIR}/simulator.log" 2>/dev/null && break
   alive "${SIM_PID}" || die "simulator exited; see ${LOG_DIR}/simulator.log"
   sleep 0.5
 done
-grep -Fq NOVA_CARTER_SENSORS_READY "${LOG_DIR}/simulator.log" || die "sensor startup timeout"
+grep -Fq "camera_profile=navigation_6cam streams=6" \
+  "${LOG_DIR}/simulator.log" || die "6-camera sensor startup timeout"
 
 nav_args=(--map "${MAP_NAME}")
 [[ "${RVIZ}" == "true" ]] && nav_args+=(--rviz) || nav_args+=(--no-rviz)
@@ -84,25 +102,31 @@ setsid "${PROJECT_ROOT}/scripts/run_navigation.sh" "${nav_args[@]}" \
 sleep 2
 alive "${NAV_PID}" || { tail -n 200 "${LOG_DIR}/navigation.log" >&2; die "navigation bringup exited"; }
 
-printf -v GOAL_TIMEOUT_S '%.3f' "${PHASE8_GOAL_TIMEOUT_S:-180.0}"
-test_args=(--ros-args -p use_sim_time:=true -p result_path:="${REPORT}"
-  -p require_rviz:="${RVIZ}" -p goal_timeout_s:="${GOAL_TIMEOUT_S}")
-if [[ -n "${PHASE8_GOAL_POSES:-}" ]]; then
-  test_args+=(-p "goal_poses:=${PHASE8_GOAL_POSES}")
+if [[ "${RUN_MODE}" == "manual" ]]; then
+  info "Navigation is ready for external/RViz goals; press Ctrl-C to stop"
+  wait "${NAV_PID}"
+  exit $?
 fi
+
+GOAL_POSES="$(python3 -c 'import sys,yaml; c=yaml.safe_load(open(sys.argv[1])); print("["+",".join(str(v) for g in c["goals"] for v in g["pose"])+"]")' "${ACCEPTANCE_CONFIG}")"
+GOAL_TIMEOUT="$(python3 -c 'import sys,yaml; print(float(yaml.safe_load(open(sys.argv[1]))["trials"]["goal_timeout_s"]))' "${ACCEPTANCE_CONFIG}")"
+printf -v GOAL_TIMEOUT_S '%.3f' "${GOAL_TIMEOUT}"
+test_args=(--ros-args -p use_sim_time:=true -p result_path:="${REPORT}"
+  -p require_rviz:="${RVIZ}" -p goal_timeout_s:="${GOAL_TIMEOUT_S}"
+  -p "goal_poses:=${GOAL_POSES}" -p experiment_class:=kujiale_static_navigation)
 set +e
-ros2 run nova_carter_experiments navigation_test_runner "${test_args[@]}" \
+ros2 run jackal_experiments navigation_test_runner "${test_args[@]}" \
   >"${LOG_DIR}/test-runner.log" 2>&1
 status=$?
 set -e
 if (( status != 0 )); then
   tail -n 240 "${LOG_DIR}/navigation.log" >&2
   cat "${LOG_DIR}/test-runner.log" >&2
-  die "Stage 8 navigation test failed"
+  die "Kujiale static navigation test failed"
 fi
 stop_group "${NAV_PID}"; NAV_PID=""
 stop_simulator; SIM_PID=""
 python3 "${PROJECT_ROOT}/tools/check_stage4_sim_report.py" "${LOG_DIR}/simulator.json"
-python3 "${PROJECT_ROOT}/tools/check_phase8_report.py" "${REPORT}"
-cp "${REPORT}" "${PROJECT_ROOT}/data/reports/phase8/latest.json"
-info "Stage 8 full pipeline passed: ${REPORT}"
+python3 "${PROJECT_ROOT}/tools/check_navigation_report.py" "${REPORT}"
+cp "${REPORT}" "${PROJECT_ROOT}/data/reports/navigation/latest.json"
+info "Kujiale/Jackal navigation route passed: ${REPORT}"
