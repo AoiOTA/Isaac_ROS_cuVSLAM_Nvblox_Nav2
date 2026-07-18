@@ -15,8 +15,11 @@ spawn_search:
   yaw_deg: 180.0
 
 runtime:
-  physics_hz: 120
-  update_hz: 120
+  # Match the proven reference runtime.  Isaac advances the rendered timeline
+  # at 60 Hz here, so 120 Hz physics performs two PhysX steps per image frame
+  # without increasing the camera cadence.
+  physics_hz: 60
+  update_hz: 60
   renderer: RaytracedLighting
   resolution: [1280, 720]
   forbid_stage_switching: true

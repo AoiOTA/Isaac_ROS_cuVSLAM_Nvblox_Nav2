@@ -40,6 +40,16 @@ def test_runtime_config_preserves_calibrated_skid_steer_contract() -> None:
     assert settings.idle_brake_command_timeout_sec == 0.25
 
 
+def test_runtime_defaults_match_reference_and_headless_skips_editor_viewport() -> None:
+    simulation = yaml.safe_load((ROOT / "config/simulation.yaml").read_text())
+    assert simulation["runtime"]["physics_hz"] == 60
+    assert simulation["runtime"]["update_hz"] == 60
+
+    entrypoint = (ROOT / "isaac_sim/navigation_sim.py").read_text()
+    assert '"disable_viewport_updates": args.headless' in entrypoint
+    assert '"headless_viewport_updates_disabled": bool(args.headless)' in entrypoint
+
+
 def test_runtime_overlay_and_graph_preserve_reference_physics_fixes() -> None:
     stage = (ROOT / "isaac_sim/jackal_sim/stage.py").read_text()
     graph = (ROOT / "isaac_sim/jackal_sim/graphs.py").read_text()

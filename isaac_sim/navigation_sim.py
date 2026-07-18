@@ -326,6 +326,10 @@ def run(args: argparse.Namespace) -> int:
         {
             "headless": args.headless,
             "hide_ui": args.headless,
+            # Headless sensor render products do not depend on the editor
+            # viewport.  Leaving its updates enabled renders an additional
+            # 1280x720 view every application frame for no ROS consumer.
+            "disable_viewport_updates": args.headless,
             "renderer": args.renderer,
             "width": args.width,
             "height": args.height,
@@ -381,6 +385,7 @@ def run(args: argparse.Namespace) -> int:
         "pid": os.getpid(),
         "stage_open_count": 0,
         "config": str(args.config.resolve()),
+        "headless_viewport_updates_disabled": bool(args.headless),
     }
     environment_before = fingerprint(args.environment_usd)
     robot_before = fingerprint(args.robot_usd)
