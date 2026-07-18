@@ -1276,6 +1276,12 @@ def main(args: list[str] | None = None) -> None:
         except Exception as error:
             # Preserve partial trajectories and an actionable machine-readable
             # report even when Nav2 aborts or a goal reaches its timeout.
+            partial_checks = {
+                "main_tf_chain_seen": ("map", "odom") in node.tf_edges
+                and ("odom", "base_link") in node.tf_edges,
+                "cuvslam_tracking": node.tracking_samples >= 20,
+                "guard_became_active": "active" in node.guard_states,
+            }
             report = {
                 "status": "failed",
                 "experiment_class": node.experiment_class,
@@ -1286,7 +1292,10 @@ def main(args: list[str] | None = None) -> None:
                 "error": str(error),
                 "error_type": type(error).__name__,
                 "traceback": traceback.format_exc(),
+                "checks": partial_checks,
                 "message_counts": dict(node.counts),
+                "tracking_samples": node.tracking_samples,
+                "tf_edges": sorted([list(edge) for edge in node.tf_edges]),
                 "guard_states": sorted(node.guard_states),
                 "collision_actions": dict(node.collision_actions),
                 "ground_truth_path_length_m": path_length(node.ground_truth),

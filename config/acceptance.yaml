@@ -20,7 +20,12 @@ trials:
   valid_trial_begins: navigation_test_runner_invoked
   infrastructure_attempts_are_reported: true
   maximum_consecutive_infrastructure_failures: 5
-  goal_timeout_s: 180.0
+  # This is wall time, not simulation time. With the complete six-image
+  # localization/navigation stack at about 0.74 RTF, a collision-monitor
+  # slowdown at the north doorway can leave a valid east traversal less than
+  # 0.6 m short at 180 s. Keep the safety interventions and allow the measured
+  # route to finish instead of turning low RTF into a false avoidance failure.
+  goal_timeout_s: 240.0
   startup_timeout_s: 180.0
   goal_position_tolerance_m: 0.25
   goal_yaw_tolerance_deg: 10.0

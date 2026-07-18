@@ -1,4 +1,7 @@
+import json
 from pathlib import Path
+import subprocess
+import sys
 
 import yaml
 
@@ -59,3 +62,80 @@ def test_static_acceptance_separates_door_and_endpoint_clearance() -> None:
     assert route["goal_clearance_radius_m"] == 0.38
     assert north["pose"][:2] == [-0.50, 3.50]
     assert east["pose"] == [0.98, 4.93, 0.0]
+
+
+def test_static_timeout_reflects_measured_full_stack_wall_time() -> None:
+    config = yaml.safe_load((ROOT / "config/acceptance.yaml").read_text())
+    runner = (
+        ROOT
+        / "ros2_ws/src/jackal_experiments/jackal_experiments/navigation_test_runner.py"
+    ).read_text()
+
+    assert config["trials"]["goal_timeout_s"] == 240.0
+    assert '"checks": partial_checks' in runner
+    for name in ("main_tf_chain_seen", "cuvslam_tracking", "guard_became_active"):
+        assert f'"{name}"' in runner.split("partial_checks =", 1)[1]
+
+
+def test_timeout_result_does_not_misclassify_healthy_localization(tmp_path: Path) -> None:
+    (tmp_path / "metadata.json").write_text(
+        json.dumps(
+            {
+                "trial_id": "timeout-diagnostic",
+                "attempt_index": 1,
+                "goal_index": 2,
+                "goal_name": "east_room",
+                "goal_pose": [0.98, 4.93, 0.0],
+                "manual_intervention": False,
+            }
+        )
+    )
+    (tmp_path / "navigation.json").write_text(
+        json.dumps(
+            {
+                "status": "failed",
+                "error": "NavigateToPose timed out",
+                "checks": {
+                    "main_tf_chain_seen": True,
+                    "cuvslam_tracking": True,
+                    "guard_became_active": True,
+                },
+            }
+        )
+    )
+    (tmp_path / "simulator.json").write_text(
+        json.dumps(
+            {
+                "status": "passed",
+                "camera_profile": "navigation_6cam",
+                "active_image_streams": 6,
+                "runtime": {"significant_time_regressions": 0},
+                "robot_contacts": {"collision_event_count": 0},
+                "sensor_graphs": {"rear_render_products_created": False},
+                "dynamic_obstacles": {"enabled": False},
+            }
+        )
+    )
+    (tmp_path / "command_trace.csv").write_text(
+        "linear_x_mps\n0.1\n", encoding="utf-8"
+    )
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "tools/finalize_static_trial.py"),
+            str(tmp_path),
+            "--runner-invoked",
+            "true",
+            "--runner-exit-code",
+            "1",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    result = json.loads((tmp_path / "result.json").read_text())
+
+    assert completed.returncode == 10
+    assert result["checks"]["localization_healthy"] is True
+    assert result["failure_reasons"] == ["goal_reached"]
