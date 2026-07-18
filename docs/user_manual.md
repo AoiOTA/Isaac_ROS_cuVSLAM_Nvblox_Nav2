@@ -116,7 +116,7 @@ data/maps/warehouse_v2_front/
 
 ```bash
 ./scripts/run_acceptance.sh \
-  --matrix-id phase11-final-v1-20260718 \
+  --matrix-id phase11-final-20260718 \
   --record-bag
 ```
 
@@ -126,7 +126,7 @@ data/maps/warehouse_v2_front/
 
 ```bash
 ./scripts/run_acceptance.sh \
-  --matrix-id phase11-final-v1-20260718 \
+  --matrix-id phase11-final-20260718 \
   --resume --skip-build --record-bag
 ```
 
@@ -144,6 +144,8 @@ data/reports/phase11/acceptance-summary-latest.json
 每轮的权威结论是 `data/runs/<run-id>/result.json`。只有目标误差、碰撞、定位安全、深度/地图新鲜度、频率、实时因子、命令时延、平滑性和场景有效性全部通过，该轮才是 `passed`。最终矩阵还检查各类别成功率、长距离成功率和成功轨迹伸长率 P95。
 
 按当前项目范围，光照和颜色随机化明确关闭；正式验收不包含光照/颜色变化，不应把这项排除误读为已通过该类泛化测试。
+
+本机已完成的权威矩阵是`phase11-final-20260718`：静态10/10、动态10/10、异构9/10，成功轨迹伸长率P95为5.10%，长距离11/12。原异构失败保留在分母；最终前向图像频率已冻结为15 Hz。按用户要求复用的历史轮次保留其当时10 Hz/12 Hz实际配置，并未为了形式上统一频率而整批重跑；详细证据见[Phase 11 Validation](phase11_validation.md)。
 
 ## 7. 常用结果读取
 

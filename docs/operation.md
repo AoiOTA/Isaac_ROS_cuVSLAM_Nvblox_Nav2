@@ -36,7 +36,7 @@ python3 tools/check_stage1.py
 ./scripts/run_stage11_trial.sh --class heterogeneous --seed 41000 --goal-index 5 --record-bag
 ./scripts/run_stage11_smoke.sh warehouse_v2_front
 ./scripts/run_stage11_tests.sh warehouse_v2_front
-./scripts/run_acceptance.sh --matrix-id phase11-formal-20260718 --record-bag
+./scripts/run_acceptance.sh --matrix-id phase11-final-20260718 --record-bag
 ```
 
 `smoke_ros_bridge.sh` starts only its own Isaac Sim process group, receives real `/clock`, image, and CameraInfo messages, and then terminates that process group. It never uses `killall` or `pkill`.
@@ -335,7 +335,7 @@ The formal command reads the default 10/10/10 counts from
 
 ```bash
 ./scripts/run_acceptance.sh \
-  --matrix-id phase11-formal-20260718 --record-bag
+  --matrix-id phase11-final-20260718 --record-bag
 ```
 
 If the host or terminal is interrupted, do not delete completed runs. Resume
@@ -343,7 +343,7 @@ the exact identity set with:
 
 ```bash
 ./scripts/run_acceptance.sh \
-  --matrix-id phase11-formal-20260718 \
+  --matrix-id phase11-final-20260718 \
   --resume --skip-build --record-bag
 ```
 

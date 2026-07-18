@@ -2,7 +2,7 @@
 
 本仓库用于在 Ubuntu 24.04、ROS 2 Jazzy、Isaac Sim 6.0.1 和 RTX 4090 上构建 Nova Carter 视觉导航系统。目标组件包括 Isaac Sim Standalone Python、Isaac ROS cuVSLAM、nvblox、Visual Global Localization 和 Nav2。
 
-当前状态：**阶段0至阶段11的代码、配置和自动化已经完成；阶段10已正式提交，阶段11按用户最终口径执行静态/动态/异构各10次的30轮正式矩阵。** 已安装CUDA Toolkit 13.0.3、TensorRT 10.13.3.9和Isaac ROS 4.5.0；Standalone程序直接打开官方Warehouse，在匿名session layer中引用Nova Carter主USD，并在运行时自建控制、前向双目、深度和IMU OmniGraph。当前项目决策固定只使用前向Hawk双目，不启动侧向或后向相机；cuVSLAM连续跟踪、前向cuVGL全局重定位、dynamic nvblox、Nav2 MPPI DiffDrive、Velocity Smoother、Collision Monitor、Command Guard、自动暂停/恢复导航和阶段11验收自动化已组成完整动态导航闭环。
+当前状态：**阶段0至阶段11已完成；按用户最终口径执行的静态/动态/异构各10次、共30轮正式矩阵已通过。** 已安装CUDA Toolkit 13.0.3、TensorRT 10.13.3.9和Isaac ROS 4.5.0；Standalone程序直接打开官方Warehouse，在匿名session layer中引用Nova Carter主USD，并在运行时自建控制、前向双目、深度和IMU OmniGraph。当前项目决策固定只使用前向Hawk双目，不启动侧向或后向相机；cuVSLAM连续跟踪、前向cuVGL全局重定位、dynamic nvblox、Nav2 MPPI DiffDrive、Velocity Smoother、Collision Monitor、Command Guard、自动暂停/恢复导航和阶段11验收自动化已组成完整动态导航闭环。
 
 第一次运行请看[用户操作手册](docs/user_manual.md)，查找代码和配置职责请看[项目重要文件索引](docs/file_index.md)，完整数据链和TF所有权见[架构说明](docs/architecture.md)。
 
@@ -217,18 +217,18 @@ cd /home/lyb/Workspace/Isaac_ROS_cuVSLAM_Nvblox_Nav2
   --headless --no-rviz --record-bag
 
 ./scripts/run_acceptance.sh \
-  --matrix-id phase11-formal-20260718 --record-bag
+  --matrix-id phase11-final-20260718 --record-bag
 ```
 
 中断后使用相同ID继续：
 
 ```bash
 ./scripts/run_acceptance.sh \
-  --matrix-id phase11-formal-20260718 \
+  --matrix-id phase11-final-20260718 \
   --resume --skip-build --record-bag
 ```
 
-最终代码已完成61项自动测试。实际代表性长距离运行中，静态目标完成12.50 m且路径伸长1.88%，异构动态目标完成11.68 m且路径伸长0.68%；两轮均为0碰撞，终点位置误差分别为3.2 cm和4.7 cm，实时因子为0.862/0.837，raw-to-sim命令新鲜度P95为47.0/54.7 ms，nvblox为7.10/7.18 Hz。正式30轮结果记录在[Phase 11 Validation](docs/phase11_validation.md)及`data/reports/phase11/acceptance-summary-latest.json`。
+最终代码已完成64项自动测试。正式矩阵`phase11-final-20260718`复用已完成的静态/动态试验和前5次异构试验，只补齐尚未完成的轮次并重测受15 Hz前向传感器参数影响的两轮。结果为静态10/10、动态10/10、异构9/10，总计29/30；长距离11/12，成功轨迹的路径伸长率P95为5.10%，终点位置/航向误差P95为0.126 m/7.65°，最低实时因子为0.767，命令新鲜度P95为56.13 ms。原异构碰撞失败被如实保留在分母中，没有通过resume隐藏。完整证据口径见[Phase 11 Validation](docs/phase11_validation.md)，本机权威摘要为`data/reports/phase11/acceptance/phase11-final-20260718/summary.json`。
 
 ## 阶段1完整环境配置
 

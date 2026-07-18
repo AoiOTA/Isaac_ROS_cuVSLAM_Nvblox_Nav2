@@ -74,19 +74,21 @@ data/reports/phase10/preacceptance-trials-latest.csv
 
 ```bash
 ./scripts/run_acceptance.sh \
-  --matrix-id phase11-formal-20260718 --record-bag
+  --matrix-id phase11-final-20260718 --record-bag
 ```
 
-默认身份集合不可随意替换：static seed 21000–21039、dynamic 31000–31039、heterogeneous 41000–41049，六个目标按序轮换。`summarize_stage11_acceptance.py`会比较期望和实际身份集合；复制一个通过报告、重复seed或错配目标都不能补数。
+默认身份集合不可随意替换：static seed 21000–21009、dynamic 31000–31009、heterogeneous 41000–41009，六个目标按序轮换。`summarize_stage11_acceptance.py`会比较期望和实际身份集合；复制一个通过报告、重复seed或错配目标都不能补数。
 
 中断恢复：
 
 ```bash
 ./scripts/run_acceptance.sh \
-  --matrix-id phase11-formal-20260718 \
+  --matrix-id phase11-final-20260718 \
   --resume --skip-build --record-bag
 ```
 
 每轮`result.json`首先要求该轮目标到达且无碰撞，并要求所有实时、低延迟、视觉健康、数据年龄、平滑性和场景有效性门通过。最终避障成功率按“无碰撞且到达并通过安全数据流检查的轮数 / 该类别全部正式轮数”计算；成功轨迹使用实际USD碰撞几何SE(2)最优路径统计P95伸长率。失败轮不会被从分母删除。
 
 `heterogeneous`组必须同时包含叉车、box和capsule，至少6个actor都实际移动。actor允许为了避免主动撞击已经安全停车的机器人而进入free-space refuge，但碰撞几何不会关闭，运动距离和yield次数保存在`simulator.json`。完整口径见[phase11_validation.md](phase11_validation.md)。
+
+本机最终矩阵复用已完成的静态10次、动态10次和异构前5次，再补齐异构后5次；结果为10/10、10/10和9/10。原异构碰撞失败保留在分母，不用修复后回归结果替换。

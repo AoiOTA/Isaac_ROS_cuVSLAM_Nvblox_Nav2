@@ -9,7 +9,7 @@ scope:
 runtime:
   map_name: warehouse_v2_front
   simulator_update_hz: 120
-  front_image_rate_hz: 12
+  front_image_rate_hz: 15
   short_goal_timeout_s: 180
   long_goal_timeout_s: 300
   startup_timeout_s: 180

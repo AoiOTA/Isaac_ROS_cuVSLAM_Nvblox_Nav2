@@ -13,7 +13,7 @@ def test_stage11_formal_counts_and_scope() -> None:
         "dynamic": 10,
         "heterogeneous": 10,
     }
-    assert config["runtime"]["front_image_rate_hz"] == 12
+    assert config["runtime"]["front_image_rate_hz"] == 15
     assert config["scope"] == {
         "front_stereo_only": True,
         "lidar_enabled": False,

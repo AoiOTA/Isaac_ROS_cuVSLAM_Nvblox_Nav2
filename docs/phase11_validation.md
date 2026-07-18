@@ -88,7 +88,7 @@ max(0, actual_ground_truth_path / USD_SE2_Astar_optimal_path - 1)
 
 最终统计成功轮的P95，要求≤20%。ground truth只在导航结束后进入分母/分子统计，不发布主TF、不进入任何控制节点。
 
-## 6. 代表性真实运行
+## 6. 代表性真实运行与定向修复
 
 最终代码在同一台RTX 4090工作站已完成三类代表性运行。动态短距离轮和异构长距离轮均全项通过；异构长距离关键结果为：
 
@@ -105,9 +105,49 @@ max(0, actual_ground_truth_path / USD_SE2_Astar_optimal_path - 1)
 - 峰值显存11.25 GiB；
 - 23.9 MB压缩MCAP有效。
 
-静态长距离最终复测和30轮正式矩阵的结果在完成实际执行后写入本节，不以单元测试替代。
+正式异构seed `41003`的长距离轮曾真实触发67个PhysX contact，原因是动态actor在map旋转后使用固定USD world refuge，撤离路径反而扫过机器人。修复后actor在当前位置、路线端点和refuge中选择与机器人中心距离最大的有界一步，且不允许清隙小于当前值。同seed、同目标定向回归后0碰撞到达，路径伸长2.29%，位置/航向误差0.074 m/6.96°。这个定向回归证明修复有效，但原正式失败仍保留在最终异构分母中。
 
-## 7. 执行命令
+异构seed `41007`和`41008`在12 Hz时均0碰撞成功到达，但短距离运行的depth scan观测频率为3.287/3.396 Hz，低于3.5 Hz硬门槛。最终前向图像频率冻结为15 Hz，只重测这两个受参数影响的身份；两轮分别以4.228/3.736 Hz深度、0碰撞通过，原12 Hz失败目录仍保留供审计。
+
+## 7. 30轮正式验收结果
+
+用户最终口径是每类10次。本轮没有从零重跑：静态10次、动态10次和异构前5次均复用已完成的匹配身份证据，再补齐异构后5次。resume会同时复用已完成的成功和失败报告，前提是class/seed/goal/stage全部匹配且`navigation.json/goals`证明目标已发送。
+
+由于用户明确要求复用已完成试验，这30轮是一个可追溯的历史证据汇总，不是在单一传感器频率下重跑的新矩阵：已复用的轮次来自当时冻结的10 Hz/12 Hz配置，最后两个频率失败身份和异构第10轮在15 Hz下实测。当前代码最终值为15 Hz，但本轮没有宣称静态/动态全30轮都在15 Hz下重测。每轮的实际值可从对应`simulator.json/sensor_graphs/image_rate_hz`审计。
+
+权威汇总ID为`phase11-final-20260718`，结果如下：
+
+| 类别 | 通过/总数 | 成功率 | 门槛 | 成功轨迹伸长率P95 |
+|---|---:|---:|---:|---:|
+| static | 10/10 | 100% | ≥95% | 4.65% |
+| dynamic | 10/10 | 100% | ≥90% | 3.69% |
+| heterogeneous | 9/10 | 90% | ≥90% | 8.90% |
+| 合计 | 29/30 | 96.67% | 按类判定 | 5.10% |
+
+其他最终指标：
+
+- 长距离11/12通过，成功率91.67%，门槛90%；
+- 成功轨迹路径伸长率P95为5.10%，门槛20%；
+- 终点位置/航向误差P95为0.126 m/7.65°，门槛0.25 m/10°；
+- 最低实时因子0.767，门槛0.70；
+- raw-to-sim命令新鲜度P95-of-trials为56.13 ms，门槛100 ms；
+- 深度年龄P95-of-trials为50.01 ms，门槛250 ms；
+- 成功轮最低controller/visual/depth/nvblox频率为19.97/7.47/3.54/6.05 Hz；
+- 成功轮加速度P95为0.120 m/s²和0.385 rad/s²，jerk P95为2.120 m/s³和6.163 rad/s³；
+- 峰值显存12194 MiB。
+
+异构类的67个碰撞事件全部来自一个被保留的失败轮，因此异构成功率恰好为9/10；不应把29/30表述为“30轮全部零碰撞”。修复后的同seed定向回归为0碰撞，但只用于验证修复，不替换原正式失败。
+
+本机完整运行数据默认不进Git。权威文件为：
+
+```text
+data/reports/phase11/acceptance/phase11-final-20260718/summary.json
+data/reports/phase11/acceptance/phase11-final-20260718/trials.csv
+data/reports/phase11/acceptance/phase11-final-20260718/report.md
+data/reports/phase11/acceptance-summary-latest.json
+```
+
+## 8. 执行命令
 
 构建、离线测试和三类代表性smoke：
 
@@ -127,20 +167,20 @@ max(0, actual_ground_truth_path / USD_SE2_Astar_optimal_path - 1)
 
 ```bash
 ./scripts/run_acceptance.sh \
-  --matrix-id phase11-final-v1-20260718 --record-bag
+  --matrix-id phase11-final-20260718 --record-bag
 ```
 
 中断恢复：
 
 ```bash
 ./scripts/run_acceptance.sh \
-  --matrix-id phase11-final-v1-20260718 \
+  --matrix-id phase11-final-20260718 \
   --resume --skip-build --record-bag
 ```
 
 权威结果为`data/reports/phase11/acceptance/<matrix-id>/summary.json`，人类可读结果为同目录`report.md`。运行数据默认不提交Git；阶段文档记录最终摘要和matrix ID，完整原始证据留在本机。
 
-## 8. 明确未覆盖
+## 9. 明确未覆盖
 
 - 不做不同光照、色温、材质颜色随机化测试；
 - 不宣称前向双目对所有现实世界外观域变化具有验收结论；

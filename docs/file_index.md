@@ -27,7 +27,7 @@
 | `isaac_sim/nova_carter_sim/graphs.py` | 运行时创建Clock、差速控制、JointState和GroundTruth OmniGraph |
 | `isaac_sim/nova_carter_sim/sensors.py` | 运行时创建前向双目、深度、CameraInfo、IMU图；正式范围不创建侧后图 |
 | `isaac_sim/nova_carter_sim/dynamic_obstacles.py` | 在session layer创建box/capsule，绑定碰撞与视觉几何 |
-| `isaac_sim/nova_carter_sim/dynamic_motion.py` | 叉车/box/capsule轨迹、yield、refuge和恢复逻辑 |
+| `isaac_sim/nova_carter_sim/dynamic_motion.py` | 叉车/box/capsule轨迹、yield、清隙不减的refuge撤离和恢复逻辑 |
 | `isaac_sim/nova_carter_sim/contact_monitor.py` | PhysX接触采集与机器人碰撞计数 |
 | `isaac_sim/nova_carter_sim/follow_camera.py` | GUI第三人称平滑跟随；不发布ROS数据 |
 | `isaac_sim/nova_carter_sim/runtime.py` | timeline主循环、时间监控、报告和退出 |
