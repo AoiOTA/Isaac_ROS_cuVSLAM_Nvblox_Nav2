@@ -14,8 +14,8 @@ set +u
 source "${PROJECT_ROOT}/ros2_ws/install/setup.bash"
 set -u
 python3 -m pytest -q \
-  "${PROJECT_ROOT}/ros2_ws/src/nova_carter_control/test" \
-  "${PROJECT_ROOT}/ros2_ws/src/nova_carter_bringup/test" \
-  "${PROJECT_ROOT}/ros2_ws/src/nova_carter_experiments/test" \
+  "${PROJECT_ROOT}/ros2_ws/src/jackal_control/test" \
+  "${PROJECT_ROOT}/ros2_ws/src/jackal_bringup/test" \
+  "${PROJECT_ROOT}/ros2_ws/src/jackal_experiments/test" \
   "${PROJECT_ROOT}/tests"
 "${PROJECT_ROOT}/scripts/run_stage11_smoke.sh" "${MAP_NAME}"

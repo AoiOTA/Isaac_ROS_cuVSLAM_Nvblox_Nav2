@@ -53,7 +53,7 @@ for ((attempt=1; attempt<=MAX_ATTEMPTS; attempt++)); do
     guard_delay="1.0"
   fi
   set +e
-  ros2 launch nova_carter_bringup phase10.launch.py \
+  ros2 launch jackal_bringup phase10.launch.py \
     map:="${MAP_DIR}/occupancy/map.yaml" \
     vgl_map_dir:="${MAP_DIR}/cuvgl" \
     vgl_config_dir:="${RUNTIME_CONFIG_DIR}" \

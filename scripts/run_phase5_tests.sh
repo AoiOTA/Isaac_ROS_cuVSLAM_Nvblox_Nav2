@@ -66,7 +66,7 @@ for _ in {1..180}; do
     tail -n 180 "${SIM_LOG}" >&2 || true
     die "simulator exited during Phase 5 startup"
   fi
-  if grep -Fq "NOVA_CARTER_SENSORS_READY" "${SIM_LOG}" 2>/dev/null; then
+  if grep -Fq "JACKAL_SENSORS_READY" "${SIM_LOG}" 2>/dev/null; then
     ready=true
     break
   fi
@@ -75,7 +75,7 @@ done
 [[ "${ready}" == true ]] || die "timed out waiting for sensor graphs: ${SIM_LOG}"
 
 info "Starting Phase 3 control, sensor TF, normalization, and cuVSLAM"
-setsid ros2 launch nova_carter_bringup phase5.launch.py >"${BRINGUP_LOG}" 2>&1 &
+setsid ros2 launch jackal_bringup phase5.launch.py >"${BRINGUP_LOG}" 2>&1 &
 BRINGUP_PID=$!
 
 info "Waiting for cuVSLAM services"
@@ -96,7 +96,7 @@ done
 
 info "Running the ${TRACKING_DURATION}-second bidirectional S-course and map service acceptance"
 set +e
-ros2 run nova_carter_experiments visual_slam_test_runner --ros-args \
+ros2 run jackal_experiments visual_slam_test_runner --ros-args \
   -p use_sim_time:=true -p result_path:="${RESULT}" -p map_path:="${MAP_DIR}" \
   -p tracking_duration_sim_seconds:="${TRACKING_DURATION}" \
   2>&1 | tee "${TEST_LOG}"

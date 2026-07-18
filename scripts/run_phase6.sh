@@ -8,4 +8,4 @@ source "${SCRIPT_DIR}/lib/common.sh"
 load_ros
 [[ -z "${REQUESTED_ROS_DOMAIN_ID}" ]] || export ROS_DOMAIN_ID="${REQUESTED_ROS_DOMAIN_ID}"
 
-exec ros2 launch nova_carter_bringup phase6.launch.py "$@"
+exec ros2 launch jackal_bringup phase6.launch.py "$@"

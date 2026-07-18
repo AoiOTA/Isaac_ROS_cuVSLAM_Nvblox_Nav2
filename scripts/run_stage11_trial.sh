@@ -156,11 +156,11 @@ info "Starting Stage 11 ${EXPERIMENT_CLASS} seed=${SEED}, goal=${GOAL_INDEX}"
 setsid "${ISAAC_SIM_PYTHON}" "${PROJECT_ROOT}/isaac_sim/navigation_sim.py" \
   "${sim_args[@]}" >"${RUN_DIR}/simulator.log" 2>&1 & SIM_PID=$!
 for _ in {1..360}; do
-  grep -Fq NOVA_CARTER_SENSORS_READY "${RUN_DIR}/simulator.log" 2>/dev/null && break
+  grep -Fq JACKAL_SENSORS_READY "${RUN_DIR}/simulator.log" 2>/dev/null && break
   process_alive "${SIM_PID}" || die "simulator exited; see ${RUN_DIR}/simulator.log"
   sleep 0.5
 done
-grep -Fq NOVA_CARTER_SENSORS_READY "${RUN_DIR}/simulator.log" || die "sensor startup timeout"
+grep -Fq JACKAL_SENSORS_READY "${RUN_DIR}/simulator.log" || die "sensor startup timeout"
 
 nav_args=(--map "${MAP_NAME}" --no-rviz)
 [[ "${RVIZ}" == "true" ]] && nav_args=(--map "${MAP_NAME}" --rviz)
@@ -170,12 +170,12 @@ sleep 2
 process_alive "${NAV_PID}" || die "Stage 11 navigation bringup exited"
 info "Waiting for final Nav2 lifecycle validation"
 for _ in {1..360}; do
-  grep -Fq 'NOVA_CARTER_NAV2_LIFECYCLE {"status": "already_active"' \
+  grep -Fq 'JACKAL_NAV2_LIFECYCLE {"status": "already_active"' \
     "${RUN_DIR}/ros.log" 2>/dev/null && break
   process_alive "${NAV_PID}" || die "navigation exited before lifecycle validation"
   sleep 0.5
 done
-grep -Fq 'NOVA_CARTER_NAV2_LIFECYCLE {"status": "already_active"' \
+grep -Fq 'JACKAL_NAV2_LIFECYCLE {"status": "already_active"' \
   "${RUN_DIR}/ros.log" || die "Nav2 lifecycle validation timeout"
 
 if [[ "${RECORD_BAG}" == "true" ]]; then
@@ -217,7 +217,7 @@ runner_args=(--ros-args -p use_sim_time:=true -p result_path:="${NAV_REPORT}"
   -p goal_xy_tolerance_m:=0.25 -p goal_yaw_tolerance_deg:=10.0
   -p minimum_ground_truth_motion_m:=0.50)
 set +e
-ros2 run nova_carter_experiments navigation_test_runner "${runner_args[@]}" \
+ros2 run jackal_experiments navigation_test_runner "${runner_args[@]}" \
   >>"${RUN_DIR}/ros.log" 2>&1
 RUNNER_STATUS=$?
 set -e

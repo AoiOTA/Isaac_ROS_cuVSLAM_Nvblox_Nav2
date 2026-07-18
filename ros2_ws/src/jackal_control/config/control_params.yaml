@@ -1,0 +1,32 @@
+command_guard:
+  ros__parameters:
+    use_sim_time: true
+    input_topic: /cmd_vel_safe
+    output_topic: /cmd_vel_sim
+    status_topic: /control/guard_status
+    max_linear_speed: 0.75
+    max_angular_speed: 1.2
+    max_linear_acceleration: 1.1
+    max_linear_deceleration: 1.0
+    max_angular_acceleration: 3.0
+    max_angular_deceleration: 3.0
+    max_linear_jerk: 8.0
+    max_angular_jerk: 16.0
+    slew_response_rate: 10.0
+    command_timeout: 0.25
+    update_rate: 100.0
+    visual_slam_timeout: 1.0
+    depth_timeout: 0.50
+    map_slice_timeout: 1.0
+
+wheel_odometry:
+  ros__parameters:
+    use_sim_time: true
+    joint_states_topic: /joint_states
+    odometry_topic: /wheel/odometry
+    left_wheel_joints: [front_left_wheel_joint, rear_left_wheel_joint]
+    right_wheel_joints: [front_right_wheel_joint, rear_right_wheel_joint]
+    wheel_radius: 0.098
+    wheel_separation: 0.800
+    odom_frame: odom
+    base_frame: base_link

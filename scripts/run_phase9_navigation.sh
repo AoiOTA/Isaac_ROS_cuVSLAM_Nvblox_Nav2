@@ -38,7 +38,7 @@ done
 python3 "${PROJECT_ROOT}/tools/prepare_vgl_runtime_config.py" \
   "${MAP_DIR}/config" "${RUNTIME_CONFIG_DIR}" --max-sync-us 3000
 
-exec ros2 launch nova_carter_bringup phase9.launch.py \
+exec ros2 launch jackal_bringup phase9.launch.py \
   map:="${MAP_DIR}/occupancy/map.yaml" \
   vgl_map_dir:="${MAP_DIR}/cuvgl" \
   vgl_config_dir:="${RUNTIME_CONFIG_DIR}" \

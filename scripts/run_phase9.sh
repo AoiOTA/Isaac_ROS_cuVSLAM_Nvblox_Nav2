@@ -117,11 +117,11 @@ setsid "${ISAAC_SIM_PYTHON}" "${PROJECT_ROOT}/isaac_sim/navigation_sim.py" \
   --stop-file "${SIM_STOP}" --report "${SIM_REPORT}" \
   >"${LOG_DIR}/simulator.log" 2>&1 & SIM_PID=$!
 for _ in {1..240}; do
-  grep -Fq NOVA_CARTER_SENSORS_READY "${LOG_DIR}/simulator.log" 2>/dev/null && break
+  grep -Fq JACKAL_SENSORS_READY "${LOG_DIR}/simulator.log" 2>/dev/null && break
   alive "${SIM_PID}" || die "simulator exited; see ${LOG_DIR}/simulator.log"
   sleep 0.5
 done
-grep -Fq NOVA_CARTER_SENSORS_READY "${LOG_DIR}/simulator.log" || die "sensor startup timeout"
+grep -Fq JACKAL_SENSORS_READY "${LOG_DIR}/simulator.log" || die "sensor startup timeout"
 
 nav_args=(--map "${MAP_NAME}")
 [[ "${RVIZ}" == "true" ]] && nav_args+=(--rviz) || nav_args+=(--no-rviz)
@@ -176,7 +176,7 @@ if [[ -n "${PHASE9_GOAL_POSES:-}" ]]; then
   test_args+=(-p "goal_poses:=${PHASE9_GOAL_POSES}")
 fi
 set +e
-ros2 run nova_carter_experiments navigation_test_runner "${test_args[@]}" \
+ros2 run jackal_experiments navigation_test_runner "${test_args[@]}" \
   >"${LOG_DIR}/test-runner.log" 2>&1
 status=$?
 set -e

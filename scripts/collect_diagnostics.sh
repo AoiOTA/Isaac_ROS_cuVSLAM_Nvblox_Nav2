@@ -27,14 +27,14 @@ capture() {
   timeout 15s "$@" >>"${OUTPUT}" 2>&1 || printf 'command unavailable or timed out\n' >>"${OUTPUT}"
 }
 
-printf 'Nova Carter diagnostics\ncreated_utc=%s\nproject_root=%s\n' \
+printf 'Jackal diagnostics\ncreated_utc=%s\nproject_root=%s\n' \
   "$(date -u +%FT%TZ)" "${PROJECT_ROOT}" >"${OUTPUT}"
 capture "os" bash -lc 'uname -a; lsb_release -ds; uptime'
 capture "gpu" nvidia-smi
 capture "disk-memory" bash -lc 'free -h; df -h / /home'
 capture "git" git -C "${PROJECT_ROOT}" status --short --branch
 capture "versions" bash -lc "source /opt/ros/jazzy/setup.bash; ros2 --help | head -n 2; '${ISAAC_SIM_PYTHON}' -c 'import isaacsim; print(isaacsim.__version__)'"
-capture "isaac-ros-packages" bash -lc "source /opt/ros/jazzy/setup.bash; source '${PROJECT_ROOT}/ros2_ws/install/setup.bash' 2>/dev/null || true; ros2 pkg list | grep -E 'isaac_ros|nvblox|nova_carter|nav2' | sort"
+capture "isaac-ros-packages" bash -lc "source /opt/ros/jazzy/setup.bash; source '${PROJECT_ROOT}/ros2_ws/install/setup.bash' 2>/dev/null || true; ros2 pkg list | grep -E 'isaac_ros|nvblox|jackal|nav2' | sort"
 capture "ros-nodes" ros2 node list
 capture "ros-topics" ros2 topic list -t
 capture "ros-services" ros2 service list -t

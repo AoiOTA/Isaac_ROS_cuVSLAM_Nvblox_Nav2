@@ -42,17 +42,17 @@ for index in "${!poses[@]}"; do
     --spawn-yaw "${heading}" --report "${attempt}/simulator.json" \
     >"${attempt}/simulator.log" 2>&1 & sim_pid=$!
   for _ in {1..240}; do
-    grep -Fq NOVA_CARTER_SENSORS_READY "${attempt}/simulator.log" 2>/dev/null && break
+    grep -Fq JACKAL_SENSORS_READY "${attempt}/simulator.log" 2>/dev/null && break
     kill -0 "${sim_pid}" 2>/dev/null || die "simulator failed in ${name}"
     sleep 0.5
   done
-  setsid ros2 launch nova_carter_bringup phase7_localization.launch.py \
+  setsid ros2 launch jackal_bringup phase7_localization.launch.py \
     vgl_map_dir:="${MAP_DIR}/cuvgl" vgl_config_dir:="${MAP_DIR}/config" \
     vgl_model_dir:="${MODEL_DIR}" cuvslam_map_dir:="${MAP_DIR}/cuvslam" \
     >"${attempt}/bringup.log" 2>&1 & bringup_pid=$!
   result="${attempt}/result.json"
   set +e
-  ros2 run nova_carter_experiments vgl_test_runner --ros-args \
+  ros2 run jackal_experiments vgl_test_runner --ros-args \
     -p use_sim_time:=true -p result_path:="${result}" -p attempt_name:="${name}" \
     >"${attempt}/test.log" 2>&1
   status=$?

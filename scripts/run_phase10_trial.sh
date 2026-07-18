@@ -163,11 +163,11 @@ info "Starting Stage 10 ${EXPERIMENT_CLASS} trial seed=${SEED}, goal=${GOAL_MODE
 setsid "${ISAAC_SIM_PYTHON}" "${PROJECT_ROOT}/isaac_sim/navigation_sim.py" \
   "${sim_args[@]}" >"${RUN_DIR}/simulator.log" 2>&1 & SIM_PID=$!
 for _ in {1..300}; do
-  grep -Fq NOVA_CARTER_SENSORS_READY "${RUN_DIR}/simulator.log" 2>/dev/null && break
+  grep -Fq JACKAL_SENSORS_READY "${RUN_DIR}/simulator.log" 2>/dev/null && break
   process_alive "${SIM_PID}" || die "simulator exited; see ${RUN_DIR}/simulator.log"
   sleep 0.5
 done
-grep -Fq NOVA_CARTER_SENSORS_READY "${RUN_DIR}/simulator.log" || die "sensor startup timeout"
+grep -Fq JACKAL_SENSORS_READY "${RUN_DIR}/simulator.log" || die "sensor startup timeout"
 
 nav_args=(--map "${MAP_NAME}" --no-rviz)
 [[ "${RVIZ}" == "true" ]] && nav_args=(--map "${MAP_NAME}" --rviz)
@@ -183,13 +183,13 @@ process_alive "${NAV_PID}" || die "Stage 10 navigation bringup exited; see ${RUN
 # clean process instance.
 info "Waiting for the final Nav2 lifecycle guard before starting the trial"
 for _ in {1..300}; do
-  grep -Fq 'NOVA_CARTER_NAV2_LIFECYCLE {"status": "already_active"' \
+  grep -Fq 'JACKAL_NAV2_LIFECYCLE {"status": "already_active"' \
     "${RUN_DIR}/ros.log" 2>/dev/null && break
   process_alive "${NAV_PID}" || \
     die "navigation exited while waiting for final lifecycle validation"
   sleep 0.5
 done
-grep -Fq 'NOVA_CARTER_NAV2_LIFECYCLE {"status": "already_active"' \
+grep -Fq 'JACKAL_NAV2_LIFECYCLE {"status": "already_active"' \
   "${RUN_DIR}/ros.log" || die "Nav2 lifecycle validation timeout"
 
 if [[ "${RECORD_BAG}" == "true" ]]; then
@@ -245,7 +245,7 @@ runner_args=(--ros-args -p use_sim_time:=true -p result_path:="${NAV_REPORT}"
   -p "fault_sequence:=${fault_parameter}" -p fault_duration_s:=2.0
   -p fault_stop_grace_s:=1.5 -p maximum_command_while_fault:=0.02)
 set +e
-ros2 run nova_carter_experiments navigation_test_runner "${runner_args[@]}" \
+ros2 run jackal_experiments navigation_test_runner "${runner_args[@]}" \
   >>"${RUN_DIR}/ros.log" 2>&1
 RUNNER_STATUS=$?
 set -e

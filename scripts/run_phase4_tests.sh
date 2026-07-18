@@ -66,22 +66,22 @@ for _ in {1..180}; do
     tail -n 180 "${SIM_LOG}" >&2 || true
     die "simulator exited during Phase 4 startup"
   fi
-  if grep -Fq "NOVA_CARTER_SENSORS_READY" "${SIM_LOG}" 2>/dev/null; then ready=true; break; fi
+  if grep -Fq "JACKAL_SENSORS_READY" "${SIM_LOG}" 2>/dev/null; then ready=true; break; fi
   sleep 0.5
 done
 [[ "${ready}" == true ]] || die "timed out waiting for Phase 4 graphs: ${SIM_LOG}"
 
 info "Starting robot_state_publisher, image normalization, and control nodes"
-setsid ros2 launch nova_carter_bringup phase4.launch.py >"${BRINGUP_LOG}" 2>&1 &
+setsid ros2 launch jackal_bringup phase4.launch.py >"${BRINGUP_LOG}" 2>&1 &
 BRINGUP_PID=$!
 
 info "Exercising stationary, twin arcs, and spin while auditing the full data flow"
 set +e
-ros2 run nova_carter_experiments sensor_payload_probe --ros-args \
+ros2 run jackal_experiments sensor_payload_probe --ros-args \
   -p result_path:="${PAYLOAD_RESULT}" 2>&1 | tee "${PAYLOAD_LOG}"
 payload_status=${PIPESTATUS[0]}
 if [[ ${payload_status} -eq 0 ]]; then
-ros2 run nova_carter_experiments sensor_test_runner --ros-args \
+ros2 run jackal_experiments sensor_test_runner --ros-args \
   -p use_sim_time:=true -p result_path:="${RESULT}" \
   -p payload_probe_path:="${PAYLOAD_RESULT}" 2>&1 | tee "${TEST_LOG}"
   test_status=${PIPESTATUS[0]}

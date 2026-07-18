@@ -76,7 +76,7 @@ for _ in {1..90}; do
     tail -n 160 "${SIM_LOG}" >&2 || true
     die "simulator exited during startup"
   fi
-  if grep -Fq "NOVA_CARTER_CONTROL_READY" "${SIM_LOG}" 2>/dev/null; then
+  if grep -Fq "JACKAL_CONTROL_READY" "${SIM_LOG}" 2>/dev/null; then
     sim_ready=true
     break
   fi
@@ -85,12 +85,12 @@ done
 [[ "${sim_ready}" == true ]] || die "timed out waiting for runtime graphs; log: ${SIM_LOG}"
 
 info "Starting Command Guard and wheel odometry"
-setsid ros2 launch nova_carter_control control.launch.py >"${CONTROL_LOG}" 2>&1 &
+setsid ros2 launch jackal_control control.launch.py >"${CONTROL_LOG}" 2>&1 &
 CONTROL_PID=$!
 
 info "Running straight, reverse, spin, arc, S-curve, sharp-turn, and safety tests"
 set +e
-ros2 run nova_carter_experiments motion_test_runner \
+ros2 run jackal_experiments motion_test_runner \
   --ros-args \
   -p use_sim_time:=true \
   -p result_path:="${RESULT}" 2>&1 | tee "${TEST_LOG}"

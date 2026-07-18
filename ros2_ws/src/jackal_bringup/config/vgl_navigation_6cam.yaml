@@ -1,0 +1,30 @@
+visual_global_localization_node:
+  ros__parameters:
+    use_sim_time: true
+    num_cameras: 6
+    stereo_localizer_cam_ids: "0,1,2,3,4,5"
+    camera_optical_frames:
+      - front_stereo_camera_left_optical
+      - front_stereo_camera_right_optical
+      - left_stereo_camera_left_optical
+      - left_stereo_camera_right_optical
+      - right_stereo_camera_left_optical
+      - right_stereo_camera_right_optical
+    map_frame: map
+    odom_frame: odom
+    base_frame: base_link
+    enable_rectify_images: false
+    publish_rectified_images: false
+    enable_continuous_localization: false
+    use_initial_guess: false
+    publish_map_to_base_tf: false
+    publish_map_to_odom_tf: false
+    image_sync_match_threshold_ms: 40.0
+    image_buffer_size: 160
+    image_qos_profile: SENSOR_DATA
+    localization_precision_level: 2
+    vgl_frequency: 1.0
+    vgl_enable_debug: false
+    verbose_logging: false
+    init_glog: false
+    glog_v: 0

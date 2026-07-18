@@ -247,7 +247,7 @@ def main() -> int:
         }
     result = {
         "schema_version": 1,
-        "method": "8-heading SE(2) A* over actual USD CollisionAPI AABBs with the padded Nova Carter footprint",
+        "method": "8-heading SE(2) A* over actual USD CollisionAPI AABBs with the padded Jackal footprint",
         "geometry_file": str(args.geometry.resolve()),
         "usd_path": geometry["usd_path"],
         "collider_count": geometry["collider_count"],

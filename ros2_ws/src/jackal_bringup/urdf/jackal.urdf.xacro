@@ -1,0 +1,65 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="jackal">
+  <material name="jackal_body"><color rgba="0.12 0.18 0.22 1"/></material>
+  <material name="wheel_black"><color rgba="0.03 0.03 0.03 1"/></material>
+
+  <link name="base_link">
+    <visual>
+      <origin xyz="0.0125 0 0.14" rpy="0 0 0"/>
+      <geometry><box size="0.485 0.420 0.220"/></geometry>
+      <material name="jackal_body"/>
+    </visual>
+  </link>
+
+  <xacro:macro name="wheel" params="name x y">
+    <link name="${name}_wheel_link">
+      <visual>
+        <origin xyz="0 0 0" rpy="1.57079632679 0 0"/>
+        <geometry><cylinder radius="0.098" length="0.040"/></geometry>
+        <material name="wheel_black"/>
+      </visual>
+    </link>
+    <joint name="${name}_wheel_joint" type="continuous">
+      <origin xyz="${x} ${y} 0.0345" rpy="0 0 0"/>
+      <parent link="base_link"/><child link="${name}_wheel_link"/>
+      <axis xyz="0 1 0"/>
+    </joint>
+  </xacro:macro>
+
+  <xacro:wheel name="front_left" x="0.131" y="0.187795"/>
+  <xacro:wheel name="front_right" x="0.131" y="-0.187795"/>
+  <xacro:wheel name="rear_left" x="-0.131" y="0.187795"/>
+  <xacro:wheel name="rear_right" x="-0.131" y="-0.187795"/>
+
+  <xacro:macro name="hawk_pair" params="name yaw">
+    <link name="${name}_stereo_camera_link"/>
+    <link name="${name}_stereo_camera_left_optical"/>
+    <link name="${name}_stereo_camera_right_optical"/>
+    <joint name="${name}_stereo_mount" type="fixed">
+      <parent link="base_link"/><child link="${name}_stereo_camera_link"/>
+      <origin xyz="0 0 0.42" rpy="0 0 ${yaw}"/>
+    </joint>
+    <joint name="${name}_stereo_left_optical_joint" type="fixed">
+      <parent link="${name}_stereo_camera_link"/>
+      <child link="${name}_stereo_camera_left_optical"/>
+      <origin xyz="0 0.075 0" rpy="-1.57079632679 0 -1.57079632679"/>
+    </joint>
+    <joint name="${name}_stereo_right_optical_joint" type="fixed">
+      <parent link="${name}_stereo_camera_link"/>
+      <child link="${name}_stereo_camera_right_optical"/>
+      <origin xyz="0 -0.075 0" rpy="-1.57079632679 0 -1.57079632679"/>
+    </joint>
+  </xacro:macro>
+
+  <xacro:hawk_pair name="front" yaw="0"/>
+  <xacro:hawk_pair name="left" yaw="1.57079632679"/>
+  <xacro:hawk_pair name="right" yaw="-1.57079632679"/>
+  <xacro:hawk_pair name="back" yaw="3.14159265359"/>
+
+  <link name="front_stereo_camera_imu"/>
+  <joint name="front_stereo_imu_joint" type="fixed">
+    <parent link="front_stereo_camera_link"/>
+    <child link="front_stereo_camera_imu"/>
+    <origin xyz="0 0.075 0" rpy="0 0 0"/>
+  </joint>
+</robot>

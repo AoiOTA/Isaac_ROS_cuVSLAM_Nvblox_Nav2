@@ -10,9 +10,9 @@ MAP_NAME="${1:-warehouse_v1}"
 info "Building and running Stage 8 contract tests"
 "${PROJECT_ROOT}/scripts/build.sh"
 python3 -m pytest -q \
-  "${PROJECT_ROOT}/ros2_ws/src/nova_carter_control/test" \
-  "${PROJECT_ROOT}/ros2_ws/src/nova_carter_bringup/test" \
-  "${PROJECT_ROOT}/ros2_ws/src/nova_carter_experiments/test"
+  "${PROJECT_ROOT}/ros2_ws/src/jackal_control/test" \
+  "${PROJECT_ROOT}/ros2_ws/src/jackal_bringup/test" \
+  "${PROJECT_ROOT}/ros2_ws/src/jackal_experiments/test"
 
 info "Running live RViz + cuVGL + cuVSLAM + nvblox + Nav2 three-goal acceptance"
 "${PROJECT_ROOT}/scripts/run_all.sh" --map "${MAP_NAME}" --headless --rviz
