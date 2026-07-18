@@ -49,7 +49,10 @@ goals:
   - name: south_corridor
     pose: [0.40, -5.10, -1.570796327]
   - name: east_room
-    pose: [0.98, 4.93, 1.570796327]
+    # Approach is west-to-east. A north-facing terminal pose made the
+    # forward-only differential drive align yaw while still 0.36 m lateral to
+    # the goal, after which it could not translate sideways to close the gap.
+    pose: [0.98, 4.93, 0.0]
 
 route_validation:
   start_pose: [0.0, 0.0]
@@ -59,7 +62,7 @@ route_validation:
   collision_radius_m: 0.28
   # Endpoints must accommodate every footprint orientation even though the
   # rectangular robot can traverse narrower, orientation-constrained doors.
-  goal_clearance_radius_m: 0.34
+  goal_clearance_radius_m: 0.38
   require_known_free: true
   require_direct_line_obstructed: true
 

@@ -141,10 +141,20 @@ local_costmap:
       resolution: 0.05
       transform_tolerance: 0.30
       footprint: "[[0.255, 0.210], [0.255, -0.210], [-0.230, -0.210], [-0.230, 0.210]]"
-      footprint_padding: 0.005
+      # A 30 mm shell covers half-cell occupancy quantization at 0.05 m and
+      # keeps the physical wheel envelope outside mapped chair geometry.
+      footprint_padding: 0.030
       track_unknown_space: true
       always_send_full_costmap: true
-      plugins: [nvblox_layer, obstacle_layer, inflation_layer]
+      # The saved eight-stream occupancy map supplies 360-degree static
+      # context. Front depth/nvblox then add live geometry; without this layer
+      # MPPI can clip mapped furniture after it rotates outside the front Hawk.
+      plugins: [static_layer, nvblox_layer, obstacle_layer, inflation_layer]
+      static_layer:
+        plugin: nav2_costmap_2d::StaticLayer
+        enabled: true
+        map_subscribe_transient_local: true
+        subscribe_to_updates: true
       nvblox_layer:
         plugin: nvblox::nav2::NvbloxCostmapLayer
         enabled: true
@@ -188,7 +198,7 @@ global_costmap:
       transform_tolerance: 0.30
       resolution: 0.05
       footprint: "[[0.255, 0.210], [0.255, -0.210], [-0.230, -0.210], [-0.230, 0.210]]"
-      footprint_padding: 0.005
+      footprint_padding: 0.030
       # The visual mapping route leaves small unobserved islands around the
       # robot spawn.  Treat those as globally traversable; the rolling local
       # costmap, combined nvblox ESDF and raw-depth Collision Monitor still

@@ -53,7 +53,9 @@ def test_static_acceptance_separates_door_and_endpoint_clearance() -> None:
     config = yaml.safe_load((ROOT / "config/acceptance.yaml").read_text())
     route = config["route_validation"]
     north = next(goal for goal in config["goals"] if goal["name"] == "north_room")
+    east = next(goal for goal in config["goals"] if goal["name"] == "east_room")
 
     assert route["collision_radius_m"] == 0.28
-    assert route["goal_clearance_radius_m"] == 0.34
+    assert route["goal_clearance_radius_m"] == 0.38
     assert north["pose"][:2] == [-0.50, 3.50]
+    assert east["pose"] == [0.98, 4.93, 0.0]

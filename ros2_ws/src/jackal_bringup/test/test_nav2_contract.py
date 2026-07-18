@@ -58,14 +58,22 @@ def test_costmap_and_visual_safety_sources_are_wired() -> None:
     local = config["local_costmap"]["local_costmap"]["ros__parameters"]
     global_map = config["global_costmap"]["global_costmap"]["ros__parameters"]
     assert local["global_frame"] == "odom"
-    assert local["plugins"] == ["nvblox_layer", "obstacle_layer", "inflation_layer"]
+    assert local["plugins"] == [
+        "static_layer",
+        "nvblox_layer",
+        "obstacle_layer",
+        "inflation_layer",
+    ]
+    assert local["static_layer"]["map_subscribe_transient_local"] is True
     assert local["nvblox_layer"]["plugin"] == "nvblox::nav2::NvbloxCostmapLayer"
     assert local["nvblox_layer"]["nvblox_map_slice_topic"] == "/nvblox_node/static_map_slice"
     assert local["obstacle_layer"]["depth_scan"]["topic"] == "/front_depth/scan"
     assert local["obstacle_layer"]["depth_scan"]["data_type"] == "LaserScan"
+    assert local["footprint_padding"] == 0.030
     assert global_map["global_frame"] == "map"
     assert global_map["plugins"] == ["static_layer", "obstacle_layer", "inflation_layer"]
     assert global_map["obstacle_layer"]["depth_scan"]["topic"] == "/front_depth/scan"
+    assert global_map["footprint_padding"] == 0.030
     assert local["update_frequency"] == 12.0
     assert global_map["update_frequency"] == 5.0
 

@@ -20,4 +20,6 @@ footprint:
     - [0.255, -0.210]
     - [-0.230, -0.210]
     - [-0.230, 0.210]
-  padding_m: 0.005
+  # Half-cell occupancy quantization plus a small numerical shell. A 5 mm
+  # shell allowed the physical wheel edge to clip a mapped chair by 26 mm.
+  padding_m: 0.030
