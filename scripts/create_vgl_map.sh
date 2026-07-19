@@ -52,13 +52,24 @@ require_file "${MAP_DIR}/cuvslam/data.mdb"
 info "Creating a cuVGL map aligned to the saved online cuVSLAM trajectory"
 mkdir -p "${WORK}/edex"
 POSE_BAG="${WORK}/cuvslam_poses"
+SENSOR_BAG="${WORK}/synchronized_sensor_bag"
 python3 "${PROJECT_ROOT}/tools/tum_to_pose_bag.py" \
   "${TUM_POSE_FILE}" "${POSE_BAG}"
+python3 "${PROJECT_ROOT}/tools/prepare_vgl_sensor_bag.py" \
+  "${BAG}" "${SENSOR_BAG}" \
+  --tum-pose-file "${TUM_POSE_FILE}" \
+  --topic-config "${TOPIC_CONFIG}" \
+  --max-sync-us "${MAX_SYNC_US}" \
+  --minimum-groups "${MINIMUM_SYNCED_FRAMES}" \
+  --report "${WORK}/sensor-bag-report.json"
 CONVERTER_ARGS=(
   --output_folder_path="${WORK}/edex" \
-  --sensor_data_bag_file="${BAG}" \
-  --min_inter_frame_distance=0.1 \
-  --min_inter_frame_rotation_degrees=2.0 \
+  --sensor_data_bag_file="${SENSOR_BAG}" \
+  # Motion-aware selection and stationary keepalives were already applied by
+  # prepare_vgl_sensor_bag.py.  Reapplying the vendor filter can permanently
+  # reject all frames after an ordinary stationary interval.
+  --min_inter_frame_distance=0 \
+  --min_inter_frame_rotation_degrees=0 \
   --sample_sync_threshold_microseconds="${MAX_SYNC_US}" \
   --generate_edex=True \
   --image_extension=.jpg \
@@ -113,6 +124,8 @@ cp -a "${WORK}/cuvgl_map" "${MAP_DIR}/cuvgl"
 python3 "${PROJECT_ROOT}/tools/prepare_vgl_runtime_config.py" \
   "$(ros2 pkg prefix isaac_ros_visual_mapping --share)/configs/isaac" \
   "${MAP_DIR}/config" --max-sync-us "${MAX_SYNC_US}"
+install -m 0644 "${WORK}/sensor-bag-report.json" \
+  "${MAP_DIR}/config/vgl_sensor_selection_report.json"
 
 [[ -s "${MAP_DIR}/cuvslam/data.mdb" ]] || die "empty online cuVSLAM map"
 [[ -n "$(find "${MAP_DIR}/cuvgl/keyframes" -type f -size +0c -print -quit)" ]] || die "empty cuVGL keyframes"

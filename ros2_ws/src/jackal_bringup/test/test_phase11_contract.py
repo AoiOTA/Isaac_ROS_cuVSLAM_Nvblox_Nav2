@@ -74,6 +74,10 @@ def test_offline_map_generation_uses_temporary_ignored_workspace() -> None:
     assert "mapping_topics_8cam.yaml" in script
     assert '--sample_sync_threshold_microseconds="${MAX_SYNC_US}"' in script
     assert 'tools/tum_to_pose_bag.py' in script
+    assert 'tools/prepare_vgl_sensor_bag.py' in script
+    assert '--sensor_data_bag_file="${SENSOR_BAG}"' in script
+    assert "--min_inter_frame_distance=0" in script
+    assert "--min_inter_frame_rotation_degrees=0" in script
     assert '--pose_bag_file="${POSE_BAG}"' in script
     assert '--pose_topic_name=/visual_slam/vis/slam_odometry' in script
     assert '--reference_pose_frame=map' in script
@@ -85,6 +89,7 @@ def test_offline_map_generation_uses_temporary_ignored_workspace() -> None:
     assert "prepare_vgl_runtime_config.py" in script
     assert 'rm -rf -- "${WORK}"' in script
     assert (ROOT / "tools/tum_to_pose_bag.py").is_file()
+    assert (ROOT / "tools/prepare_vgl_sensor_bag.py").is_file()
 
 
 def test_performance_policy_is_adaptive_observation_not_a_fixed_kpi() -> None:
