@@ -46,6 +46,10 @@ def generate_launch_description() -> LaunchDescription:
             DeclareLaunchArgument("rviz", default_value="true"),
             DeclareLaunchArgument("nvblox_start_delay", default_value="3.0"),
             DeclareLaunchArgument("nav2_start_delay", default_value="20.0"),
+            # The front depth stream is 10 Hz in simulation, but under the
+            # measured GUI + RViz GPU load callback gaps can approach 1.0 s.
+            DeclareLaunchArgument("depth_timeout", default_value="1.25"),
+            DeclareLaunchArgument("source_timeout", default_value="1.25"),
             DeclareLaunchArgument(
                 "rviz_config", default_value=str(share / "rviz/navigation.rviz")
             ),
@@ -57,6 +61,7 @@ def generate_launch_description() -> LaunchDescription:
                     "vgl_model_dir": LaunchConfiguration("vgl_model_dir"),
                     "cuvslam_map_dir": LaunchConfiguration("cuvslam_map_dir"),
                     "require_navigation_health": "true",
+                    "depth_timeout": LaunchConfiguration("depth_timeout"),
                     "override_publishing_stamp": "true",
                     "publish_map_to_odom_tf": "false",
                     "camera_profile": LaunchConfiguration("camera_profile"),
@@ -82,6 +87,9 @@ def generate_launch_description() -> LaunchDescription:
                         {
                             "map": LaunchConfiguration("map"),
                             "params_file": LaunchConfiguration("nav2_params"),
+                            "source_timeout": LaunchConfiguration(
+                                "source_timeout"
+                            ),
                         },
                     )
                 ],

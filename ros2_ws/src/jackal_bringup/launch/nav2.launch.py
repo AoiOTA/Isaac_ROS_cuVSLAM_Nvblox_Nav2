@@ -180,10 +180,15 @@ def generate_launch_description() -> LaunchDescription:
                 default_value="/nvblox_node/static_map_slice",
             ),
             DeclareLaunchArgument(
-                "odom_topic", default_value="/visual_slam/tracking/odometry"
+                # RewrittenYaml applies this value to ControllerServer and
+                # BT Navigator. cuVSLAM owns pose/TF, but its odometry twist
+                # is too sparse under the six-camera GUI workload for MPPI's
+                # current-velocity feedback. The calibrated wheel odometry is
+                # high-rate and is used here for twist feedback only.
+                "odom_topic", default_value="/wheel/odometry"
             ),
             DeclareLaunchArgument("movement_time_allowance", default_value="25.0"),
-            DeclareLaunchArgument("source_timeout", default_value="0.75"),
+            DeclareLaunchArgument("source_timeout", default_value="1.25"),
             # Resolve substitutions now.  This launch is itself included by
             # phase8, so delayed actions must not depend on a later scoped
             # LaunchConfiguration lookup.

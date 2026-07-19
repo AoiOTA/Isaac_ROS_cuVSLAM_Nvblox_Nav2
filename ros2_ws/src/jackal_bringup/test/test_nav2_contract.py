@@ -26,7 +26,9 @@ def collect_values(value: object) -> set[str]:
 
 def test_nav2_uses_diff_drive_mppi_and_smac_2d() -> None:
     config = params()
-    controller = config["controller_server"]["ros__parameters"]["FollowPath"]
+    controller_params = config["controller_server"]["ros__parameters"]
+    assert controller_params["odom_topic"] == "/wheel/odometry"
+    controller = controller_params["FollowPath"]
     planner = config["planner_server"]["ros__parameters"]["GridBased"]
     assert controller["plugin"] == "nav2_mppi_controller::MPPIController"
     assert controller["motion_model"] == "DiffDrive"
@@ -53,27 +55,34 @@ def test_nav2_uses_diff_drive_mppi_and_smac_2d() -> None:
     assert planner["allow_unknown"] is False
 
 
+def test_nav2_launch_keeps_mppi_velocity_feedback_on_wheel_odometry() -> None:
+    config = params()
+    assert config["bt_navigator"]["ros__parameters"]["odom_topic"] == (
+        "/wheel/odometry"
+    )
+    assert config["velocity_smoother"]["ros__parameters"]["odom_topic"] == (
+        "/wheel/odometry"
+    )
+    launch = (BRINGUP / "launch/nav2.launch.py").read_text()
+    assert '"odom_topic", default_value="/wheel/odometry"' in launch
+    assert '"odom_topic", default_value="/visual_slam/tracking/odometry"' not in launch
+
+
 def test_costmap_and_visual_safety_sources_are_wired() -> None:
     config = params()
     local = config["local_costmap"]["local_costmap"]["ros__parameters"]
     global_map = config["global_costmap"]["global_costmap"]["ros__parameters"]
     assert local["global_frame"] == "odom"
-    assert local["plugins"] == [
-        "static_layer",
-        "nvblox_layer",
-        "obstacle_layer",
-        "inflation_layer",
-    ]
-    assert local["static_layer"]["map_subscribe_transient_local"] is True
+    assert local["plugins"] == ["nvblox_layer", "inflation_layer"]
+    assert "static_layer" not in local
     assert local["nvblox_layer"]["plugin"] == "nvblox::nav2::NvbloxCostmapLayer"
     assert local["nvblox_layer"]["nvblox_map_slice_topic"] == "/nvblox_node/static_map_slice"
-    assert local["obstacle_layer"]["depth_scan"]["topic"] == "/front_depth/scan"
-    assert local["obstacle_layer"]["depth_scan"]["data_type"] == "LaserScan"
-    assert local["footprint_padding"] == 0.030
+    assert "obstacle_layer" not in local
+    assert local["footprint_padding"] == 0.005
     assert global_map["global_frame"] == "map"
-    assert global_map["plugins"] == ["static_layer", "obstacle_layer", "inflation_layer"]
-    assert global_map["obstacle_layer"]["depth_scan"]["topic"] == "/front_depth/scan"
-    assert global_map["footprint_padding"] == 0.030
+    assert global_map["plugins"] == ["static_layer", "inflation_layer"]
+    assert "obstacle_layer" not in global_map
+    assert global_map["footprint_padding"] == 0.005
     assert local["update_frequency"] == 12.0
     assert global_map["update_frequency"] == 5.0
 
@@ -115,9 +124,12 @@ def test_command_chain_and_collision_zones_are_fixed() -> None:
     assert collision["cmd_vel_in_topic"] == "/cmd_vel_smoothed"
     assert collision["cmd_vel_out_topic"] == "/cmd_vel_safe"
     assert collision["scan"]["topic"] == "/front_depth/scan_raw"
-    assert collision["base_shift_correction"] is False
+    assert collision["base_shift_correction"] is True
     assert collision["StopZone"]["action_type"] == "stop"
+    assert collision["StopZone"]["min_points"] == 3
     assert collision["SlowdownZone"]["action_type"] == "slowdown"
+    assert collision["SlowdownZone"]["min_points"] == 4
+    assert collision["FootprintApproach"]["min_points"] == 3
     velocity = config["velocity_smoother"]["ros__parameters"]
     assert velocity["max_velocity"] == [0.75, 0.0, 1.20]
     assert velocity["min_velocity"][0] == 0.0
@@ -125,7 +137,7 @@ def test_command_chain_and_collision_zones_are_fixed() -> None:
     assert velocity["scale_velocities"] is True
     assert velocity["smoothing_frequency"] == 20.0
     assert collision["SlowdownZone"]["slowdown_ratio"] == 0.85
-    assert collision["source_timeout"] == 0.75
+    assert collision["source_timeout"] == 1.25
 
 
 def test_rviz_contains_every_stage8_display_source() -> None:
@@ -205,6 +217,8 @@ def test_phase8_launch_enables_health_gate_and_runtime_components() -> None:
     launch = (BRINGUP / "launch/phase8.launch.py").read_text()
     for token in (
         '"require_navigation_health": "true"',
+        '"depth_timeout": LaunchConfiguration("depth_timeout")',
+        '"source_timeout": LaunchConfiguration(',
         '"override_publishing_stamp": "true"',
         '"publish_map_to_odom_tf": "false"',
         '"nvblox.launch.py"',
@@ -219,8 +233,16 @@ def test_phase8_launch_enables_health_gate_and_runtime_components() -> None:
         'executable="rviz2"',
         "TimerAction",
         'DeclareLaunchArgument("nav2_start_delay", default_value="20.0")',
+        'DeclareLaunchArgument("depth_timeout", default_value="1.25")',
+        'DeclareLaunchArgument("source_timeout", default_value="1.25")',
     ):
         assert token in launch
+
+
+def test_phase7_forwards_depth_health_timeout_to_command_guard() -> None:
+    launch = (BRINGUP / "launch/phase7_localization.launch.py").read_text()
+    assert 'DeclareLaunchArgument("depth_timeout", default_value="0.5")' in launch
+    assert '"depth_timeout": LaunchConfiguration("depth_timeout")' in launch
 
 
 def test_manual_gui_rviz_entrypoints_are_guarded() -> None:

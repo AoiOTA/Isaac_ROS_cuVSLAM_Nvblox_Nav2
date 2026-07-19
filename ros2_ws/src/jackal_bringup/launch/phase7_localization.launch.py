@@ -24,6 +24,7 @@ def generate_launch_description() -> LaunchDescription:
             DeclareLaunchArgument("vgl_model_dir"),
             DeclareLaunchArgument("cuvslam_map_dir"),
             DeclareLaunchArgument("require_navigation_health", default_value="false"),
+            DeclareLaunchArgument("depth_timeout", default_value="0.5"),
             DeclareLaunchArgument("camera_profile", default_value="navigation_6cam"),
             DeclareLaunchArgument("image_qos", default_value="DEFAULT"),
             DeclareLaunchArgument(
@@ -44,7 +45,8 @@ def generate_launch_description() -> LaunchDescription:
                 {
                     "require_navigation_health": LaunchConfiguration(
                         "require_navigation_health"
-                    )
+                    ),
+                    "depth_timeout": LaunchConfiguration("depth_timeout"),
                 },
             ),
             include(

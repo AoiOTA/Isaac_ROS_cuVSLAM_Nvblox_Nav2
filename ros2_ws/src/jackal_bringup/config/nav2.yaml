@@ -8,7 +8,7 @@ bt_navigator:
     use_sim_time: true
     global_frame: map
     robot_base_frame: base_link
-    odom_topic: /visual_slam/tracking/odometry
+    odom_topic: /wheel/odometry
     bt_loop_duration: 10
     default_server_timeout: 1000
     wait_for_service_timeout: 5000
@@ -23,6 +23,12 @@ controller_server:
     use_sim_time: true
     controller_frequency: 10.0
     costmap_update_timeout: 3.0
+    # ControllerServer consumes only the odometry twist here. The bare /odom
+    # topic has no publisher, which made every MPPI cycle start from zero and
+    # repeatedly reapply only the first 0.1 s acceleration increment. Use the
+    # high-rate, calibrated wheel twist; cuVSLAM/cuVGL still exclusively own
+    # the map->odom->base_link localization chain.
+    odom_topic: /wheel/odometry
     min_x_velocity_threshold: 0.001
     min_y_velocity_threshold: 0.5
     min_theta_velocity_threshold: 0.001
@@ -141,46 +147,29 @@ local_costmap:
       resolution: 0.05
       transform_tolerance: 0.30
       footprint: "[[0.255, 0.210], [0.255, -0.210], [-0.230, -0.210], [-0.230, 0.210]]"
-      # A 30 mm shell covers half-cell occupancy quantization at 0.05 m and
-      # keeps the physical wheel envelope outside mapped chair geometry.
-      footprint_padding: 0.030
+      # Match the validated Kujiale reference profile. The footprint already
+      # follows the physical wheel envelope; a 30 mm shell made the padded
+      # circumscribed radius larger than the measured 0.361 m clearance at a
+      # mapped corner and left MPPI with no valid trajectory.
+      footprint_padding: 0.005
       track_unknown_space: true
       always_send_full_costmap: true
-      # The saved eight-stream occupancy map supplies 360-degree static
-      # context. Front depth/nvblox then add live geometry; without this layer
-      # MPPI can clip mapped furniture after it rotates outside the front Hawk.
-      plugins: [static_layer, nvblox_layer, obstacle_layer, inflation_layer]
-      static_layer:
-        plugin: nav2_costmap_2d::StaticLayer
-        enabled: true
-        map_subscribe_transient_local: true
-        subscribe_to_updates: true
+      # Keep the saved eight-stream occupancy map in the global planner. The
+      # rolling controller costmap follows NVIDIA's nvblox/Nav2 integration:
+      # live ESDF geometry plus inflation. Merging the saved map here made
+      # isolated 5 cm mapping speckles lethal a second time inside narrow
+      # passages, although the live ESDF and PhysX contact monitor both showed
+      # physical clearance. Do not duplicate depth through an ObstacleLayer
+      # either: its relayed scan can arrive behind Nav2's TF cache under the
+      # six-camera GUI workload. Collision Monitor still consumes the raw scan
+      # directly as the final safety layer.
+      plugins: [nvblox_layer, inflation_layer]
       nvblox_layer:
         plugin: nvblox::nav2::NvbloxCostmapLayer
         enabled: true
         nav2_costmap_global_frame: odom
         nvblox_map_slice_topic: /nvblox_node/static_map_slice
         convert_to_binary_costmap: true
-      obstacle_layer:
-        plugin: nav2_costmap_2d::ObstacleLayer
-        enabled: true
-        # Keep the observation in its real optical sensor frame so Nav2 can
-        # transform both the points and the ray-tracing origin with TF.  A
-        # PointCloud2 pre-transformed into odom has no sensor-origin field;
-        # treating odom (0,0) as the origin works near startup but breaks
-        # clearing after long-distance motion.
-        observation_sources: depth_scan
-        depth_scan:
-          topic: /front_depth/scan
-          data_type: LaserScan
-          clearing: true
-          marking: true
-          observation_persistence: 0.35
-          expected_update_rate: 10.0
-          obstacle_min_range: 0.15
-          obstacle_max_range: 5.0
-          raytrace_min_range: 0.0
-          raytrace_max_range: 6.0
       inflation_layer:
         plugin: nav2_costmap_2d::InflationLayer
         enabled: true
@@ -198,37 +187,22 @@ global_costmap:
       transform_tolerance: 0.30
       resolution: 0.05
       footprint: "[[0.255, 0.210], [0.255, -0.210], [-0.230, -0.210], [-0.230, 0.210]]"
-      footprint_padding: 0.030
+      footprint_padding: 0.005
       # The visual mapping route leaves small unobserved islands around the
       # robot spawn.  Treat those as globally traversable; the rolling local
       # costmap, combined nvblox ESDF and raw-depth Collision Monitor still
       # provide conservative online obstacle enforcement.
       track_unknown_space: false
       always_send_full_costmap: true
-      # Front depth observations make the static session-layer objects visible
-      # to Smac as soon as they enter view.  The default replan BT can then
-      # select a route around them instead of leaving all avoidance to MPPI.
-      plugins: [static_layer, obstacle_layer, inflation_layer]
+      # The offline occupancy map is the authoritative global-planning source.
+      # Live nvblox geometry remains local so transient observations cannot
+      # poison Smac's global plan or persist as scan/TF ghosts.
+      plugins: [static_layer, inflation_layer]
       static_layer:
         plugin: nav2_costmap_2d::StaticLayer
         enabled: true
         map_subscribe_transient_local: true
         subscribe_to_updates: true
-      obstacle_layer:
-        plugin: nav2_costmap_2d::ObstacleLayer
-        enabled: true
-        observation_sources: depth_scan
-        depth_scan:
-          topic: /front_depth/scan
-          data_type: LaserScan
-          clearing: true
-          marking: true
-          observation_persistence: 0.50
-          expected_update_rate: 10.0
-          obstacle_min_range: 0.15
-          obstacle_max_range: 5.0
-          raytrace_min_range: 0.0
-          raytrace_max_range: 6.0
       inflation_layer:
         plugin: nav2_costmap_2d::InflationLayer
         enabled: true
@@ -311,7 +285,7 @@ velocity_smoother:
     min_velocity: [0.0, 0.0, -1.20]
     max_accel: [1.10, 0.0, 3.00]
     max_decel: [-1.00, 0.0, -3.00]
-    odom_topic: /visual_slam/tracking/odometry
+    odom_topic: /wheel/odometry
     odom_duration: 0.1
     deadband_velocity: [0.01, 0.0, 0.01]
     velocity_timeout: 0.25
@@ -326,15 +300,22 @@ collision_monitor:
     cmd_vel_out_topic: /cmd_vel_safe
     state_topic: /collision_monitor/state
     transform_tolerance: 0.20
-    source_timeout: 0.75
-    base_shift_correction: false
+    # GUI + RViz measurements show that the 10 Hz simulated depth stream can
+    # occasionally reach Collision Monitor about 1.0 simulated second after
+    # acquisition while the GPU is shared by cuVSLAM and nvblox.  The source
+    # remains motion-compensated below, so allow the measured burst latency
+    # plus margin instead of alternating between valid data and forced stops.
+    source_timeout: 1.25
+    # Compensate the raw depth scan for chassis motion between acquisition and
+    # collision evaluation, as in the validated reference configuration.
+    base_shift_correction: true
     stop_pub_timeout: 0.50
     polygons: [StopZone, SlowdownZone, FootprintApproach]
     StopZone:
       type: polygon
       points: "[[0.285, 0.230], [0.285, -0.230], [-0.250, -0.230], [-0.250, 0.230]]"
       action_type: stop
-      min_points: 4
+      min_points: 3
       visualize: true
       polygon_pub_topic: /collision_monitor/stop_zone
       enabled: true
@@ -353,7 +334,7 @@ collision_monitor:
       footprint_topic: /local_costmap/published_footprint
       time_before_collision: 1.0
       simulation_time_step: 0.05
-      min_points: 4
+      min_points: 3
       visualize: true
       polygon_pub_topic: /collision_monitor/approach_zone
       enabled: true
