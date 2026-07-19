@@ -93,12 +93,23 @@ def test_mapping_workflow_supports_guarded_manual_and_closed_loop_auto_capture()
         "--allow-physical-collisions",
         "for pair in front left right back",
         "mapping_topics_8cam.yaml",
+        "recover_manual_map.sh",
+        "offline cuVGL conversion failed",
         "ros2 bag record --storage mcap",
         "--storage-preset-profile zstd_fast",
         'rm -rf -- "${BAG_ROOT}"',
     ):
         assert token in script
     assert "--dynamic-profile" not in script
+    recovery = (ROOT / "scripts/recover_manual_map.sh").read_text()
+    for token in (
+        "create_vgl_map.sh",
+        "write_map_manifest.py",
+        "check_map_manifest.py",
+        "offline-map-recovery.log",
+        "Retained MCAP remains",
+    ):
+        assert token in recovery
     saver = (
         ROOT
         / "ros2_ws/src/jackal_experiments/jackal_experiments/visual_map_saver.py"

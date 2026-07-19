@@ -319,10 +319,19 @@ fi
 
 "${PROJECT_ROOT}/scripts/export_vgl_models.sh" "${PROJECT_ROOT}/data/models/vgl" \
   >"${LOG_DIR}/model-export.log" 2>&1
-"${PROJECT_ROOT}/scripts/create_vgl_map.sh" "${BAG_DIR}" "${MAP_DIR}" \
+if ! "${PROJECT_ROOT}/scripts/create_vgl_map.sh" "${BAG_DIR}" "${MAP_DIR}" \
   --topic-config "${PROJECT_ROOT}/ros2_ws/src/jackal_bringup/config/mapping_topics_8cam.yaml" \
   --max-sync-us "${MAPPING_MAX_SYNC_US:-40000}" \
-  >"${LOG_DIR}/offline-map.log" 2>&1
+  >"${LOG_DIR}/offline-map.log" 2>&1; then
+  info "Map was not promoted: offline cuVGL conversion failed."
+  info "The indexed MCAP and all passed online map artifacts were retained."
+  info "Detailed conversion log: ${LOG_DIR}/offline-map.log"
+  if [[ "${MAPPING_MODE}" == "interactive" ]]; then
+    info "After correcting the converter, resume without remapping:"
+    info "./scripts/recover_manual_map.sh --map ${MAP_NAME} --bag ${BAG_DIR} --run-id ${RUN_ID}"
+  fi
+  die "cuVGL map is incomplete; do not start navigation until 'Map complete:' is printed."
+fi
 python3 "${PROJECT_ROOT}/tools/write_map_manifest.py" "${MAP_DIR}" "${BAG_DIR}" \
   --run-id "${RUN_ID}" \
   --mapping-validation "${LOG_DIR}/mapping-validation.json" \
