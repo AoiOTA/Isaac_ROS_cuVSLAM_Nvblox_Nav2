@@ -11,6 +11,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 
 from prepare_native_depth_fusion import (  # noqa: E402
     depth_to_millimetres,
+    load_selected_frames,
     nearest_target_index,
     safe_relative_image_path,
 )
@@ -41,6 +42,20 @@ def test_keyframe_matching_and_paths_are_bounded() -> None:
     )
     with pytest.raises(ValueError):
         safe_relative_image_path("../escape.jpg", ".png")
+
+
+def test_protobuf_default_camera_zero_is_accepted_when_field_is_omitted(
+    tmp_path: Path,
+) -> None:
+    metadata = tmp_path / "frames_meta.json"
+    metadata.write_text(
+        '{"camera_params_id_to_camera_params":{"0":{"sensor_meta_data":'
+        '{"sensor_name":"camera_zero"}}},"keyframes_metadata":['
+        '{"timestamp_microseconds":"100","image_name":"zero/100.jpg"}]}'
+    )
+    _, camera_id, frames = load_selected_frames(metadata, "camera_zero")
+    assert camera_id == "0"
+    assert len(frames) == 1
 
 
 def test_nvblox_gflags_preserve_false_values() -> None:

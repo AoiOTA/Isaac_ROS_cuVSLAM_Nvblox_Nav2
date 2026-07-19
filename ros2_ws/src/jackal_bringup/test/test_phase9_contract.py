@@ -101,6 +101,10 @@ def test_mapping_workflow_supports_guarded_manual_and_closed_loop_auto_capture()
         "--keep-bag",
         "ros2 bag record --storage mcap",
         "--storage-preset-profile zstd_fast",
+        "/visual_slam/tracking/odometry",
+        "capture-validation.json",
+        "check_visual_map_stage.py",
+        "--require-optimized-occupancy",
         'rm -rf -- "${BAG_ROOT}"',
     ):
         assert token in script
@@ -112,6 +116,8 @@ def test_mapping_workflow_supports_guarded_manual_and_closed_loop_auto_capture()
         "write_map_manifest.py",
         "check_map_manifest.py",
         "offline-map-recovery.log",
+        "Reusing the already-passed cuVSLAM/cuVGL stage",
+        "Reusing the already-passed optimized nvblox/occupancy stage",
         "Retained MCAP remains",
     ):
         assert token in recovery

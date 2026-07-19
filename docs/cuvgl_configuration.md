@@ -155,6 +155,10 @@ RTX 4090实测生成约5.0 MB的ALIKED engine和约27.2 MB的LightGlue engine。
 > TUM 直传在静止段的关键帧时间跳变。具体以 `scripts/create_vgl_map.sh` 和 `docs/mapping.md`
 > 为准。本节仅保留为通用离线数据集参考。
 
+> 同理，正式 occupancy 不使用 `create_map_offline.py` 的 `depth` 步骤：本机 Isaac ROS 4.5
+> 该入口只提供 ESS/FoundationStereo，而项目要求直接复用 MCAP 中的 Isaac Sim 原生深度。
+> 工作流改为用同一优化关键帧调用官方 `nvblox_ros fuse_cusfm`，不改变坐标解或传感器来源。
+
 ```bash
 export ISAAC_ROS_WS=/absolute/path/to/ros2_ws
 MAP_ROOT=/data/maps/warehouse_v1

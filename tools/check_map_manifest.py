@@ -89,6 +89,18 @@ def validate_occupancy_yaml(map_dir: Path) -> None:
     if report.get("fusion_report_sha256") != digest:
         raise RuntimeError("offline occupancy provenance hash does not match")
     fusion = json.loads(fusion_report.read_text(encoding="utf-8"))
+    input_report = fusion.get("input_report")
+    native_report_path = map_dir / "nvblox/native_depth_report.json"
+    if not native_report_path.is_file():
+        raise RuntimeError("native-depth extraction report is missing")
+    native_report = json.loads(native_report_path.read_text(encoding="utf-8"))
+    if not isinstance(input_report, dict) or native_report != input_report:
+        raise RuntimeError("native-depth extraction provenance does not match fusion")
+    if int(input_report.get("schema_version", 1)) >= 2:
+        frames_meta = map_dir / "cuvgl/keyframes/frames_meta.json"
+        frames_digest = hashlib.sha256(frames_meta.read_bytes()).hexdigest()
+        if input_report.get("source_frames_meta_sha256") != frames_digest:
+            raise RuntimeError("occupancy keyframe metadata hash does not match cuVGL")
     config_snapshot = map_dir / "config/offline_mapping.yaml"
     if not config_snapshot.is_file():
         raise RuntimeError("offline occupancy parameter snapshot is missing")
@@ -144,8 +156,52 @@ def main() -> int:
         action="store_true",
         help="also require a completed live navigation smoke recorded in the manifest",
     )
+    parser.add_argument(
+        "--artifacts-only",
+        action="store_true",
+        help="validate reusable runtime artifacts before manifest promotion",
+    )
+    parser.add_argument(
+        "--require-optimized-occupancy",
+        action="store_true",
+        help="reject legacy online-ESDF occupancy artifacts",
+    )
+    parser.add_argument(
+        "--source-bag",
+        type=Path,
+        default=None,
+        help="also bind optimized occupancy to this retained MCAP",
+    )
     args = parser.parse_args()
     map_dir = args.map_dir.resolve()
+    if args.artifacts_only:
+        require_runtime_files(map_dir)
+        validate_occupancy_yaml(map_dir)
+        if args.require_optimized_occupancy:
+            occupancy_report = json.loads(
+                (map_dir / "occupancy/save_report.json").read_text(encoding="utf-8")
+            )
+            if occupancy_report.get("conversion_policy") != (
+                "nvblox_offline_static_occupancy_optimized_keyframes"
+            ):
+                raise RuntimeError("optimized offline occupancy artifact is required")
+        if args.source_bag is not None:
+            fusion = json.loads(
+                (map_dir / "nvblox/fusion_report.json").read_text(encoding="utf-8")
+            )
+            input_report = fusion.get("input_report", {})
+            recorded_digest = input_report.get("input_bag_metadata_sha256")
+            if recorded_digest is not None:
+                metadata_path = args.source_bag.resolve() / "metadata.yaml"
+                if not metadata_path.is_file():
+                    raise FileNotFoundError(
+                        f"source MCAP metadata is missing: {metadata_path}"
+                    )
+                actual_digest = hashlib.sha256(metadata_path.read_bytes()).hexdigest()
+                if recorded_digest != actual_digest:
+                    raise RuntimeError("optimized occupancy source MCAP hash does not match")
+        print(f"MAP_ARTIFACTS_OK map={map_dir.name}")
+        return 0
     manifest_path = map_dir / "manifest.json"
     if not manifest_path.is_file():
         raise FileNotFoundError(f"map manifest is missing: {manifest_path}")

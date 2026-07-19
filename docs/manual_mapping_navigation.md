@@ -98,10 +98,12 @@ MCAP 使用可按时间索引的 `zstd_fast` 配置，以便离线 cuVGL 对齐�
 ./scripts/recover_manual_map.sh --map <地图名>
 ```
 
-恢复脚本会从八路图像中只保留完整同步组，运动时按位姿选关键帧，停车时用最大 `0.5 s`
-间隔的连续帧避免官方转换器失去同步，随后生成 cuVGL、用优化位姿重新融合原生深度、
-写入 `manifest.json` 并运行地图完整性检查。只有看到 `Map recovery complete:` 或原流程
-中的 `Map complete:` 才表示地图可以进入导航流程。
+恢复脚本先逐阶段检查已有产物：已通过的 cuVSLAM/cuVGL 阶段和优化 nvblox/occupancy
+阶段会直接复用，只重跑尚未完成的阶段。因此即使失败发生在最终 manifest 写入，也不会
+重新提取 8 路关键帧或覆盖已经通过的地图。需要重建 cuVGL 时，它会从八路图像中只保留
+完整同步组，运动时按位姿选关键帧，停车时用最大 `0.5 s` 间隔的连续帧避免官方转换器
+失去同步；随后用优化位姿重新融合原生深度、写入 `manifest.json` 并运行完整性检查。
+只有看到 `Map recovery complete:` 或原流程中的 `Map complete:` 才表示地图可以进入导航流程。
 
 随后检查地图：
 

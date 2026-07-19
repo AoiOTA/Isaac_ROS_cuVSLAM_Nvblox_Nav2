@@ -19,6 +19,29 @@ MAPPING_IMAGE_TOPICS = tuple(
     for pair in ("front", "left", "right", "back")
     for side in ("left", "right")
 )
+MAPPING_CAMERA_INFO_TOPICS = tuple(
+    f"/{pair}_stereo_camera/{side}/camera_info"
+    for pair in ("front", "left", "right", "back")
+    for side in ("left", "right")
+)
+MAPPING_RECONSTRUCTION_TOPICS = (
+    "/front_stereo_camera/depth/image_raw",
+    "/front_stereo_camera/depth/camera_info",
+    "/front_stereo_imu/imu",
+    "/tf",
+    "/tf_static",
+    "/clock",
+)
+MAPPING_REQUIRED_TOPICS = (
+    MAPPING_IMAGE_TOPICS
+    + MAPPING_CAMERA_INFO_TOPICS
+    + MAPPING_RECONSTRUCTION_TOPICS
+)
+MAPPING_DIAGNOSTIC_TOPICS = (
+    "/visual_slam/tracking/odometry",
+    "/visual_slam/vis/slam_odometry",
+    "/visual_slam/status",
+)
 
 
 def sha256_file(path: Path) -> str:
@@ -66,14 +89,22 @@ def bag_summary(
         )
         for item in information.get("topics_with_message_count", [])
     }
-    missing = [topic for topic in MAPPING_IMAGE_TOPICS if topics.get(topic, 0) <= 0]
+    if information.get("storage_identifier") != "mcap":
+        raise RuntimeError("mapping capture must use indexed MCAP storage")
+    missing = [topic for topic in MAPPING_REQUIRED_TOPICS if topics.get(topic, 0) <= 0]
     if missing:
-        raise RuntimeError(f"four-Hawk/eight-stream mapping bag has empty image topics: {missing}")
+        raise RuntimeError(f"mapping bag has empty required offline inputs: {missing}")
     return {
         "storage_identifier": information.get("storage_identifier"),
         "message_count": int(information.get("message_count", 0)),
         "mapping_image_message_counts": {
             topic: topics[topic] for topic in MAPPING_IMAGE_TOPICS
+        },
+        "required_topic_message_counts": {
+            topic: topics[topic] for topic in MAPPING_REQUIRED_TOPICS
+        },
+        "diagnostic_topic_message_counts": {
+            topic: topics.get(topic, 0) for topic in MAPPING_DIAGNOSTIC_TOPICS
         },
         "retained_in_repository": False,
         "retention_policy": retention_policy,
@@ -92,6 +123,14 @@ def require_runtime_files(map_dir: Path) -> None:
     patterns = {
         "cuVSLAM database": (map_dir / "cuvslam", ("*.mdb", "*.db")),
         "cuVGL BoW index": (map_dir / "cuvgl", ("bow_index*",)),
+        "cuVGL keyframe metadata": (
+            map_dir / "cuvgl/keyframes",
+            ("frames_meta.json",),
+        ),
+        "cuVGL vocabulary": (
+            map_dir / "cuvgl/vocabulary",
+            ("bow_vocabulary*.pb",),
+        ),
         "nvblox binary map": (map_dir / "nvblox", ("*.nvblx",)),
         "nvblox mesh": (map_dir / "mesh", ("*.ply",)),
     }

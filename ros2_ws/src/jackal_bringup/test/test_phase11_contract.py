@@ -48,6 +48,9 @@ def test_map_manifest_requires_all_runtime_groups_and_no_capture_leaks() -> None
     checker = (ROOT / "tools/check_map_manifest.py").read_text()
     assert 'REQUIRED_GROUPS = ("cuvslam", "cuvgl", "nvblox", "mesh", "occupancy", "config")' in writer
     assert "MAPPING_IMAGE_TOPICS" in writer
+    assert "MAPPING_REQUIRED_TOPICS" in writer
+    assert "MAPPING_DIAGNOSTIC_TOPICS" in writer
+    assert '"/front_stereo_camera/depth/image_raw"' in writer
     assert '"retained_in_repository": False' in writer
     for expected in (
         "cuVSLAM database",
@@ -111,6 +114,10 @@ def test_final_occupancy_uses_optimized_native_depth_refusion() -> None:
     assert "nvblox_offline_static_occupancy_optimized_keyframes" in checker
     assert "offline occupancy parameter snapshot hash does not match" in checker
     assert "offline occupancy did not pass every topology route gate" in checker
+    assert "--artifacts-only" in checker
+    assert "--require-optimized-occupancy" in checker
+    mapping_runner = (ROOT / "scripts/run_mapping.sh").read_text()
+    assert "check_visual_map_stage.py" in mapping_runner
 
 
 def test_performance_policy_is_adaptive_observation_not_a_fixed_kpi() -> None:

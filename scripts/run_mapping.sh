@@ -180,7 +180,10 @@ fi
 BAG_TOPICS=("${IMAGE_TOPICS[@]}" "${CAMERA_INFO_TOPICS[@]}" \
   /front_stereo_camera/depth/image_raw \
   /front_stereo_camera/depth/camera_info \
-  /front_stereo_imu/imu /tf /tf_static /clock)
+  /front_stereo_imu/imu /tf /tf_static /clock \
+  /visual_slam/tracking/odometry \
+  /visual_slam/vis/slam_odometry \
+  /visual_slam/status)
 # cuVGL reads the MCAP by receive timestamp. fastwrite disables MCAP
 # chunking, so long multi-camera captures have no timestamp index and can be
 # read out of order. zstd_fast keeps chunks/indexes at the required throughput.
@@ -209,6 +212,9 @@ stop_group "${BAG_PID}"
 BAG_PID=""
 ros2 bag info "${BAG_DIR}" >"${LOG_DIR}/rosbag-info.txt"
 grep -Fq "storage_identifier: mcap" "${BAG_DIR}/metadata.yaml" || die "bag is not MCAP"
+python3 "${PROJECT_ROOT}/tools/summarize_mapping_capture.py" "${BAG_DIR}" \
+  --output "${LOG_DIR}/capture-validation.json" \
+  >"${LOG_DIR}/capture-validation.stdout.json"
 
 info "Saving the live nvblox map as an online QC preview (not the final map)"
 mkdir -p "${LOG_DIR}/online-preview/nvblox" \
@@ -336,6 +342,10 @@ if ! "${PROJECT_ROOT}/scripts/create_vgl_map.sh" "${BAG_DIR}" "${MAP_DIR}" \
   fi
   die "cuVGL map is incomplete; do not start navigation until 'Map complete:' is printed."
 fi
+python3 "${PROJECT_ROOT}/tools/check_visual_map_stage.py" "${MAP_DIR}" \
+  --source-bag "${BAG_DIR}" \
+  >"${LOG_DIR}/visual-stage-check.log" 2>&1 || \
+  die "cuVSLAM/cuVGL stage validation failed; see ${LOG_DIR}/visual-stage-check.log"
 if ! "${PROJECT_ROOT}/scripts/create_offline_occupancy_map.sh" \
   "${BAG_DIR}" "${MAP_DIR}" \
   >"${LOG_DIR}/offline-occupancy.log" 2>&1; then
@@ -348,6 +358,11 @@ if ! "${PROJECT_ROOT}/scripts/create_offline_occupancy_map.sh" \
   fi
   die "offline occupancy is incomplete; do not start navigation until 'Map complete:' is printed."
 fi
+python3 "${PROJECT_ROOT}/tools/check_map_manifest.py" "${MAP_DIR}" \
+  --artifacts-only --require-optimized-occupancy \
+  --source-bag "${BAG_DIR}" \
+  >"${LOG_DIR}/offline-artifacts-check.log" 2>&1 || \
+  die "offline artifact validation failed; see ${LOG_DIR}/offline-artifacts-check.log"
 MANIFEST_BAG_DIR="${BAG_DIR}"
 MANIFEST_CAPTURE_ARGS=(--capture-retention discarded_after_generation)
 if [[ "${BAG_RETENTION}" == "keep" ]]; then

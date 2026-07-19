@@ -85,6 +85,9 @@
 |---|---|
 | `tools/write_map_manifest.py` | 检查 8 路 bag 和运行时 artifact，写 manifest |
 | `tools/check_map_manifest.py` | 检查资产/profile/hash/文件组并拒绝 raw capture 泄漏 |
+| `tools/check_visual_map_stage.py` | 校验可恢复的 cuVSLAM/cuVGL 八路优化位姿阶段 |
+| `tools/prepare_native_depth_fusion.py` | 从 MCAP 对齐优化关键帧与 front 原生深度 |
+| `tools/run_offline_nvblox_fusion.py` | 调用官方 fuser 生成 TSDF mesh 与静态 occupancy |
 | `tools/validate_acceptance_routes.py` | occupancy known-free、膨胀、连通与绕行验证 |
 | `tools/create_static_trial_metadata.py` | 创建不可变 trial 身份与目标元数据 |
 | `tools/finalize_static_trial.py` | 合并导航/仿真/碰撞/命令并分类单轮 |

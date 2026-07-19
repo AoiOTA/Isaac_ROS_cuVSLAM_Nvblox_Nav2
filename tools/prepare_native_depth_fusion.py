@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 from bisect import bisect_left
 from copy import deepcopy
+import hashlib
 import json
 from pathlib import Path
 from statistics import median
@@ -168,7 +169,7 @@ def load_selected_frames(
     frames = [
         deepcopy(frame)
         for frame in metadata.get("keyframes_metadata", [])
-        if str(frame.get("camera_params_id", "0")) == camera_id
+        if str(frame.get("camera_params_id") or "0") == camera_id
     ]
     frames.sort(key=lambda frame: int(frame["timestamp_microseconds"]))
     if not frames:
@@ -286,10 +287,16 @@ def prepare(args: argparse.Namespace) -> dict[str, Any]:
         if value[1]["maximum_valid_depth_m"] > 0.0
     ]
     report: dict[str, Any] = {
-        "schema_version": 1,
+        "schema_version": 2,
         "status": "passed" if not missing_depth and not missing_color else "failed",
         "input_bag": str(args.bag.resolve()),
+        "input_bag_metadata_sha256": hashlib.sha256(
+            (args.bag / "metadata.yaml").read_bytes()
+        ).hexdigest(),
         "source_frames_meta": str(args.frames_meta.resolve()),
+        "source_frames_meta_sha256": hashlib.sha256(
+            args.frames_meta.read_bytes()
+        ).hexdigest(),
         "output_dir": str(args.output_dir.resolve()),
         "sensor_name": args.sensor_name,
         "camera_params_id": camera_id,

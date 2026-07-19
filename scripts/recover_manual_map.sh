@@ -19,7 +19,7 @@ while (($#)); do
     --run-id) RUN_ID="${2:?missing mapping run id}"; shift 2 ;;
     -h|--help)
       echo "Usage: ./scripts/recover_manual_map.sh --map NAME [--bag BAG_DIR] [--run-id RUN_ID]"
-      echo "Completes cuVGL conversion and manifest promotion from a retained manual MCAP."
+      echo "Resumes incomplete cuVGL/occupancy stages and manifest promotion from retained MCAP."
       exit 0 ;;
     *) die "unknown argument: $1" ;;
   esac
@@ -33,7 +33,10 @@ MAP_DIR="${PROJECT_ROOT}/data/maps/${MAP_NAME}"
 
 if [[ -z "${BAG_DIR}" ]]; then
   shopt -s nullglob
-  bag_candidates=("${PROJECT_ROOT}/data/bags/.${MAP_NAME}."*/capture)
+  bag_candidates=(
+    "${PROJECT_ROOT}/data/bags/.${MAP_NAME}."*/capture
+    "${PROJECT_ROOT}/data/bags/${MAP_NAME}_"*/capture
+  )
   shopt -u nullglob
   ((${#bag_candidates[@]} == 1)) || \
     die "expected exactly one retained bag for ${MAP_NAME}; found ${#bag_candidates[@]}; pass --bag explicitly"
@@ -59,6 +62,9 @@ fi
 LOG_DIR="${PROJECT_ROOT}/data/logs/mapping/${RUN_ID}"
 MAPPING_VALIDATION="${LOG_DIR}/mapping-validation.json"
 require_file "${MAPPING_VALIDATION}"
+python3 "${PROJECT_ROOT}/tools/summarize_mapping_capture.py" "${BAG_DIR}" \
+  --output "${LOG_DIR}/capture-recovery-validation.json" \
+  >"${LOG_DIR}/capture-recovery-validation.stdout.json"
 
 python3 - "${MAP_DIR}" "${MAPPING_VALIDATION}" <<'PY'
 import json
@@ -81,25 +87,48 @@ mkdir -p "${PROJECT_ROOT}/data/locks"
 exec 9>"${PROJECT_ROOT}/data/locks/mapping-workflow.lock"
 flock -n 9 || die "another mapping workflow is already running"
 
-info "Recovering cuVGL and manifest for ${MAP_NAME} from retained MCAP"
-"${PROJECT_ROOT}/scripts/export_vgl_models.sh" "${PROJECT_ROOT}/data/models/vgl" \
-  >"${LOG_DIR}/model-export-recovery.log" 2>&1
-if ! "${PROJECT_ROOT}/scripts/create_vgl_map.sh" "${BAG_DIR}" "${MAP_DIR}" \
-  --topic-config "${PROJECT_ROOT}/ros2_ws/src/jackal_bringup/config/mapping_topics_8cam.yaml" \
-  --max-sync-us "${MAPPING_MAX_SYNC_US:-40000}" \
-  >"${LOG_DIR}/offline-map-recovery.log" 2>&1; then
-  info "cuVGL recovery failed; retained MCAP and partial map were preserved."
-  info "Detailed log: ${LOG_DIR}/offline-map-recovery.log"
-  tail -30 "${LOG_DIR}/offline-map-recovery.log" >&2 || true
-  exit 1
+info "Recovering unfinished offline stages for ${MAP_NAME} from retained MCAP"
+if python3 "${PROJECT_ROOT}/tools/check_visual_map_stage.py" "${MAP_DIR}" \
+  --source-bag "${BAG_DIR}" \
+  >"${LOG_DIR}/visual-stage-recovery-check.log" 2>&1; then
+  info "Reusing the already-passed cuVSLAM/cuVGL stage"
+else
+  info "Visual stage is incomplete; rebuilding cuVGL from the retained MCAP"
+  "${PROJECT_ROOT}/scripts/export_vgl_models.sh" "${PROJECT_ROOT}/data/models/vgl" \
+    >"${LOG_DIR}/model-export-recovery.log" 2>&1
+  if ! "${PROJECT_ROOT}/scripts/create_vgl_map.sh" "${BAG_DIR}" "${MAP_DIR}" \
+    --topic-config "${PROJECT_ROOT}/ros2_ws/src/jackal_bringup/config/mapping_topics_8cam.yaml" \
+    --max-sync-us "${MAPPING_MAX_SYNC_US:-40000}" \
+    >"${LOG_DIR}/offline-map-recovery.log" 2>&1; then
+    info "cuVGL recovery failed; retained MCAP and partial map were preserved."
+    info "Detailed log: ${LOG_DIR}/offline-map-recovery.log"
+    tail -30 "${LOG_DIR}/offline-map-recovery.log" >&2 || true
+    exit 1
+  fi
+  python3 "${PROJECT_ROOT}/tools/check_visual_map_stage.py" "${MAP_DIR}" \
+    --source-bag "${BAG_DIR}" \
+    >"${LOG_DIR}/visual-stage-recovery-check.log" 2>&1
 fi
-if ! "${PROJECT_ROOT}/scripts/create_offline_occupancy_map.sh" \
-  "${BAG_DIR}" "${MAP_DIR}" \
-  >"${LOG_DIR}/offline-occupancy-recovery.log" 2>&1; then
-  info "Optimized occupancy recovery failed; retained MCAP and visual maps were preserved."
-  info "Detailed log: ${LOG_DIR}/offline-occupancy-recovery.log"
-  tail -30 "${LOG_DIR}/offline-occupancy-recovery.log" >&2 || true
-  exit 1
+
+if python3 "${PROJECT_ROOT}/tools/check_map_manifest.py" "${MAP_DIR}" \
+  --artifacts-only --require-optimized-occupancy \
+  --source-bag "${BAG_DIR}" \
+  >"${LOG_DIR}/offline-artifacts-recovery-check.log" 2>&1; then
+  info "Reusing the already-passed optimized nvblox/occupancy stage"
+else
+  info "Occupancy stage is incomplete; rebuilding it from optimized keyframes"
+  if ! "${PROJECT_ROOT}/scripts/create_offline_occupancy_map.sh" \
+    "${BAG_DIR}" "${MAP_DIR}" \
+    >"${LOG_DIR}/offline-occupancy-recovery.log" 2>&1; then
+    info "Optimized occupancy recovery failed; retained MCAP and visual maps were preserved."
+    info "Detailed log: ${LOG_DIR}/offline-occupancy-recovery.log"
+    tail -30 "${LOG_DIR}/offline-occupancy-recovery.log" >&2 || true
+    exit 1
+  fi
+  python3 "${PROJECT_ROOT}/tools/check_map_manifest.py" "${MAP_DIR}" \
+    --artifacts-only --require-optimized-occupancy \
+    --source-bag "${BAG_DIR}" \
+    >"${LOG_DIR}/offline-artifacts-recovery-check.log" 2>&1
 fi
 
 python3 "${PROJECT_ROOT}/tools/write_map_manifest.py" "${MAP_DIR}" "${BAG_DIR}" \

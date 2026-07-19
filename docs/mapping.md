@@ -68,7 +68,8 @@ GUI 出现后保持启动终端获得焦点，用 `W/S/A/D` 驾驶，`Space` 停
 
 ```text
 8 RGB + 8 CameraInfo + front depth + IMU + TF + clock
-  -> temporary MCAP
+  + cuVSLAM odometry / optimized-pose / status diagnostics
+  -> indexed MCAP (required topic audit immediately after recording)
 
 live 8-camera VIO/cuVSLAM
   -> save_map: cuVSLAM database
@@ -89,6 +90,13 @@ all runtime groups
   -> manifest.json
   -> delete temporary extracted images; retain indexed MCAP by default
 ```
+
+这对应“一次在线采集和预览、停止仿真后离线统一生成、重新在线加载导航”三段式流程。
+Isaac ROS 4.5 自带的 `create_map_offline.py` 是上游参考编排器，但其 `depth_model` 入口只接受
+ESS 或 FoundationStereo；本项目明确使用 Isaac Sim front Hawk 原生深度，所以不调用该单体
+脚本做深度推理。项目分别调用同一官方链路的 `rosbag_to_mapping_data`、
+`create_cuvgl_map.py` 和 `nvblox_ros fuse_cusfm`，并将在线 IMU/VIO 保存的 cuVSLAM 数据库与
+最终优化轨迹作为唯一位姿解。这样既遵循官方离线重融合顺序，也不会引入未要求的深度模型。
 
 cuVSLAM、cuVGL、nvblox 和 occupancy 必须来自同一次采集与同一最终优化 SLAM 解。项目不再用
 离线纯视觉 cuVSLAM 覆盖在线 VIO 数据库；这种混用在平面 A/B 中曾产生 `1.92 m`
@@ -135,9 +143,10 @@ data/maps/kujiale_jackal_8cam/
 
 - 三个源 USD 的路径、default prim 与 SHA-256；
 - `mapping_8cam=8`、`navigation_6cam=6`、后向导航 render product 为 false；
-- 8 个图像话题的实际消息数；
+- 8 个图像、8 个 CameraInfo、front 原生深度/CameraInfo、IMU、TF 与 `/clock` 的实际消息数；
+- cuVSLAM odometry、优化位姿与状态诊断话题的实际消息数（诊断缺失不替代必需输入门禁）；
 - 每个运行时目录的文件数、总字节数与 tree hash；
-- raw capture 未保留；
+- raw capture 不进入地图/Git；manifest 记录它是本机保留还是显式删除；
 - 当前地图的验证状态。
 
 完整检查：
@@ -146,7 +155,9 @@ data/maps/kujiale_jackal_8cam/
 python3 tools/check_map_manifest.py data/maps/kujiale_jackal_8cam
 ```
 
-检查器会拒绝缺失的 cuVSLAM DB、cuVGL BoW index、nvblox binary、mesh、occupancy、被改动的 artifact hash、旧资产 hash，以及 `.mcap`/`.db3` 或 capture/offline/online_cuvslam 泄漏。
+检查器会拒绝缺失的 cuVSLAM DB、cuVGL keyframe metadata/vocabulary/BoW index、nvblox
+binary、mesh、occupancy、被改动的 artifact hash、旧资产 hash，以及 `.mcap`/`.db3` 或
+capture/offline/online_cuvslam 泄漏。
 
 ## Git LFS
 
