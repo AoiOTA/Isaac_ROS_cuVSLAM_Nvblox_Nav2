@@ -99,11 +99,38 @@ def require_runtime_files(map_dir: Path) -> None:
             raise RuntimeError(f"{label} is missing from {root}")
 
 
+def mapping_validation_summary(path: Path) -> dict[str, object]:
+    report = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(report, dict):
+        raise RuntimeError(f"mapping validation report is not an object: {path}")
+    status = report.get("status")
+    if status not in {"passed", "passed_with_warnings"}:
+        raise RuntimeError(f"mapping validation did not pass: {status}")
+    checks = report.get("checks")
+    if not isinstance(checks, dict):
+        raise RuntimeError("mapping validation checks are missing")
+    collision_free = checks.get("physical_collision_free")
+    if not isinstance(collision_free, bool):
+        raise RuntimeError("mapping validation collision state is missing")
+    collision_events = int(report.get("physical_collision_event_count", 0))
+    return {
+        "status": status,
+        "physical_collision_free": collision_free,
+        "physical_collision_event_count": collision_events,
+        "collision_policy": (
+            "strict_zero_collision"
+            if collision_free
+            else "manual_collision_recorded"
+        ),
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("map_dir", type=Path)
     parser.add_argument("bag_dir", type=Path)
     parser.add_argument("--run-id", required=True)
+    parser.add_argument("--mapping-validation", type=Path, required=True)
     parser.add_argument(
         "--assets", type=Path, default=PROJECT_ROOT / "config/assets.yaml"
     )
@@ -117,6 +144,7 @@ def main() -> int:
         raise FileNotFoundError(f"map directory is missing: {map_dir}")
     assets = yaml.safe_load(args.assets.read_text(encoding="utf-8"))
     require_runtime_files(map_dir)
+    mapping_validation = mapping_validation_summary(args.mapping_validation)
     groups = {
         name: summarize_group(map_dir / name) for name in REQUIRED_GROUPS
     }
@@ -171,6 +199,7 @@ def main() -> int:
         "git_lfs_required": True,
         "validation": {
             "mapping_artifacts_complete": True,
+            "mapping_run": mapping_validation,
             "navigation_6cam_smoke_passed": False,
             "static_avoidance_acceptance_passed": False,
         },

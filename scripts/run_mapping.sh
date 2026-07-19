@@ -173,7 +173,10 @@ BAG_TOPICS=("${IMAGE_TOPICS[@]}" "${CAMERA_INFO_TOPICS[@]}" \
   /front_stereo_camera/depth/image_raw \
   /front_stereo_camera/depth/camera_info \
   /front_stereo_imu/imu /tf /tf_static /clock)
-setsid ros2 bag record --storage mcap --storage-preset-profile fastwrite \
+# cuVGL reads the MCAP by receive timestamp. fastwrite disables MCAP
+# chunking, so long multi-camera captures have no timestamp index and can be
+# read out of order. zstd_fast keeps chunks/indexes at the required throughput.
+setsid ros2 bag record --storage mcap --storage-preset-profile zstd_fast \
   --disable-keyboard-controls --output "${BAG_DIR}" --topics "${BAG_TOPICS[@]}" \
   >"${LOG_DIR}/rosbag.log" 2>&1 & BAG_PID=$!
 sleep 2
@@ -242,19 +245,55 @@ SIM_PID=""
 mapping_validation_args=("${LOG_DIR}/simulator.json")
 if [[ "${MAPPING_MODE}" == "auto" ]]; then
   mapping_validation_args+=(--coverage-report "${LOG_DIR}/coverage.json")
+else
+  # Manual map capture may contain a scrape while the operator explores a
+  # dense room. Keep that evidence in the manifest, but reserve strict zero
+  # collision promotion for the automated/acceptance mapping workflow.
+  mapping_validation_args+=(--allow-physical-collisions)
 fi
-python3 "${PROJECT_ROOT}/tools/validate_mapping_run.py" \
-  "${mapping_validation_args[@]}" >"${LOG_DIR}/mapping-validation.json"
+if ! python3 "${PROJECT_ROOT}/tools/validate_mapping_run.py" \
+  "${mapping_validation_args[@]}" >"${LOG_DIR}/mapping-validation.json"; then
+  read -r COLLISION_EVENTS VALIDATION_REASONS < <(
+    python3 - "${LOG_DIR}/mapping-validation.json" "${LOG_DIR}/simulator.json" <<'PY'
+import json
+import sys
+
+validation = json.load(open(sys.argv[1], encoding="utf-8"))
+simulator = json.load(open(sys.argv[2], encoding="utf-8"))
+contacts = simulator.get("robot_contacts", {})
+count = contacts.get("collision_event_count", "unknown") if isinstance(contacts, dict) else "unknown"
+reasons = ",".join(validation.get("failure_reasons", [])) or "unknown"
+print(count, reasons)
+PY
+  )
+  info "Map was not promoted: validation failed (${VALIDATION_REASONS}); physical collision events=${COLLISION_EVENTS}."
+  info "No manifest.json was written, so navigation is intentionally blocked."
+  info "Saved partial artifacts and the evidence log were retained: ${MAP_DIR}, ${LOG_DIR}/mapping-validation.json"
+  die "Rebuild this manual map with a new --map name and avoid physical contacts; wait for 'Map complete:' before starting navigation."
+fi
+
+MANUAL_COLLISION_EVENTS="$(python3 - "${LOG_DIR}/mapping-validation.json" <<'PY'
+import json
+import sys
+
+report = json.load(open(sys.argv[1], encoding="utf-8"))
+print(int(report.get("physical_collision_event_count", 0)))
+PY
+)"
+if [[ "${MAPPING_MODE}" == "interactive" && "${MANUAL_COLLISION_EVENTS}" != "0" ]]; then
+  info "Manual map promotion retains ${MANUAL_COLLISION_EVENTS} physical collision events in manifest.json."
+  info "This map is usable for manual navigation, but is not evidence for the strict zero-collision acceptance metric."
+fi
 
 "${PROJECT_ROOT}/scripts/export_vgl_models.sh" "${PROJECT_ROOT}/data/models/vgl" \
   >"${LOG_DIR}/model-export.log" 2>&1
 "${PROJECT_ROOT}/scripts/create_vgl_map.sh" "${BAG_DIR}" "${MAP_DIR}" \
   --topic-config "${PROJECT_ROOT}/ros2_ws/src/jackal_bringup/config/mapping_topics_8cam.yaml" \
-  --tum-pose-file "${MAP_DIR}/cuvslam/optimized_poses.tum" \
   --max-sync-us "${MAPPING_MAX_SYNC_US:-40000}" \
   >"${LOG_DIR}/offline-map.log" 2>&1
 python3 "${PROJECT_ROOT}/tools/write_map_manifest.py" "${MAP_DIR}" "${BAG_DIR}" \
   --run-id "${RUN_ID}" \
+  --mapping-validation "${LOG_DIR}/mapping-validation.json" \
   --generation-command \
   "./scripts/run_mapping.sh --map {map_name} --${MAPPING_MODE} ${SIM_MODE}"
 

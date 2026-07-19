@@ -236,6 +236,8 @@ def test_manual_gui_rviz_entrypoints_are_guarded() -> None:
         assert token in manual_mapping
     assert 'rviz/mapping.rviz' in mapping
     assert 'RVIZ="true"' in mapping
+    assert 'Map was not promoted' in mapping
+    assert 'mapping-validation.json' in mapping
     assert '--manual --gui --rviz' in manual_navigation
     assert 'manual_navigation_ready' in manual_check
     assert 'fastdds-super-client.xml' in manual_check

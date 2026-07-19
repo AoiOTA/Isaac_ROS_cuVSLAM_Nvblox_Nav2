@@ -19,6 +19,11 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("simulator_report", type=Path)
     parser.add_argument("--coverage-report", type=Path)
+    parser.add_argument(
+        "--allow-physical-collisions",
+        action="store_true",
+        help="allow only a manual-map promotion while recording collision evidence",
+    )
     args = parser.parse_args()
     simulator = load_object(args.simulator_report)
     sensor_graphs = simulator.get("sensor_graphs", {})
@@ -63,12 +68,34 @@ def main() -> int:
                 and coverage["planning_reference"].get("use") == "planning_only",
             }
         )
-    failed = [name for name, passed in checks.items() if not passed]
+    collision_events = (
+        int(contacts.get("collision_event_count", 0))
+        if isinstance(contacts, dict)
+        else 0
+    )
+    warnings = []
+    failed = []
+    for name, passed in checks.items():
+        if passed:
+            continue
+        if name == "physical_collision_free" and args.allow_physical_collisions:
+            warnings.append(name)
+            continue
+        failed.append(name)
     result = {
         "schema_version": 1,
-        "status": "passed" if not failed else "failed",
+        "status": (
+            "failed"
+            if failed
+            else "passed_with_warnings"
+            if warnings
+            else "passed"
+        ),
         "checks": checks,
         "failure_reasons": failed,
+        "warnings": warnings,
+        "physical_collision_event_count": collision_events,
+        "allow_physical_collisions": args.allow_physical_collisions,
         "simulator_report": str(args.simulator_report.resolve()),
         "coverage_report": (
             str(args.coverage_report.resolve())

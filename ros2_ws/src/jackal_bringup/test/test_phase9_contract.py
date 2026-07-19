@@ -88,9 +88,11 @@ def test_mapping_workflow_supports_guarded_manual_and_closed_loop_auto_capture()
         "ros2 run jackal_teleop keyboard_teleop",
         "mapping_coverage_driver",
         "validate_mapping_run.py",
+        "--allow-physical-collisions",
         "for pair in front left right back",
         "mapping_topics_8cam.yaml",
         "ros2 bag record --storage mcap",
+        "--storage-preset-profile zstd_fast",
         'rm -rf -- "${BAG_ROOT}"',
     ):
         assert token in script

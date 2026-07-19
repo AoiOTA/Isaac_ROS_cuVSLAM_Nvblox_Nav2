@@ -69,6 +69,17 @@ cuVGL 离线索引可能耗时较长。在终端出现以下内容之前不要�
 Map complete: .../data/maps/kujiale_manual_20260719
 ```
 
+只有出现这行后，`manifest.json` 才已写入，可以启动导航。手动建图即使发生物理接触仍会
+继续生成可用于手动导航的地图，但 `manifest.json` 会永久记录碰撞次数，并标为
+`manual_collision_recorded`；它不能作为正式“零物理碰撞”或静态避障验收的证据。自动建图
+与正式验收仍严格要求零碰撞。若终端显示 `Map was not promoted`，说明除手动接触外还有其他
+关键门禁失败；该次地图会保留 nvblox、occupancy、cuVSLAM 与诊断日志，但不能用于导航。
+失败原因在对应 `data/logs/mapping/<时间>/mapping-validation.json`。
+
+临时 MCAP 使用可按时间索引的 `zstd_fast` 配置，以便离线 cuVGL 对齐所有四组 Hawk 图像；
+生成阶段还会要求至少 40 组同步关键帧。若这个质量门禁失败，不会写入 manifest，避免把只有
+少量关键帧的视觉定位图当作可用地图。
+
 随后检查地图：
 
 ```bash

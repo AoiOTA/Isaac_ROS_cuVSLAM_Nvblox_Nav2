@@ -74,11 +74,18 @@ def test_offline_map_generation_uses_temporary_ignored_workspace() -> None:
     assert "mapping_topics_8cam.yaml" in script
     assert '--sample_sync_threshold_microseconds="${MAX_SYNC_US}"' in script
     assert '--tum_pose_file="${TUM_POSE_FILE}"' in script
+    assert 'CONVERTER_ARGS+=(--tum_pose_file="${TUM_POSE_FILE}")' in script
+    assert "Using recorded /tf poses for cuVGL conversion" in script
     assert '--rectify_images=True' in script
+    assert "MINIMUM_SYNCED_FRAMES=40" in script
+    assert "cuVGL synchronized frame groups" in script
     assert "create_map_offline.py" not in script
     assert 'require_file "${MAP_DIR}/cuvslam/data.mdb"' in script
     assert "prepare_vgl_runtime_config.py" in script
     assert 'rm -rf -- "${WORK}"' in script
+    mapping_runner = (ROOT / "scripts/run_mapping.sh").read_text()
+    vgl_call = mapping_runner.split('"${PROJECT_ROOT}/scripts/create_vgl_map.sh"', 1)[1]
+    assert "--tum-pose-file" not in vgl_call.split("python3", 1)[0]
 
 
 def test_performance_policy_is_adaptive_observation_not_a_fixed_kpi() -> None:
