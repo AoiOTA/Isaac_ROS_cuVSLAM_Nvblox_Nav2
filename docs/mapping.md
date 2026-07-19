@@ -72,7 +72,7 @@ live 8-camera VIO/cuVSLAM
   -> save_map: cuVSLAM database
   -> get_all_poses: globally optimized TUM trajectory
   -> planar/path/closure quality gate
-  -> recorded map/odom/base_link TF-selected rectified MCAP frames
+  -> map-frame odometry pose bag + rectified MCAP frames
   -> ALIKED features + cuVGL vocabulary/BoW index
 
 same live cuVSLAM map-frame pose + front native depth (near clip 0.40 m)
@@ -86,10 +86,10 @@ all runtime groups
 
 cuVSLAM、cuVGL、nvblox 和 occupancy 必须来自同一次在线 SLAM 解。项目不再用
 离线纯视觉 cuVSLAM 覆盖在线 VIO 数据库；这种混用在平面 A/B 中曾产生 `1.92 m`
-闭环误差。`create_vgl_map.sh` 默认使用录包内连续的 `map→odom→base_link` TF 选帧，避免
-`GetAllPoses` 导出的 TUM 在静止段造成跨数秒关键帧配对失败；TUM 仍保存用于在线质量审计，
-并可通过可选 `--tum-pose-file` 参数显式使用。默认同步窗为 `40000 µs`，并把同一值写入
-地图内冻结的 cuVGL runtime config。Isaac ROS 4.5 的 `GetAllPoses` 会把全局优化位姿的
+闭环误差。`create_vgl_map.sh` 将在线 `GetAllPoses` 导出的 TUM 轨迹转换成带 `map` frame 的
+标准 ROS odometry pose bag，再传给 `rosbag_to_mapping_data` 选帧。这既保留了在线全局优化
+坐标，又避开 TUM 直传在静止段造成跨数秒关键帧配对失败的问题。默认同步窗为 `40000 µs`，并
+把同一值写入地图内冻结的 cuVGL runtime config。Isaac ROS 4.5 的 `GetAllPoses` 会把全局优化位姿的
 `PoseStamped.frame_id` 留空；保存报告明确记录这一版本策略，几何门槛仍全部执行。官方接口说明见
 [Isaac ROS Visual SLAM API](https://nvidia-isaac-ros.github.io/repositories_and_packages/isaac_ros_visual_slam/isaac_ros_visual_slam/index.html)
 与 [Isaac Mapping ROS](https://nvidia-isaac-ros.github.io/repositories_and_packages/isaac_ros_mapping_and_localization/isaac_mapping_ros/index.html)。

@@ -30,9 +30,10 @@ while (($#)); do
   esac
 done
 require_file "${TOPIC_CONFIG}"
-if [[ -n "${TUM_POSE_FILE}" ]]; then
-  require_file "${TUM_POSE_FILE}"
+if [[ -z "${TUM_POSE_FILE}" ]]; then
+  TUM_POSE_FILE="${MAP_DIR}/cuvslam/optimized_poses.tum"
 fi
+require_file "${TUM_POSE_FILE}"
 [[ "${MAX_SYNC_US}" =~ ^[1-9][0-9]*$ ]] || die "--max-sync-us must be a positive integer"
 WORK="$(mktemp -d "${PROJECT_ROOT}/data/bags/.vgl-work.XXXXXX")"
 MODEL_DIR="${PROJECT_ROOT}/data/models/vgl"
@@ -48,8 +49,11 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 require_file "${MAP_DIR}/cuvslam/data.mdb"
-info "Creating a cuVGL map from the saved online cuVSLAM trajectory"
+info "Creating a cuVGL map aligned to the saved online cuVSLAM trajectory"
 mkdir -p "${WORK}/edex"
+POSE_BAG="${WORK}/cuvslam_poses"
+python3 "${PROJECT_ROOT}/tools/tum_to_pose_bag.py" \
+  "${TUM_POSE_FILE}" "${POSE_BAG}"
 CONVERTER_ARGS=(
   --output_folder_path="${WORK}/edex" \
   --sensor_data_bag_file="${BAG}" \
@@ -60,13 +64,11 @@ CONVERTER_ARGS=(
   --image_extension=.jpg \
   --base_link_name=base_link \
   --camera_topic_config="${TOPIC_CONFIG}" \
+  --pose_bag_file="${POSE_BAG}" \
+  --pose_topic_name=/visual_slam/vis/slam_odometry \
+  --reference_pose_frame=map \
   --rectify_images=True
 )
-if [[ -n "${TUM_POSE_FILE}" ]]; then
-  CONVERTER_ARGS+=(--tum_pose_file="${TUM_POSE_FILE}")
-else
-  info "Using recorded /tf poses for cuVGL conversion"
-fi
 ros2 run isaac_mapping_ros rosbag_to_mapping_data "${CONVERTER_ARGS[@]}"
 
 rm -rf "${WORK}/cuvgl_map"
