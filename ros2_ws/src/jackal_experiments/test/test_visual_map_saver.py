@@ -2,7 +2,13 @@ from types import SimpleNamespace
 
 import pytest
 
-from jackal_experiments.visual_map_saver import pose_record, trajectory_metrics, tum_line
+from jackal_experiments.visual_map_saver import (
+    DEFAULT_MAXIMUM_3D_TO_PLANAR_RATIO,
+    DEFAULT_MINIMUM_PLANAR_PATH_LENGTH_M,
+    pose_record,
+    trajectory_metrics,
+    tum_line,
+)
 
 
 def message(timestamp: float, x: float, y: float, z: float) -> SimpleNamespace:
@@ -52,3 +58,16 @@ def test_empty_get_all_poses_frame_is_preserved_for_version_policy() -> None:
     item = message(1.0, 0.0, 0.0, 0.0)
     item.header.frame_id = ""
     assert trajectory_metrics([pose_record(item)])["frame_ids"] == [""]
+
+
+def test_short_planar_capture_is_rejected_by_distance_not_z_jitter_ratio() -> None:
+    records = [
+        pose_record(message(float(index), index * 0.01, 0.0, (index % 2) * 0.002))
+        for index in range(29)
+    ]
+    metrics = trajectory_metrics(records)
+    assert metrics["planar_path_length_m"] < DEFAULT_MINIMUM_PLANAR_PATH_LENGTH_M
+    assert (
+        metrics["path_length_3d_to_planar_ratio"]
+        <= DEFAULT_MAXIMUM_3D_TO_PLANAR_RATIO
+    )

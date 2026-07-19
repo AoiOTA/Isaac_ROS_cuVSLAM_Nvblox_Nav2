@@ -86,6 +86,8 @@ def test_mapping_workflow_supports_guarded_manual_and_closed_loop_auto_capture()
         "[[ -t 0 ]]",
         '"${SIM_MODE}" --duration 0 --camera-profile mapping_8cam',
         "ros2 run jackal_teleop keyboard_teleop",
+        "Q is accepted only after at least 2.0 m",
+        "save-cuvslam.log",
         "mapping_coverage_driver",
         "validate_mapping_run.py",
         "--allow-physical-collisions",
@@ -97,6 +99,12 @@ def test_mapping_workflow_supports_guarded_manual_and_closed_loop_auto_capture()
     ):
         assert token in script
     assert "--dynamic-profile" not in script
+    saver = (
+        ROOT
+        / "ros2_ws/src/jackal_experiments/jackal_experiments/visual_map_saver.py"
+    ).read_text()
+    assert '"minimum_planar_path_length_m", DEFAULT_MINIMUM_PLANAR_PATH_LENGTH_M' in saver
+    assert "DEFAULT_MAXIMUM_3D_TO_PLANAR_RATIO = 1.05" in saver
 
 
 def test_navigation_is_locked_to_six_camera_static_profile() -> None:

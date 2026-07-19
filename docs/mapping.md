@@ -50,7 +50,9 @@ Jackal LiDAR 明确关闭，模拟器不会创建 LiDAR prim、render product �
 - 目标地图目录非空时拒绝覆盖；
 - 同一时刻只允许一个 mapping workflow。
 
-GUI 出现后用 `W/S/A/D` 驾驶，`Space` 停车，`Q` 保存。建议缓慢遍历所有目标区域、门洞与走廊，并形成闭环。
+GUI 出现后保持启动终端获得焦点，用 `W/S/A/D` 驾驶，`Space` 停车，`P` 查看累计距离，
+`Q` 保存。未达到 2m 最低真实运动时 `Q` 会被拒绝；2m 只是防误触门槛，仍应缓慢遍历所有
+目标区域、门洞与走廊，并形成闭环。
 完整操作与 cuVGL 自动出生点定位见
 [手动键盘建图、保存与 RViz 导航全流程](manual_mapping_navigation.md)。
 

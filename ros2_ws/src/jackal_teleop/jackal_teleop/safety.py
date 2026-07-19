@@ -60,3 +60,46 @@ class DeadmanCommand:
         self.linear = 0.0
         self.angular = 0.0
         self.last_motion_key_s = None
+
+
+@dataclass
+class MappingProgress:
+    """Accumulate meaningful planar odometry while rejecting stationary jitter."""
+
+    minimum_path_m: float = 2.0
+    minimum_increment_m: float = 0.01
+    maximum_increment_m: float = 1.0
+    path_length_m: float = 0.0
+    last_counted_xy: tuple[float, float] | None = None
+
+    def __post_init__(self) -> None:
+        if not all(
+            math.isfinite(value) and value > 0.0
+            for value in (
+                self.minimum_path_m,
+                self.minimum_increment_m,
+                self.maximum_increment_m,
+            )
+        ):
+            raise ValueError("mapping progress limits must be finite and positive")
+        if self.minimum_increment_m >= self.maximum_increment_m:
+            raise ValueError("mapping progress increment bounds are invalid")
+
+    def update(self, x: float, y: float) -> bool:
+        if not all(math.isfinite(value) for value in (x, y)):
+            return False
+        if self.last_counted_xy is None:
+            self.last_counted_xy = (x, y)
+            return False
+        increment = math.hypot(x - self.last_counted_xy[0], y - self.last_counted_xy[1])
+        if increment < self.minimum_increment_m:
+            return False
+        self.last_counted_xy = (x, y)
+        if increment > self.maximum_increment_m:
+            return False
+        self.path_length_m += increment
+        return True
+
+    @property
+    def can_finish(self) -> bool:
+        return self.path_length_m >= self.minimum_path_m

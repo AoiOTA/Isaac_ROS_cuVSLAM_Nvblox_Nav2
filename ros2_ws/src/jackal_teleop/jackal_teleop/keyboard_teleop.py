@@ -10,11 +10,13 @@ import time
 import tty
 
 from geometry_msgs.msg import Twist
+from nav_msgs.msg import Odometry
 import rclpy
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
+from rclpy.qos import qos_profile_sensor_data
 
-from .safety import DeadmanCommand
+from .safety import DeadmanCommand, MappingProgress
 
 
 SPEED_SCALES = (0.50, 0.75, 1.00, 1.20, 1.35)
@@ -38,6 +40,8 @@ class KeyboardTeleop(Node):
         self.declare_parameter("speed_level", 3)
         self.declare_parameter("deadman_timeout_s", 0.18)
         self.declare_parameter("publish_rate_hz", 20.0)
+        self.declare_parameter("odometry_topic", "/visual_slam/tracking/odometry")
+        self.declare_parameter("minimum_save_path_m", 2.0)
         self.base_linear_speed = float(self.get_parameter("linear_speed").value)
         self.base_angular_speed = float(self.get_parameter("angular_speed").value)
         self.speed_level = int(self.get_parameter("speed_level").value)
@@ -49,6 +53,9 @@ class KeyboardTeleop(Node):
             linear_speed=linear_speed,
             angular_speed=angular_speed,
         )
+        self.progress = MappingProgress(
+            minimum_path_m=float(self.get_parameter("minimum_save_path_m").value)
+        )
         self.publisher = self.create_publisher(
             Twist, str(self.get_parameter("command_topic").value), 10
         )
@@ -56,6 +63,23 @@ class KeyboardTeleop(Node):
         if rate <= 0.0:
             raise ValueError("publish_rate_hz must be positive")
         self.timer = self.create_timer(1.0 / rate, self.publish)
+        self.create_subscription(
+            Odometry,
+            str(self.get_parameter("odometry_topic").value),
+            self.on_odometry,
+            qos_profile_sensor_data,
+        )
+
+    def on_odometry(self, message: Odometry) -> None:
+        position = message.pose.pose.position
+        self.progress.update(float(position.x), float(position.y))
+
+    def report_progress(self, blocked: bool = False) -> None:
+        prefix = "Cannot save yet. " if blocked else ""
+        self.get_logger().info(
+            f"{prefix}Travelled {self.progress.path_length_m:.2f} m / "
+            f"minimum {self.progress.minimum_path_m:.2f} m."
+        )
 
     def set_speed_level(self, level: int) -> bool:
         level = max(1, min(len(SPEED_SCALES), level))
@@ -106,8 +130,8 @@ def main(args: list[str] | None = None) -> None:
     descriptor = sys.stdin.fileno()
     original = termios.tcgetattr(descriptor)
     print(
-        "W/S 前后，A/D 转向，1-5 或 +/- 调速度，Space 急停，Q 保存并退出；"
-        "松键 0.18 秒自动停车。"
+        "W/S 前后，A/D 转向，1-5 或 +/- 调速度，Space 急停，P 查看距离，"
+        "Q 保存并退出；松键 0.18 秒自动停车。键盘必须聚焦此终端。"
     )
     try:
         tty.setcbreak(descriptor)
@@ -118,7 +142,13 @@ def main(args: list[str] | None = None) -> None:
                 continue
             key = os.read(descriptor, 1).decode(errors="ignore").lower()
             if key == "q":
-                break
+                if node.progress.can_finish:
+                    break
+                node.report_progress(blocked=True)
+                continue
+            if key == "p":
+                node.report_progress()
+                continue
             node.handle_key(key)
     except (KeyboardInterrupt, ExternalShutdownException):
         pass

@@ -6,6 +6,11 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 load_ros
 
+# Jazzy still honors ROS_LOCALHOST_ONLY but warns on every short-lived CLI
+# probe. Use its supported replacement for this local-only mapping workflow.
+unset ROS_LOCALHOST_ONLY
+export ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
+
 MAP_NAME="kujiale_jackal_8cam"
 MAPPING_MODE=""
 SIM_MODE=""
@@ -185,6 +190,8 @@ process_alive "${BAG_PID}" || die "rosbag recorder exited; see ${LOG_DIR}/rosbag
 if [[ "${MAPPING_MODE}" == "interactive" ]]; then
   info "Manual mapping ready in Isaac Sim GUI + RViz"
   info "W/S forward/back, A/D rotate, Space stop, Q stop recording, validate, save and exit"
+  info "Keyboard control is read from THIS TERMINAL; keep this terminal focused while driving."
+  info "Press P to show travelled distance. Q is accepted only after at least 2.0 m."
   ros2 run jackal_teleop keyboard_teleop
 else
   info "Automated mapping ready: following the collision-clear closed-loop coverage route"
@@ -232,8 +239,33 @@ PY
   )
 fi
 info "Saving the live cuVSLAM database and globally optimized map-frame trajectory"
-ros2 run jackal_experiments visual_map_saver --ros-args \
-  "${VISUAL_SAVE_ARGS[@]}" >"${LOG_DIR}/save-cuvslam.log" 2>&1
+if ! ros2 run jackal_experiments visual_map_saver --ros-args \
+  "${VISUAL_SAVE_ARGS[@]}" >"${LOG_DIR}/save-cuvslam.log" 2>&1; then
+  if [[ -f "${MAP_DIR}/cuvslam/save_report.json" ]]; then
+    read -r SAVE_REASONS PATH_METERS CLOSURE_METERS DURATION_SECONDS < <(
+      python3 - "${MAP_DIR}/cuvslam/save_report.json" <<'PY'
+import json
+import sys
+
+report = json.load(open(sys.argv[1], encoding="utf-8"))
+trajectory = report.get("trajectory", {})
+print(
+    ",".join(report.get("failure_reasons", [])) or "unknown",
+    f"{float(trajectory.get('planar_path_length_m', 0.0)):.3f}",
+    f"{float(trajectory.get('closure_error_m', 0.0)):.3f}",
+    f"{float(trajectory.get('duration_s', 0.0)):.1f}",
+)
+PY
+    )
+    info "Map was not promoted: cuVSLAM quality failed (${SAVE_REASONS})."
+    info "Trajectory: path=${PATH_METERS}m closure_error=${CLOSURE_METERS}m duration=${DURATION_SECONDS}s."
+  else
+    info "Map was not promoted: cuVSLAM save failed before producing a quality report."
+  fi
+  info "Detailed save log: ${LOG_DIR}/save-cuvslam.log"
+  info "The raw MCAP and partial artifacts were retained for diagnosis."
+  die "Start a new map name; drive from THIS TERMINAL for broad coverage, return near the start, then press Q."
+fi
 
 stop_group "${BRINGUP_PID}"
 BRINGUP_PID=""

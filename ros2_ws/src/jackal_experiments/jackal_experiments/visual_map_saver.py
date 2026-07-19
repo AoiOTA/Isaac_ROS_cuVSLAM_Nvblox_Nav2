@@ -15,6 +15,10 @@ import rclpy
 from rclpy.node import Node
 
 
+DEFAULT_MINIMUM_PLANAR_PATH_LENGTH_M = 2.0
+DEFAULT_MAXIMUM_3D_TO_PLANAR_RATIO = 1.05
+
+
 @dataclass(frozen=True)
 class PoseRecord:
     timestamp_s: float
@@ -117,9 +121,17 @@ class VisualMapSaver(Node):
         self.declare_parameter("maximum_path_ratio", 1.15)
         self.declare_parameter("minimum_pose_count", 100)
         self.declare_parameter("minimum_duration_s", 30.0)
+        self.declare_parameter(
+            "minimum_planar_path_length_m", DEFAULT_MINIMUM_PLANAR_PATH_LENGTH_M
+        )
         self.declare_parameter("maximum_closure_error_m", 0.50)
         self.declare_parameter("maximum_vertical_range_m", 0.10)
-        self.declare_parameter("maximum_3d_to_planar_ratio", 1.01)
+        # The ground-constrained trajectory still contains millimetre-scale Z
+        # jitter. A 1.01 ratio rejects short but otherwise planar captures;
+        # vertical_range independently detects a genuinely non-planar frame.
+        self.declare_parameter(
+            "maximum_3d_to_planar_ratio", DEFAULT_MAXIMUM_3D_TO_PLANAR_RATIO
+        )
         self.output_dir = Path(str(self.get_parameter("output_dir").value)).resolve()
 
     def save_map(self, timeout_s: float = 120.0) -> bool:
@@ -178,6 +190,8 @@ class VisualMapSaver(Node):
             >= int(self.get_parameter("minimum_pose_count").value),
             "trajectory_duration": float(metrics["duration_s"])
             >= float(self.get_parameter("minimum_duration_s").value),
+            "minimum_planar_path_length": float(metrics["planar_path_length_m"])
+            >= float(self.get_parameter("minimum_planar_path_length_m").value),
             # Isaac ROS 4.5 GetAllPoses documents these as globally optimized
             # SLAM poses but leaves PoseStamped.header.frame_id empty.  Accept
             # that version-specific encoding as well as an explicit map frame.
