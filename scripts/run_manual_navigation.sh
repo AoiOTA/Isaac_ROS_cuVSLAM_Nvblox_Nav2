@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/common.sh
 source "${SCRIPT_DIR}/lib/common.sh"
 
-MAP_NAME="kujiale_jackal_8cam"
+MAP_NAME="kujiale_latest_20260719_160004"
 while (($#)); do
   case "$1" in
     --map) MAP_NAME="${2:?missing map name}"; shift 2 ;;

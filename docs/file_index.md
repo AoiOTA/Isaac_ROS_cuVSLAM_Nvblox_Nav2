@@ -10,8 +10,8 @@
 | `config/control.yaml` | 有效轮距、四轮关节、速度限制、PhysX、idle brake、motion assist |
 | `config/sensors.yaml` | 四组 Hawk prim、8 路图像话题、分辨率、频率、外参和 0.40 m depth 自车裁剪 |
 | `config/acceptance.yaml` | 静态 20 次 / 95% 口径、候选目标、路线验证和自适应性能策略 |
-| `.gitattributes` | `kujiale_jackal_8cam` 运行时地图的 Git LFS 规则 |
-| `.gitignore` | raw bag、中间产物、模型 cache、日志、run 和其他地图排除规则 |
+| `.gitattributes` | 文本属性说明；运行时地图不再进入 Git/LFS |
+| `.gitignore` | 所有运行时地图、raw bag、中间产物、模型 cache、日志、run 和报告排除规则 |
 
 ## Isaac Sim
 
@@ -101,9 +101,10 @@
 
 | 路径 | Git 策略 |
 |---|---|
-| `data/maps/kujiale_jackal_8cam/` | runtime artifact 可提交，指定类型走 Git LFS |
-| `data/maps/<其他地图>/` | 忽略 |
-| `data/bags/` | raw MCAP/DB3 与离线临时工作区，忽略 |
+| `data/maps/kujiale_latest_20260719_160004/` | 当前本机保留地图，忽略且不复制到 Git/LFS |
+| `data/maps/<其他地图>/` | 忽略；按空间策略清理旧地图 |
+| `data/bags/kujiale_latest_20260719_160004_20260719T080027Z/` | 当前本机保留 MCAP，忽略且不复制到 Git/LFS |
+| `data/bags/<其他采集>/` | raw MCAP/DB3 与离线临时工作区，忽略 |
 | `data/models/vgl/` | TensorRT cache，忽略 |
 | `data/logs/`、`data/runs/`、`data/reports/` | 运行证据，默认忽略 |
 

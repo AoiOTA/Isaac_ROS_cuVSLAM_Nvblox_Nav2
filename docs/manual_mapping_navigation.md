@@ -8,13 +8,11 @@
 
 ```bash
 cd /home/lyb/Workspace/Isaac_ROS_cuVSLAM_Nvblox_Nav2
-git lfs install
-git lfs pull
 ./scripts/build.sh
 ```
 
 每次建图必须使用一个空的新地图名。仓库已有的正式地图
-`kujiale_jackal_8cam` 不会被覆盖。下面示例使用 `kujiale_manual_20260719`；若同名目录
+`kujiale_latest_20260719_160004` 不会被覆盖。下面示例使用 `kujiale_manual_20260719`；若同名目录
 已经有内容，请换一个名字。
 
 ## 2. 启动手动键盘建图
@@ -150,7 +148,7 @@ python3 tools/check_map_manifest.py \
 也可直接使用仓库内已经验证的正式地图：
 
 ```bash
-./scripts/run_manual_navigation.sh --map kujiale_jackal_8cam
+./scripts/run_manual_navigation.sh --map kujiale_latest_20260719_160004
 ```
 
 此命令会同时启动 Isaac Sim GUI、6 路导航相机、cuVGL/cuVSLAM、nvblox、Nav2 和导航

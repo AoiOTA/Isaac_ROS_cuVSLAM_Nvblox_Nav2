@@ -22,7 +22,7 @@ Jackal LiDAR 明确关闭，模拟器不会创建 LiDAR prim、render product �
 ## 建图命令
 
 ```bash
-./scripts/run_mapping.sh --map kujiale_jackal_8cam --auto --headless
+./scripts/run_mapping.sh --map "kujiale_rebuild_$(date +%Y%m%d_%H%M%S)" --auto --headless
 ```
 
 `config/mapping_coverage.yaml` 保存一条约 38 m 的低速闭环覆盖路线。路线只把参考分支中
@@ -134,7 +134,7 @@ voxel 宽的表面，不包含车体 footprint 或 inflation。导航时的动�
 ## 运行时地图
 
 ```text
-data/maps/kujiale_jackal_8cam/
+data/maps/<地图名>/
 ├── config/       cuVGL runtime pb.txt
 ├── cuvgl/        keyframes, vocabulary, bow_index
 ├── cuvslam/      在线 cuVSLAM database、optimized_poses.tum、质量报告
@@ -157,24 +157,25 @@ data/maps/kujiale_jackal_8cam/
 完整检查：
 
 ```bash
-python3 tools/check_map_manifest.py data/maps/kujiale_jackal_8cam
+python3 tools/check_map_manifest.py data/maps/kujiale_latest_20260719_160004
 ```
 
 检查器会拒绝缺失的 cuVSLAM DB、公共优化帧 metadata、cuVGL keyframe metadata/vocabulary/BoW index、nvblox
 binary、mesh、occupancy、被改动的 artifact hash、旧资产 hash，以及 `.mcap`/`.db3` 或
 capture/offline/online_cuvslam 泄漏。
 
-## Git LFS
+## 本地保留策略
 
-只有这一张地图的运行时文件可提交。`.gitattributes` 对数据库、protobuf/bin、keyframe 图像、nvblox、mesh 和 occupancy PGM 启用 LFS；其他地图、raw bag、TensorRT engine、日志与中间数据仍被忽略。
+运行时地图和 raw bag 都不提交到 Git/LFS，避免大体积关键帧和 MCAP 在工作区与对象库中重复占用空间。当前本机只长期保留 `kujiale_latest_20260719_160004` 地图及其 `kujiale_latest_20260719_160004_20260719T080027Z` 采集包。
 
 ```bash
-git check-attr filter -- \
-  data/maps/kujiale_jackal_8cam/nvblox/kujiale.nvblx
-git lfs status
+git check-ignore -v \
+  data/maps/kujiale_latest_20260719_160004/nvblox/kujiale.nvblx
+git check-ignore -v \
+  data/bags/kujiale_latest_20260719_160004_20260719T080027Z/capture/capture_0.mcap
 ```
 
-不要把 temporary MCAP 复制进地图目录，也不要提交 `data/bags`。
+不要把 temporary MCAP 复制进地图目录，也不要提交 `data/bags`；需要长期保存时保留其原始采集目录。
 
 ## 导航侧复用
 

@@ -149,7 +149,7 @@ RTX 4090实测生成约5.0 MB的ALIKED engine和约27.2 MB的LightGlue engine。
 
 ## 6. 生成EDEx和对齐的cuVSLAM地图
 
-> 当前 `kujiale_jackal_8cam` 工作流不采用本节的离线纯视觉 cuVSLAM 重算。四 Hawk
+> 当前 `kujiale_latest_20260719_160004` 工作流不采用本节的离线纯视觉 cuVSLAM 重算。四 Hawk
 > 建图由在线 VIO/cuVSLAM 保存数据库和 `GetAllPoses` 优化轨迹；工作流将该 TUM 转换为带
 > `map` frame 的 ROS odometry pose bag，再与同一 MCAP 传给 `rosbag_to_mapping_data`，生成
 > cuVGL 与 nvblox 共同消费的 `optimized_frames/frames_meta.json`，避免

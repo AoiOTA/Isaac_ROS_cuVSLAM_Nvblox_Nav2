@@ -20,10 +20,6 @@ log/
 
 data/maps/*
 !data/maps/.gitkeep
-!data/maps/kujiale_jackal_8cam/
-!data/maps/kujiale_jackal_8cam/**
-data/maps/kujiale_jackal_8cam/offline/
-data/maps/kujiale_jackal_8cam/online_cuvslam/
 data/models/*
 !data/models/.gitkeep
 data/bags/*
@@ -46,9 +42,5 @@ data/locks/*
 *.ply
 *.engine
 *.plan
-# Runtime nvblox artifacts for the one versioned map are intentionally kept;
-# raw captures and every other generated map remain ignored above.
-!data/maps/kujiale_jackal_8cam/**/*.nvblx
-!data/maps/kujiale_jackal_8cam/**/*.ply
 core
 core.*

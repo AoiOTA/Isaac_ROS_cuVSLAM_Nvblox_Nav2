@@ -15,7 +15,7 @@ class NvbloxMapSaver(Node):
     def __init__(self) -> None:
         super().__init__("nvblox_map_saver")
         self.declare_parameter(
-            "output_dir", "data/maps/kujiale_jackal_8cam/nvblox"
+            "output_dir", "data/maps/kujiale_latest_20260719_160004/nvblox"
         )
         self.declare_parameter("stem", "kujiale")
         self.output_dir = Path(str(self.get_parameter("output_dir").value)).resolve()

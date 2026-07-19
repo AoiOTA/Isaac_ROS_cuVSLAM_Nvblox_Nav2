@@ -66,7 +66,7 @@ P95/P99 和 30 秒总体 RTF 没有被这个单点替代。建图临时 MCAP 共
 ```bash
 cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
 ./scripts/run_performance_benchmark.sh \
-  --profile all --map kujiale_jackal_8cam --gui
+  --profile all --map kujiale_latest_20260719_160004 --gui
 ```
 
 报告中的 `rendering.preview_resolution_reduced` 必须为 `false`，并同时检查八/六路消息计数、tracking

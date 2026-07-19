@@ -57,7 +57,6 @@ Jackal 的轮心几何轮距为 `0.37559 m`，但差速控制与轮里程计使�
 
 ```bash
 cd /home/lyb/Workspace/Isaac_ROS_cuVSLAM_Nvblox_Nav2
-git lfs install
 ./scripts/build.sh
 ```
 
@@ -66,7 +65,7 @@ git lfs install
 推荐使用经过同场景参考占据图校核的自动闭环覆盖路线：
 
 ```bash
-./scripts/run_mapping.sh --map kujiale_jackal_8cam --auto --headless
+./scripts/run_mapping.sh --map "kujiale_rebuild_$(date +%Y%m%d_%H%M%S)" --auto --headless
 ```
 
 旧占据图只用于选择无碰撞行驶折线，不会复制到结果中。最终地图仍由本次实时四 Hawk
@@ -83,7 +82,7 @@ git lfs install
 产物，raw bag 默认保留用于复现（显式 `--discard-bag` 才删除）。默认输出：
 
 ```text
-data/maps/kujiale_jackal_8cam/
+data/maps/<地图名>/
 ├── config/
 ├── cuvgl/
 ├── cuvslam/
@@ -96,9 +95,9 @@ data/maps/kujiale_jackal_8cam/
 检查地图：
 
 ```bash
-python3 tools/check_map_manifest.py data/maps/kujiale_jackal_8cam
+python3 tools/check_map_manifest.py data/maps/kujiale_latest_20260719_160004
 python3 tools/validate_acceptance_routes.py \
-  data/maps/kujiale_jackal_8cam --config config/acceptance.yaml
+  data/maps/kujiale_latest_20260719_160004 --config config/acceptance.yaml
 ```
 
 `config/acceptance.yaml` 中的三个目标已通过正式 occupancy 的已知自由空间、Jackal
@@ -109,19 +108,19 @@ python3 tools/validate_acceptance_routes.py \
 完整 headless 导航：
 
 ```bash
-./scripts/run_all.sh --map kujiale_jackal_8cam --headless --no-rviz
+./scripts/run_all.sh --map kujiale_latest_20260719_160004 --headless --no-rviz
 ```
 
 带 GUI、RViz，并由脚本自动发布验收目标：
 
 ```bash
-./scripts/run_all.sh --map kujiale_jackal_8cam --gui --rviz
+./scripts/run_all.sh --map kujiale_latest_20260719_160004 --gui --rviz
 ```
 
 人工在 RViz 使用 `2D Goal Pose`：
 
 ```bash
-./scripts/run_manual_navigation.sh --map kujiale_jackal_8cam
+./scripts/run_manual_navigation.sh --map kujiale_latest_20260719_160004
 ```
 
 cuVGL 会自动确定当前出生位姿并建立 `map→odom`，无需使用 `2D Pose Estimate`。完整的
@@ -142,7 +141,7 @@ cuVGL 会自动确定当前出生位姿并建立 `map→odom`，无需使用 `2D
 
 ```bash
 ./scripts/run_static_acceptance.sh \
-  --map kujiale_jackal_8cam --headless
+  --map kujiale_latest_20260719_160004 --headless
 ```
 
 口径固定为：
@@ -164,7 +163,7 @@ cuVGL 会自动确定当前出生位姿并建立 `map→odom`，无需使用 `2D
 
 ```bash
 ./scripts/run_performance_benchmark.sh \
-  --profile all --map kujiale_jackal_8cam --gui
+  --profile all --map kujiale_latest_20260719_160004 --gui
 ```
 
 脚本先启动真实 Isaac/ROS 工作负载，待话题、定位、nvblox 和 Nav2 就绪后才开始自适应预热；稳定后按墙钟采样，或在配置的最大时长停止。输出包含 Isaac Sim 官方 recorder 的 Mean FPS、Real Time Factor、App/Physics frametime，以及整个仿真与 ROS 进程树的 RSS/VMS/USS、GPU 利用率、显存、功耗和温度。
@@ -179,13 +178,13 @@ lidar；导航没有创建后 Hawk render product。这些是本机观测值而�
 
 ## 5. Git 与运行产物
 
-只有 `data/maps/kujiale_jackal_8cam` 的运行时地图允许进入版本库，其中二进制、图像、nvblox 和 mesh 由 Git LFS 管理。raw `.mcap`/`.db3`、离线工作目录、TensorRT cache、日志、实验 run 和报告默认忽略。
+运行时地图和 raw `.mcap`/`.db3` 均保留在本机并由 Git 忽略，避免地图、关键帧和采集包在工作区与 Git LFS 中重复占用空间。当前保留集是地图 `kujiale_latest_20260719_160004` 及其采集目录 `kujiale_latest_20260719_160004_20260719T080027Z`；离线临时目录、TensorRT cache、日志、实验 run 和报告同样默认忽略。
 
-地图生成后可检查 LFS 归属：
+可检查两类保留产物仍处于忽略状态：
 
 ```bash
-git check-attr filter -- data/maps/kujiale_jackal_8cam/nvblox/*.nvblx
-git lfs status
+git check-ignore -v data/maps/kujiale_latest_20260719_160004/manifest.json
+git check-ignore -v data/bags/kujiale_latest_20260719_160004_20260719T080027Z/capture/capture_0.mcap
 ```
 
 ## 6. 验证与文档

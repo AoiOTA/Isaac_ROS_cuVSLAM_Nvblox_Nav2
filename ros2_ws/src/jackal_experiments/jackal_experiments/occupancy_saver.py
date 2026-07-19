@@ -17,7 +17,7 @@ class OccupancySaver(Node):
     def __init__(self) -> None:
         super().__init__("occupancy_saver")
         self.declare_parameter(
-            "output_dir", "data/maps/kujiale_jackal_8cam/occupancy"
+            "output_dir", "data/maps/kujiale_latest_20260719_160004/occupancy"
         )
         # Match the official nvblox Nav2 layer: only zero/negative ESDF
         # distance is lethal.  Robot footprint and inflation are applied by

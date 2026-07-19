@@ -8,7 +8,7 @@ load_ros
 
 ACCEPTANCE_CONFIG="${PROJECT_ROOT}/config/acceptance.yaml"
 PROFILE="all"
-MAP_NAME="kujiale_jackal_8cam"
+MAP_NAME="kujiale_latest_20260719_160004"
 SIM_MODE="--headless"
 RVIZ="false"
 OUTPUT_DIR=""

@@ -17,7 +17,7 @@ if [[ -n "${CALLER_ROS_DISCOVERY_SERVER}" ]]; then
   unset ROS_LOCALHOST_ONLY
 fi
 
-MAP_NAME="kujiale_jackal_8cam"
+MAP_NAME="kujiale_latest_20260719_160004"
 RVIZ="true"
 while (($#)); do
   case "$1" in

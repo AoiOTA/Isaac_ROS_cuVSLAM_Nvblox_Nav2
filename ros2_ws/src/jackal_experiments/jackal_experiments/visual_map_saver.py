@@ -115,7 +115,7 @@ def tum_line(record: PoseRecord) -> str:
 class VisualMapSaver(Node):
     def __init__(self) -> None:
         super().__init__("visual_map_saver")
-        self.declare_parameter("output_dir", "data/maps/kujiale_jackal_8cam/cuvslam")
+        self.declare_parameter("output_dir", "data/maps/kujiale_latest_20260719_160004/cuvslam")
         self.declare_parameter("expected_path_length_m", 0.0)
         self.declare_parameter("minimum_path_ratio", 0.85)
         self.declare_parameter("maximum_path_ratio", 1.15)

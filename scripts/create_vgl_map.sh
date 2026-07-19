@@ -8,7 +8,7 @@ load_ros
 
 BAG="${1:?usage: create_vgl_map.sh BAG [MAP_DIR] [--topic-config FILE]}"
 shift
-MAP_DIR="${PROJECT_ROOT}/data/maps/kujiale_jackal_8cam"
+MAP_DIR="${PROJECT_ROOT}/data/maps/kujiale_latest_20260719_160004"
 if (($#)) && [[ "$1" != --* ]]; then
   MAP_DIR="$1"
   shift

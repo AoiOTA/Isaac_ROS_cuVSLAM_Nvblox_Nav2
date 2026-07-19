@@ -28,9 +28,9 @@ python3 tools/validate_acceptance_routes.py \
 ## 六路导航
 
 ```bash
-./scripts/run_all.sh --map kujiale_jackal_8cam --headless --no-rviz
-./scripts/run_all.sh --map kujiale_jackal_8cam --gui --rviz
-./scripts/run_manual_navigation.sh --map kujiale_jackal_8cam
+./scripts/run_all.sh --map kujiale_latest_20260719_160004 --headless --no-rviz
+./scripts/run_all.sh --map kujiale_latest_20260719_160004 --gui --rviz
+./scripts/run_manual_navigation.sh --map kujiale_latest_20260719_160004
 ```
 
 推荐始终使用上面的手动入口；它会统一管理 GUI、RViz、自动定位门禁和本地 DDS discovery
@@ -44,17 +44,17 @@ server。运行期间可在另一个终端做只读检查：
 
 ```bash
 ./scripts/run_static_trial.sh \
-  --map kujiale_jackal_8cam --goal-index 0 --attempt-index 1 --headless
+  --map kujiale_latest_20260719_160004 --goal-index 0 --attempt-index 1 --headless
 
 ./scripts/run_static_acceptance.sh \
-  --map kujiale_jackal_8cam --headless
+  --map kujiale_latest_20260719_160004 --headless
 ```
 
 ## 自适应性能观测
 
 ```bash
 ./scripts/run_performance_benchmark.sh \
-  --profile all --map kujiale_jackal_8cam --gui
+  --profile all --map kujiale_latest_20260719_160004 --gui
 ```
 
 这会保留 1280×720 第三人称跟随视口，但不会在 GUI 中预览八路相机。无人观察时可把

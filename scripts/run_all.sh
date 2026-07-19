@@ -6,7 +6,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 load_ros
 
-MAP_NAME="kujiale_jackal_8cam"
+MAP_NAME="kujiale_latest_20260719_160004"
 SIM_MODE="--headless"
 RVIZ="false"
 REPORT=""

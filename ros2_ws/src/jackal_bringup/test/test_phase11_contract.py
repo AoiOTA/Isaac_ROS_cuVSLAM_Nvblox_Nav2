@@ -10,36 +10,27 @@ ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(ROOT / "tools"))
 
 
-def test_runtime_map_artifacts_are_lfs_tracked_without_raw_bags() -> None:
+def test_runtime_map_and_capture_artifacts_stay_local() -> None:
     attributes = (ROOT / ".gitattributes").read_text()
-    for suffix in ("mdb", "db", "pb", "bin", "jpg", "png", "nvblx", "ply", "pgm"):
-        pattern = f"data/maps/kujiale_jackal_8cam/**/*.{suffix}"
-        assert f"{pattern} filter=lfs diff=lfs merge=lfs -text" in attributes
-        checked = subprocess.run(
-            [
-                "git",
-                "check-attr",
-                "filter",
-                "--",
-                f"data/maps/kujiale_jackal_8cam/runtime/file.{suffix}",
-            ],
-            cwd=ROOT,
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        assert checked.stdout.rstrip().endswith("filter: lfs")
-
-    for relative in (
-        "nvblox/kujiale.nvblx",
-        "mesh/kujiale.ply",
-        "cuvslam/map.mdb",
+    assert "data/maps/" not in attributes
+    retained_map = "data/maps/kujiale_latest_20260719_160004"
+    retained_bag = (
+        "data/bags/kujiale_latest_20260719_160004_20260719T080027Z/"
+        "capture/capture_0.mcap"
+    )
+    for runtime_path in (
+        f"{retained_map}/nvblox/kujiale.nvblx",
+        f"{retained_map}/mesh/kujiale.ply",
+        f"{retained_map}/cuvslam/data.mdb",
+        retained_bag,
     ):
         assert subprocess.run(
-            ["git", "check-ignore", "-q", f"data/maps/kujiale_jackal_8cam/{relative}"],
+            ["git", "check-ignore", "-q", runtime_path],
             cwd=ROOT,
-        ).returncode == 1
+        ).returncode == 0
     ignores = (ROOT / ".gitignore").read_text()
+    assert "data/maps/*" in ignores
+    assert "data/bags/*" in ignores
     assert "*.mcap" in ignores and "*.db3" in ignores
 
 

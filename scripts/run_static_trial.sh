@@ -7,7 +7,7 @@ source "${SCRIPT_DIR}/lib/common.sh"
 load_ros
 
 ACCEPTANCE_CONFIG="${PROJECT_ROOT}/config/acceptance.yaml"
-MAP_NAME="kujiale_jackal_8cam"
+MAP_NAME="kujiale_latest_20260719_160004"
 GOAL_INDEX="0"
 ATTEMPT_INDEX="1"
 RUN_DIR=""

@@ -6,7 +6,6 @@
 
 ```bash
 cd /home/lyb/Workspace/Isaac_ROS_cuVSLAM_Nvblox_Nav2
-git lfs install
 ./scripts/build.sh
 ```
 
@@ -24,7 +23,7 @@ git lfs install
 推荐先运行自动闭环覆盖：
 
 ```bash
-./scripts/run_mapping.sh --map kujiale_jackal_8cam --auto --headless
+./scripts/run_mapping.sh --map "kujiale_rebuild_$(date +%Y%m%d_%H%M%S)" --auto --headless
 ```
 
 该模式沿 `config/mapping_coverage.yaml` 的约 38 m 闭环低速行驶，不倒车，并在开放区域
@@ -77,9 +76,9 @@ cuVSLAM/cuVGL、nvblox、mesh 和 occupancy 都来自本轮采集；cuVSLAM 回�
 ## 3. 地图检查与目标校准
 
 ```bash
-python3 tools/check_map_manifest.py data/maps/kujiale_jackal_8cam
+python3 tools/check_map_manifest.py data/maps/kujiale_latest_20260719_160004
 python3 tools/validate_acceptance_routes.py \
-  data/maps/kujiale_jackal_8cam \
+  data/maps/kujiale_latest_20260719_160004 \
   --config config/acceptance.yaml \
   --output data/reports/route-validation.json
 ```
@@ -98,19 +97,19 @@ python3 tools/validate_acceptance_routes.py \
 快速自动路线：
 
 ```bash
-./scripts/run_all.sh --map kujiale_jackal_8cam --headless --no-rviz
+./scripts/run_all.sh --map kujiale_latest_20260719_160004 --headless --no-rviz
 ```
 
 需要观察时：
 
 ```bash
-./scripts/run_all.sh --map kujiale_jackal_8cam --gui --rviz
+./scripts/run_all.sh --map kujiale_latest_20260719_160004 --gui --rviz
 ```
 
 需要自己在 RViz 发布目标时使用手动入口：
 
 ```bash
-./scripts/run_manual_navigation.sh --map kujiale_jackal_8cam
+./scripts/run_manual_navigation.sh --map kujiale_latest_20260719_160004
 ```
 
 终端出现 `MANUAL_NAVIGATION_READY` 后选择 RViz `2D Goal Pose`。cuVGL 自动把当前
@@ -133,14 +132,14 @@ Nav2 的线速度下限为 `0.0 m/s`，Behavior Server 只有 Spin 和 Wait，�
 
 ```bash
 ./scripts/run_static_trial.sh \
-  --map kujiale_jackal_8cam --goal-index 0 --attempt-index 1 --headless
+  --map kujiale_latest_20260719_160004 --goal-index 0 --attempt-index 1 --headless
 ```
 
 再跑正式批次：
 
 ```bash
 ./scripts/run_static_acceptance.sh \
-  --map kujiale_jackal_8cam --headless
+  --map kujiale_latest_20260719_160004 --headless
 ```
 
 批次按三个目标 round-robin，直到得到 20 次有效实验。有效实验开始后，下列任一项都会记失败：
@@ -172,7 +171,7 @@ valid_trial_count >= 20
 
 ```bash
 ./scripts/run_performance_benchmark.sh \
-  --profile all --map kujiale_jackal_8cam --gui
+  --profile all --map kujiale_latest_20260719_160004 --gui
 ```
 
 也可单独运行：
@@ -180,7 +179,7 @@ valid_trial_count >= 20
 ```bash
 ./scripts/run_performance_benchmark.sh --profile mapping_8cam --gui
 ./scripts/run_performance_benchmark.sh \
-  --profile navigation_6cam --map kujiale_jackal_8cam --gui
+  --profile navigation_6cam --map kujiale_latest_20260719_160004 --gui
 ```
 
 无人观察时可以把 `--gui` 换成 `--headless`，但两种模式是不同工况，结果不可混写。
@@ -219,8 +218,9 @@ render product。优化配置、官方依据和被回退的实验见
 | `data/runs/static-acceptance/` | 单轮原始结果 |
 | `data/reports/static-acceptance/` | 静态统计 JSON/CSV/Markdown |
 | `data/reports/performance/` | 8 路/6 路性能观测 |
-| `data/maps/kujiale_jackal_8cam/` | 唯一允许版本化的运行时地图 |
+| `data/maps/kujiale_latest_20260719_160004/` | 当前本机保留且由 Git 忽略的运行时地图 |
+| `data/bags/kujiale_latest_20260719_160004_20260719T080027Z/` | 与当前地图对应、必须保留的原始 MCAP |
 
 前台运行按一次 `Ctrl-C`。自动脚本只停止自己创建的进程组，并通过 stop file 让 Isaac Sim 写完报告；不要使用 `killall` 或全局 `pkill`。
 
-地图二进制使用 Git LFS，raw bags、日志、实验 run 和报告默认不提交。正式结果是否达标以新生成的 `summary.json` 为准，不能用短时技术烟测代替。
+地图和 raw bag 均由 Git 忽略并保留在本机；日志、实验 run 和报告默认可清理。正式结果是否达标以新生成的 `summary.json` 为准，不能用短时技术烟测代替。

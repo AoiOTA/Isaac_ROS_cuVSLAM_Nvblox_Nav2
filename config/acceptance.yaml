@@ -2,7 +2,7 @@ schema_version: 1
 workflow: kujiale_jackal_static_avoidance
 
 map:
-  name: kujiale_jackal_8cam
+  name: kujiale_latest_20260719_160004
   frame: map
   mapping_camera_profile: mapping_8cam
   navigation_camera_profile: navigation_6cam

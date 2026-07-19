@@ -11,7 +11,7 @@ load_ros
 unset ROS_LOCALHOST_ONLY
 export ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
 
-MAP_NAME="kujiale_jackal_8cam"
+MAP_NAME="kujiale_auto_$(date +%Y%m%d_%H%M%S)"
 MAPPING_MODE=""
 SIM_MODE=""
 RVIZ=""

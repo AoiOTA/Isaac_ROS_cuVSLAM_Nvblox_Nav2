@@ -6,7 +6,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 load_ros
 
-MAP_NAME="${1:-kujiale_jackal_8cam}"
+MAP_NAME="${1:-kujiale_latest_20260719_160004}"
 MAP_DIR="${PROJECT_ROOT}/data/maps/${MAP_NAME}"
 MODEL_DIR="${PROJECT_ROOT}/data/models/vgl"
 [[ -d "${MAP_DIR}/cuvgl" ]] || die "cuVGL map missing: ${MAP_DIR}/cuvgl"
