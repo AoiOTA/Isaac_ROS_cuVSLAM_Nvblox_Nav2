@@ -8,6 +8,11 @@ from pxr import Gf, Sdf, Usd, UsdGeom
 
 
 CAMERA_PATH = "/World/FollowCameraRig"
+REFERENCE_DISTANCE_M = 3.2
+REFERENCE_HEIGHT_M = 2.2
+REFERENCE_LOOK_AHEAD_M = 1.0
+REFERENCE_LOOK_AT_HEIGHT_M = 0.25
+REFERENCE_FOCAL_LENGTH_MM = 16.0
 
 
 class FollowCamera:
@@ -16,9 +21,11 @@ class FollowCamera:
         stage: Usd.Stage,
         target_path: str,
         *,
-        distance_m: float = 3.0,
-        height_m: float = 1.8,
-        target_height_m: float = 0.4,
+        distance_m: float = REFERENCE_DISTANCE_M,
+        height_m: float = REFERENCE_HEIGHT_M,
+        look_ahead_m: float = REFERENCE_LOOK_AHEAD_M,
+        target_height_m: float = REFERENCE_LOOK_AT_HEIGHT_M,
+        focal_length_mm: float = REFERENCE_FOCAL_LENGTH_MM,
         smoothing_time_s: float = 0.25,
     ) -> None:
         self.stage = stage
@@ -27,11 +34,13 @@ class FollowCamera:
             raise RuntimeError(f"follow-camera target is invalid: {target_path}")
         self.distance = distance_m
         self.height = height_m
+        self.look_ahead = look_ahead_m
         self.target_height = target_height_m
+        self.focal_length = focal_length_mm
         self.smoothing_time = smoothing_time_s
         with Usd.EditContext(stage, stage.GetSessionLayer()):
             camera = UsdGeom.Camera.Define(stage, CAMERA_PATH)
-            camera.CreateFocalLengthAttr(20.0)
+            camera.CreateFocalLengthAttr(self.focal_length)
             camera.CreateHorizontalApertureAttr(20.955)
             camera.CreateClippingRangeAttr(Gf.Vec2f(0.05, 10000.0))
             self.transform = camera.AddTransformOp()
@@ -46,7 +55,11 @@ class FollowCamera:
         base = matrix.ExtractTranslation()
         forward = matrix.TransformDir(Gf.Vec3d(1.0, 0.0, 0.0)).GetNormalized()
         eye = base - forward * self.distance + Gf.Vec3d(0.0, 0.0, self.height)
-        target = base + Gf.Vec3d(0.0, 0.0, self.target_height)
+        target = (
+            base
+            + forward * self.look_ahead
+            + Gf.Vec3d(0.0, 0.0, self.target_height)
+        )
         return eye, target
 
     @staticmethod
@@ -75,6 +88,17 @@ class FollowCamera:
         return {
             "eye_m": [float(value) for value in self.eye],
             "look_at_m": [float(value) for value in self.look_at],
+        }
+
+    def profile(self) -> dict[str, float]:
+        """Return the reference-aligned optical geometry for reports and checks."""
+
+        return {
+            "distance_m": self.distance,
+            "height_m": self.height,
+            "look_ahead_m": self.look_ahead,
+            "look_at_height_m": self.target_height,
+            "focal_length_mm": self.focal_length,
         }
 
 

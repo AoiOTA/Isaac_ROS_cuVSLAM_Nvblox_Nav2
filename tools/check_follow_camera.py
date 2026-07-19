@@ -22,6 +22,11 @@ def main() -> int:
         "viewport_rebound_after_play": int(camera.get("viewport_bindings", 0)) >= 1,
         "camera_pose_reported": len(camera.get("eye_m", [])) == 3
         and len(camera.get("look_at_m", [])) == 3,
+        "reference_chase_geometry": camera.get("distance_m") == 3.2
+        and camera.get("height_m") == 2.2
+        and camera.get("look_ahead_m") == 1.0
+        and camera.get("look_at_height_m") == 0.25
+        and camera.get("focal_length_mm") == 16.0,
     }
     print(json.dumps(checks, indent=2, sort_keys=True))
     return 0 if all(checks.values()) else 1

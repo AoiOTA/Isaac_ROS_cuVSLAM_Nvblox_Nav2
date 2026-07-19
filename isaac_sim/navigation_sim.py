@@ -577,8 +577,7 @@ def run(args: argparse.Namespace) -> int:
                 "enabled": True,
                 "prim": "/World/FollowCameraRig",
                 "viewport_active": True,
-                "distance_m": 3.0,
-                "height_m": 1.8,
+                **follow_camera.profile(),
             }
         else:
             report["follow_camera"] = {
