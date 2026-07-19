@@ -4,7 +4,7 @@ visual_slam_node:
 
     # Stage 9 uses the front Hawk stereo pair at the map-acquisition cadence
     # of 10 Hz. This prevents DDS history overrun while dynamic nvblox and
-    # MPPI share the GPU; the IMU remains at 120 Hz.
+    # MPPI share the GPU; the physics-step IMU remains at 60 Hz.
     tracking_mode: 1
     num_cameras: 2
     min_num_images: 2
@@ -32,7 +32,7 @@ visual_slam_node:
     gyro_random_walk: 0.000019393
     accel_noise_density: 0.001862
     accel_random_walk: 0.003
-    calibration_frequency: 120.0
+    calibration_frequency: 60.0
 
     publish_map_to_odom_tf: true
     publish_odom_to_base_tf: true

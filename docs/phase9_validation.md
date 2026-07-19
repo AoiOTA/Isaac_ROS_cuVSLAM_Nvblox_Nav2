@@ -61,14 +61,14 @@ SmacPlanner2D -> MPPI(DiffDrive) -> Velocity Smoother
 |---|---|
 | 左右图像 | 1280×800、mono8、10 Hz目标发布频率 |
 | CameraInfo | 与左右图像同仿真时间戳 |
-| IMU | 120 Hz |
+| IMU | 60 Hz（当前 performance/PhysX 配置） |
 | 深度 | 640×400、32FC1米制 |
 | cuVSLAM相机数 | 2 |
 | cuVGL相机数 | 2，ID顺序为前左、前右 |
 | cuVGL同步窗 | 3 ms运行时配置 |
 | 周边相机 | 默认不创建对应OmniGraph，不参与验收 |
 
-完整栈同时运行时，10 Hz双目比30 Hz更稳：它与`warehouse_v2_front`离线地图采样频率一致，并避免cuVSLAM、cuVGL、dynamic nvblox、MPPI和RViz同时运行时出现DDS历史队列积压。IMU仍保持120 Hz。
+完整栈同时运行时，10 Hz双目比30 Hz更稳：它与`warehouse_v2_front`离线地图采样频率一致，并避免cuVSLAM、cuVGL、dynamic nvblox、MPPI和RViz同时运行时出现DDS历史队列积压。当前 IMU 由 60 Hz PhysX step 触发，cuVSLAM 噪声模型频率也保持 60 Hz。
 
 ## 4. 动态障碍实现
 

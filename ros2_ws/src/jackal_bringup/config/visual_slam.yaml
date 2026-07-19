@@ -32,7 +32,7 @@ visual_slam_node:
     gyro_random_walk: 0.000019393
     accel_noise_density: 0.001862
     accel_random_walk: 0.003
-    calibration_frequency: 120.0
+    calibration_frequency: 60.0
 
     publish_map_to_odom_tf: true
     publish_odom_to_base_tf: true

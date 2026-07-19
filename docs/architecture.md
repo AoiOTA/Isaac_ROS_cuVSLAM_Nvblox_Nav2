@@ -50,7 +50,7 @@ front 32FC1 depth ──> live nvblox TSDF/ESDF (mapping QC preview)
                    └─> TF-aligned scan/points ──> Nav2 obstacle layers
 ```
 
-所有 Hawk 相机在 session layer 中使用与 `rectified_images=true` 一致的 pinhole 投影。源 Hawk USD 保持不变。图像为 `1280×800 @ 10 Hz`，front depth 为 `640×400 @ 10 Hz`，front IMU 为 `120 Hz`。
+所有 Hawk 相机在 session layer 中使用与 `rectified_images=true` 一致的 pinhole 投影。源 Hawk USD 保持不变。图像为 `1280×800 @ 10 Hz`，front depth 为 `640×400 @ 10 Hz`，front IMU 为与当前 PhysX 步频一致的 `60 Hz`。
 
 在线 nvblox 预览配置为 `static_tsdf`、5 cm voxel、2D ESDF，深度集成 10 Hz、颜色 3 Hz、
 ESDF 10 Hz。最终地图按优化位姿分别执行 TSDF mesh 与静态概率占据融合；两者都只接

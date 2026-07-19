@@ -57,7 +57,7 @@ def main() -> int:
         raise SystemExit("unexpected stereo resolution")
     if sensors.get("depth_resolution") != [640, 400]:
         raise SystemExit("unexpected depth resolution")
-    if sensors.get("image_rate_hz") != 10.0 or sensors.get("imu_rate_hz") != 120.0:
+    if sensors.get("image_rate_hz") != 10.0 or sensors.get("imu_rate_hz") != 60.0:
         raise SystemExit("unexpected authored sensor rates")
     timeline = report.get("timeline", {})
     if timeline.get("looping") is not False:

@@ -15,9 +15,8 @@ spawn_search:
   yaw_deg: 180.0
 
 runtime:
-  # Match the proven reference runtime.  Isaac advances the rendered timeline
-  # at 60 Hz here, so 120 Hz physics performs two PhysX steps per image frame
-  # without increasing the camera cadence.
+  # Match the proven reference runtime. Isaac advances physics and the app at
+  # 60 Hz; the physics-step IMU publisher therefore also produces 60 Hz data.
   physics_hz: 60
   update_hz: 60
   renderer: RealTimePathTracing

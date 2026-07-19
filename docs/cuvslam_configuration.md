@@ -139,8 +139,8 @@ export FASTRTPS_DEFAULT_PROFILES_FILE="$HOME/Workspace/Isaac_ROS_cuVSLAM_Nvblox_
 | `/front_stereo_camera/right/image_raw` | `sensor_msgs/Image` | `mono8`, 1280×800, 30 Hz源频率 | `front_stereo_camera_right_optical` |
 | `/front_stereo_camera/left/camera_info` | `sensor_msgs/CameraInfo` | 与左图同时间基准 | 左光学帧 |
 | `/front_stereo_camera/right/camera_info` | `sensor_msgs/CameraInfo` | 与右图同时间基准 | 右光学帧 |
-| `/front_stereo_imu/imu` | `sensor_msgs/Imu` | 120 Hz | `front_stereo_camera_imu` |
-| `/clock` | `rosgraph_msgs/Clock` | 120 Hz | 无 |
+| `/front_stereo_imu/imu` | `sensor_msgs/Imu` | 60 Hz | `front_stereo_camera_imu` |
+| `/clock` | `rosgraph_msgs/Clock` | 60 Hz | 无 |
 
 QoS固定使用`SENSOR_DATA`，即Best Effort传感器数据语义。图像必须是未压缩ROS Image，不要直接把`CompressedImage`或H.264流remap给cuVSLAM。
 
@@ -306,7 +306,7 @@ gyro_noise_density: 0.000244
 gyro_random_walk: 0.000019393
 accel_noise_density: 0.001862
 accel_random_walk: 0.003
-calibration_frequency: 120.0
+calibration_frequency: 60.0
 ```
 
 这组噪声值来自Isaac ROS示例初值，并在当前仿真中验证可用。真实IMU必须使用厂家数据手册或静止bag/Allan variance重新估计，`calibration_frequency`必须填写生成噪声参数时使用的IMU频率。不要用调整噪声参数掩盖错误的IMU外参或时间戳。
@@ -376,7 +376,7 @@ visual_slam_node:
     gyro_random_walk: 0.000019393
     accel_noise_density: 0.001862
     accel_random_walk: 0.003
-    calibration_frequency: 120.0
+    calibration_frequency: 60.0
 
     publish_map_to_odom_tf: true
     publish_odom_to_base_tf: true
@@ -411,7 +411,7 @@ visual_slam_node:
 | `rectified_images` | true | 只有输入像素确实已校正时才为true |
 | `sync_matching_threshold_ms` | 5.0 | 硬同步应保持小；不得用大阈值掩盖不同步 |
 | `image_buffer_size` | 30 | 短时调度抖动可增大；内存也会增加 |
-| `imu_buffer_size` | 400 | 应覆盖若干秒IMU；120 Hz下约3.3秒 |
+| `imu_buffer_size` | 400 | 应覆盖若干秒IMU；60 Hz下约6.7秒 |
 | `image_qos`/`imu_qos` | SENSOR_DATA | 必须与传感器发布QoS兼容 |
 | `enable_localization_n_mapping` | true | 只需VO且不要地图时可设false |
 | `slam_max_map_size` | 4000 | 当前 38 m 闭环保留全部优化位姿；更大场景按实测增加 |

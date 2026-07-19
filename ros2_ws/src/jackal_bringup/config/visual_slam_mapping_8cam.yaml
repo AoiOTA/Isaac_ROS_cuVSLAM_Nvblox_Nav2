@@ -37,7 +37,9 @@ visual_slam_node:
     gyro_random_walk: 0.000019393
     accel_noise_density: 0.001862
     accel_random_walk: 0.003
-    calibration_frequency: 120.0
+    # Must match the physics-step IMU timestamps, not the authored Hawk sensor
+    # period. The current simulator profile publishes exactly 60 Hz IMU data.
+    calibration_frequency: 60.0
 
     publish_map_to_odom_tf: true
     publish_odom_to_base_tf: true

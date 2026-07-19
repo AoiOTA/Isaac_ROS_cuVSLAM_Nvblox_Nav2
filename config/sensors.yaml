@@ -13,7 +13,10 @@ front_stereo:
   # nvblox; otherwise the static TSDF records a black "robot trail".
   depth_min_range_m: 0.40
   image_rate_hz: 10.0
-  imu_rate_hz: 120.0
+  # The ROS publisher is driven by OnPhysicsStep.  The current performance
+  # profile advances PhysX at 60 Hz, so 60 Hz is the highest truthful IMU
+  # publication rate without raising the whole simulation physics cadence.
+  imu_rate_hz: 60.0
   # Isaac Sim 6.0.1 publishes zero distortion in CameraInfo for the legacy
   # fisheyePolynomial Hawk projection. Render the navigation pair as pinhole
   # in the anonymous session layer so rectified_images=true is truthful.

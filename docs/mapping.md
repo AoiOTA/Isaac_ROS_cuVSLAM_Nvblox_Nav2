@@ -9,7 +9,7 @@
 3. right left / right
 4. back left / right
 
-四组 Hawk 均为 `1280×800 @ 10 Hz`，front IMU 为 `120 Hz`。nvblox 只接收 front Hawk 左目的 `640×400` 原生模拟深度；视觉建图与 nvblox 不共享合成双目深度。
+四组 Hawk 均为 `1280×800 @ 10 Hz`，front IMU 为与当前 PhysX 步频一致的 `60 Hz`。nvblox 只接收 front Hawk 左目的 `640×400` 原生模拟深度；视觉建图与 nvblox 不共享合成双目深度。
 front Hawk 深度的近裁剪面固定为 `0.40 m`，用于在渲染源头排除相机下方的 Jackal
 车体；它不是雷达量程，也不会创建任何 LiDAR 资源。
 
