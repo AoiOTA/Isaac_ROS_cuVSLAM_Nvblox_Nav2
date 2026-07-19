@@ -130,6 +130,7 @@ def main() -> int:
     parser.add_argument("--workload", choices=["mapping", "navigation"], required=True)
     parser.add_argument("--workload-report", type=Path, required=True)
     parser.add_argument("--capture-report", type=Path, default=None)
+    parser.add_argument("--rviz-enabled", action="store_true")
     args = parser.parse_args()
     simulator = json.loads(args.sim_report.read_text(encoding="utf-8"))
     performance = simulator.get("performance", {})
@@ -200,6 +201,7 @@ def main() -> int:
             "lidar_enabled": sensor_graphs.get("lidar_enabled"),
             "rendering": rendering,
         },
+        "ros_visualization": {"rviz_enabled": args.rviz_enabled},
         "sampling": {
             "parameters": performance.get("parameters"),
             "warmup": performance.get("warmup"),

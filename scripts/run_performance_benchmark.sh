@@ -10,6 +10,7 @@ ACCEPTANCE_CONFIG="${PROJECT_ROOT}/config/acceptance.yaml"
 PROFILE="all"
 MAP_NAME="kujiale_jackal_8cam"
 SIM_MODE="--headless"
+RVIZ="false"
 OUTPUT_DIR=""
 TELEMETRY_PERIOD="1.0"
 MIN_WARMUP=""
@@ -26,6 +27,8 @@ while (($#)); do
     --profile) PROFILE="${2:?missing profile}"; shift 2 ;;
     --map) MAP_NAME="${2:?missing map name}"; shift 2 ;;
     --headless|--gui) SIM_MODE="$1"; shift ;;
+    --rviz) RVIZ="true"; shift ;;
+    --no-rviz) RVIZ="false"; shift ;;
     --output-dir) OUTPUT_DIR="${2:?missing output directory}"; shift 2 ;;
     --min-warmup-s) MIN_WARMUP="${2:?missing value}"; shift 2 ;;
     --max-warmup-s) MAX_WARMUP="${2:?missing value}"; shift 2 ;;
@@ -37,8 +40,9 @@ while (($#)); do
     --max-sample-s) MAX_SAMPLE="${2:?missing value}"; shift 2 ;;
     --telemetry-period-s) TELEMETRY_PERIOD="${2:?missing value}"; shift 2 ;;
     -h|--help)
-      echo "Usage: ./scripts/run_performance_benchmark.sh [--profile all|mapping_8cam|navigation_6cam] [--map NAME] [adaptive wall-time options]"
+      echo "Usage: ./scripts/run_performance_benchmark.sh [--profile all|mapping_8cam|navigation_6cam] [--map NAME] [--headless|--gui] [--rviz|--no-rviz] [adaptive wall-time options]"
       echo "Mapping records a temporary four-Hawk/eight-image-stream MCAP; navigation cycles real goals."
+      echo "RViz is disabled by default; --rviz keeps Isaac Sim in the selected mode and starts the workload RViz configuration."
       echo "No frame-count baseline or documentation KPI gate is applied."
       exit 0 ;;
     *) die "unknown argument: $1" ;;
@@ -82,6 +86,7 @@ PROFILE_METRICS_PID=""
 PROFILE_DRIVER_PID=""
 PROFILE_BAG_PID=""
 PROFILE_DISCOVERY_PID=""
+PROFILE_RVIZ_PID=""
 PROFILE_SIM_STOP=""
 PROFILE_METRICS_STOP=""
 PROFILE_DRIVER_STOP=""
@@ -114,6 +119,7 @@ cleanup_profile() {
   stop_group "${PROFILE_DRIVER_PID}"
   stop_group "${PROFILE_BAG_PID}"
   stop_group "${PROFILE_METRICS_PID}"
+  stop_group "${PROFILE_RVIZ_PID}"
   stop_group "${PROFILE_ROS_PID}"
   if process_alive "${PROFILE_SIM_PID}"; then
     [[ -z "${PROFILE_SIM_STOP}" ]] || touch "${PROFILE_SIM_STOP}" 2>/dev/null || true
@@ -126,6 +132,7 @@ cleanup_profile() {
   PROFILE_DRIVER_PID=""
   PROFILE_BAG_PID=""
   PROFILE_DISCOVERY_PID=""
+  PROFILE_RVIZ_PID=""
   remove_profile_bag
 }
 trap cleanup_profile EXIT INT TERM
@@ -272,6 +279,17 @@ run_profile() {
     [[ "${action_ready}" == "true" ]] || die "NavigateToPose action startup timeout"
   fi
 
+  if [[ "${RVIZ}" == "true" ]]; then
+    local rviz_config="${BRINGUP_SHARE}/rviz/${workload}.rviz"
+    require_file "${rviz_config}"
+    info "Starting ${workload} RViz while Isaac Sim remains ${SIM_MODE}"
+    setsid rviz2 -d "${rviz_config}" --ros-args -p use_sim_time:=true \
+      >"${profile_dir}/rviz.log" 2>&1 & PROFILE_RVIZ_PID=$!
+    sleep 3
+    process_alive "${PROFILE_RVIZ_PID}" || \
+      die "${workload} RViz exited; see ${profile_dir}/rviz.log"
+  fi
+
   if [[ "${workload}" == "mapping" ]]; then
     PROFILE_BAG_ROOT="$(mktemp -d "${PROJECT_ROOT}/data/bags/.performance-${camera_profile}.XXXXXX")"
     bag_dir="${PROFILE_BAG_ROOT}/capture"
@@ -310,6 +328,7 @@ run_profile() {
     --pid "${PROFILE_ROS_PID}" --pid "${PROFILE_DRIVER_PID}"
     --pid "${PROFILE_DISCOVERY_PID}")
   [[ -z "${PROFILE_BAG_PID}" ]] || metrics_args+=(--pid "${PROFILE_BAG_PID}")
+  [[ "${RVIZ}" != "true" ]] || metrics_args+=(--pid "${PROFILE_RVIZ_PID}")
   setsid python3 "${PROJECT_ROOT}/tools/record_performance_metrics.py" \
     "${metrics_args[@]}" >"${profile_dir}/telemetry.log" 2>&1 & PROFILE_METRICS_PID=$!
 
@@ -320,6 +339,8 @@ run_profile() {
     process_alive "${PROFILE_DRIVER_PID}" || die "${workload} driver exited before active load"
     [[ -z "${PROFILE_BAG_PID}" ]] || process_alive "${PROFILE_BAG_PID}" || \
       die "mapping MCAP recorder exited before active load"
+    [[ "${RVIZ}" != "true" ]] || process_alive "${PROFILE_RVIZ_PID}" || \
+      die "${workload} RViz exited before active load"
     sleep 0.5
   done
   [[ -f "${ready_file}" ]] || die "${workload} workload never produced a nonzero simulator command"
@@ -329,6 +350,8 @@ run_profile() {
     process_alive "${PROFILE_DRIVER_PID}" || die "${workload} driver exited during sampling"
     [[ -z "${PROFILE_BAG_PID}" ]] || process_alive "${PROFILE_BAG_PID}" || \
       die "mapping MCAP recorder exited during sampling"
+    [[ "${RVIZ}" != "true" ]] || process_alive "${PROFILE_RVIZ_PID}" || \
+      die "${workload} RViz exited during sampling"
     process_alive "${PROFILE_METRICS_PID}" || die "performance telemetry recorder exited"
     sleep 1
   done
@@ -358,11 +381,13 @@ run_profile() {
       "${bag_dir}" --output "${capture_report}" >"${profile_dir}/capture-summary.log"
     remove_profile_bag
   fi
+  stop_group "${PROFILE_RVIZ_PID}"; PROFILE_RVIZ_PID=""
   stop_group "${PROFILE_ROS_PID}"; PROFILE_ROS_PID=""
   (( sim_status == 0 )) || die "${camera_profile} performance simulator failed"
   summary_args=(--sim-report "${sim_report}" --telemetry "${telemetry}"
     --output "${normalized}" --workload "${workload}"
     --workload-report "${workload_report}")
+  [[ "${RVIZ}" != "true" ]] || summary_args+=(--rviz-enabled)
   [[ "${workload}" != "mapping" ]] || summary_args+=(--capture-report "${capture_report}")
   python3 "${PROJECT_ROOT}/tools/summarize_performance.py" \
     "${summary_args[@]}" \
