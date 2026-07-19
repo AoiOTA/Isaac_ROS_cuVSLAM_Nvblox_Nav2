@@ -29,8 +29,8 @@ git lfs install
 
 该模式沿 `config/mapping_coverage.yaml` 的约 38 m 闭环低速行驶，不倒车，并在开放区域
 扫描。参考分支的旧 occupancy 只用于规划路线，绝不会作为新地图输出。八路图像、
-cuVSLAM/cuVGL、nvblox、mesh 和 occupancy 都来自本轮采集；最终 nvblox 与 occupancy
-使用回环优化后的关键帧离线统一重建，不直接保存在线预览。
+cuVSLAM/cuVGL、nvblox、mesh 和 occupancy 都来自本轮采集；cuVSLAM 回环优化后的公共帧
+分别输入 cuVGL 和 nvblox，最终 occupancy 不依赖 cuVGL 的二次选帧，也不直接保存在线预览。
 
 需要人工控制和 GUI 时运行：
 

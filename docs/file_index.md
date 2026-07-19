@@ -63,7 +63,7 @@
 | `scripts/run_sim.sh` | 单独启动 GUI/headless simulator，可选 camera profile |
 | `scripts/run_mapping.sh` | 自动闭环或人工四 Hawk / 8 路图像建图，完整成功后清理 raw/intermediate |
 | `scripts/run_manual_mapping.sh` | Isaac Sim GUI + 建图 RViz + 键盘控制的一键入口 |
-| `scripts/create_vgl_map.sh` | 用在线 cuVSLAM 优化 TUM 从临时 MCAP 生成同坐标系 cuVGL map |
+| `scripts/create_vgl_map.sh` | 用在线 cuVSLAM 优化 TUM 和临时 MCAP 生成公共优化帧，再从其分支生成同坐标系 cuVGL map |
 | `scripts/run_navigation.sh` | 检查 manifest 并启动 6 路 ROS 导航 |
 | `scripts/run_all.sh` | 启动 simulator + ROS 导航 + 自动路线 runner |
 | `scripts/run_manual_navigation.sh` | GUI + RViz + cuVGL 自动定位 + 2D Goal Pose 一键入口 |
@@ -85,8 +85,9 @@
 |---|---|
 | `tools/write_map_manifest.py` | 检查 8 路 bag 和运行时 artifact，写 manifest |
 | `tools/check_map_manifest.py` | 检查资产/profile/hash/文件组并拒绝 raw capture 泄漏 |
-| `tools/check_visual_map_stage.py` | 校验可恢复的 cuVSLAM/cuVGL 八路优化位姿阶段 |
-| `tools/prepare_native_depth_fusion.py` | 从 MCAP 对齐优化关键帧与 front 原生深度 |
+| `tools/check_visual_map_stage.py` | 校验公共 cuVSLAM 八路优化帧及其 cuVGL 子集的位姿一致性 |
+| `tools/prepare_native_depth_fusion.py` | 从 MCAP 对齐公共 cuVSLAM 优化帧与 front 原生深度 |
+| `tools/write_optimized_frames_report.py` | 校验 8 路公共优化帧完整性并冻结 cuVSLAM/MCAP 位姿溯源哈希 |
 | `tools/run_offline_nvblox_fusion.py` | 调用官方 fuser 生成 TSDF mesh 与静态 occupancy |
 | `tools/validate_acceptance_routes.py` | occupancy known-free、膨胀、连通与绕行验证 |
 | `tools/create_static_trial_metadata.py` | 创建不可变 trial 身份与目标元数据 |

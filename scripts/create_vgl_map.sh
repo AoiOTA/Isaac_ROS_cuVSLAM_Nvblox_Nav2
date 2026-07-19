@@ -82,6 +82,22 @@ CONVERTER_ARGS=(
 )
 ros2 run isaac_mapping_ros rosbag_to_mapping_data "${CONVERTER_ARGS[@]}"
 
+# Materialize the common pose-bearing metadata before cuVGL performs its own
+# stricter feature-keyframe selection. Both cuVGL and offline nvblox must branch
+# from this cuVSLAM-optimized set; neither map is the pose source for the other.
+SHARED_FRAMES="${WORK}/optimized_frames"
+mkdir -p "${SHARED_FRAMES}"
+require_file "${WORK}/edex/frames_meta.json"
+install -m 0644 "${WORK}/edex/frames_meta.json" \
+  "${SHARED_FRAMES}/frames_meta.json"
+install -m 0644 "${WORK}/sensor-bag-report.json" \
+  "${SHARED_FRAMES}/selection_report.json"
+python3 "${PROJECT_ROOT}/tools/write_optimized_frames_report.py" \
+  "${SHARED_FRAMES}/frames_meta.json" "${SHARED_FRAMES}/report.json" \
+  --tum-pose-file "${TUM_POSE_FILE}" \
+  --source-bag "${BAG}" \
+  --selection-report "${SHARED_FRAMES}/selection_report.json"
+
 rm -rf "${WORK}/cuvgl_map"
 info "Creating cuVGL BoW map with the project TensorRT cache"
 ros2 run isaac_ros_visual_mapping create_cuvgl_map.py \
@@ -121,6 +137,8 @@ print(f"cuVGL synchronized frame groups: {len(timestamps)}")
 PY
 rm -rf "${MAP_DIR}/cuvgl"
 cp -a "${WORK}/cuvgl_map" "${MAP_DIR}/cuvgl"
+rm -rf "${MAP_DIR}/optimized_frames"
+cp -a "${SHARED_FRAMES}" "${MAP_DIR}/optimized_frames"
 python3 "${PROJECT_ROOT}/tools/prepare_vgl_runtime_config.py" \
   "$(ros2 pkg prefix isaac_ros_visual_mapping --share)/configs/isaac" \
   "${MAP_DIR}/config" --max-sync-us "${MAX_SYNC_US}"
@@ -128,6 +146,8 @@ install -m 0644 "${WORK}/sensor-bag-report.json" \
   "${MAP_DIR}/config/vgl_sensor_selection_report.json"
 
 [[ -s "${MAP_DIR}/cuvslam/data.mdb" ]] || die "empty online cuVSLAM map"
+require_file "${MAP_DIR}/optimized_frames/frames_meta.json"
+require_file "${MAP_DIR}/optimized_frames/report.json"
 [[ -n "$(find "${MAP_DIR}/cuvgl/keyframes" -type f -size +0c -print -quit)" ]] || die "empty cuVGL keyframes"
 [[ -n "$(find "${MAP_DIR}/cuvgl/vocabulary" -type f -size +0c -print -quit)" ]] || die "empty BoW vocabulary"
 [[ -n "$(find "${MAP_DIR}/cuvgl" -maxdepth 1 -type f -name 'bow_index*' -size +0c -print -quit)" ]] || die "empty BoW index"

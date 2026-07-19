@@ -22,7 +22,10 @@ while (($#)); do
 done
 
 require_file "${BAG_DIR}/metadata.yaml"
-require_file "${MAP_DIR}/cuvgl/keyframes/frames_meta.json"
+OPTIMIZED_FRAMES_META="${MAP_DIR}/optimized_frames/frames_meta.json"
+OPTIMIZED_FRAMES_REPORT="${MAP_DIR}/optimized_frames/report.json"
+require_file "${OPTIMIZED_FRAMES_META}"
+require_file "${OPTIMIZED_FRAMES_REPORT}"
 require_file "${CONFIG}"
 require_file "${ROUTE_CONFIG}"
 for group in nvblox mesh occupancy; do
@@ -65,9 +68,10 @@ print(
 PY
 )
 
-info "Extracting native depth at globally optimized cuVSLAM/cuVGL keyframes"
+info "Extracting native depth at shared globally optimized cuVSLAM map frames"
 python3 "${PROJECT_ROOT}/tools/prepare_native_depth_fusion.py" \
-  "${BAG_DIR}" "${MAP_DIR}/cuvgl/keyframes/frames_meta.json" "${WORK}/input" \
+  "${BAG_DIR}" "${OPTIMIZED_FRAMES_META}" "${WORK}/input" \
+  --source-pose-report "${OPTIMIZED_FRAMES_REPORT}" \
   --sensor-name "${SENSOR_NAME}" \
   --depth-topic "${DEPTH_TOPIC}" \
   --depth-info-topic "${DEPTH_INFO_TOPIC}" \

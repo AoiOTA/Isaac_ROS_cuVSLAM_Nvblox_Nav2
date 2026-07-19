@@ -76,12 +76,14 @@ live 8-camera VIO/cuVSLAM
   -> get_all_poses: globally optimized TUM trajectory
   -> planar/path/closure quality gate
   -> map-frame odometry pose bag + rectified MCAP frames
-  -> ALIKED features + cuVGL vocabulary/BoW index
+  -> shared optimized_frames/frames_meta.json
+       -> ALIKED features + cuVGL vocabulary/BoW index
+       -> front native-depth matching + offline nvblox
 
 live cuVSLAM pose + front native depth
   -> online nvblox mesh/ESDF coverage preview only
 
-globally optimized cuVGL keyframes + matching front native depth (near clip 0.40 m)
+shared globally optimized cuVSLAM map frames + matching front native depth (near clip 0.40 m)
   -> offline nvblox TSDF mesh pass (repeated-evidence weight gate)
   -> offline nvblox static occupancy pass
   -> occupancy coverage gates (Nav2 applies footprint/inflation later)
@@ -96,12 +98,14 @@ Isaac ROS 4.5 自带的 `create_map_offline.py` 是上游参考编排器，但�
 ESS 或 FoundationStereo；本项目明确使用 Isaac Sim front Hawk 原生深度，所以不调用该单体
 脚本做深度推理。项目分别调用同一官方链路的 `rosbag_to_mapping_data`、
 `create_cuvgl_map.py` 和 `nvblox_ros fuse_cusfm`，并将在线 IMU/VIO 保存的 cuVSLAM 数据库与
-最终优化轨迹作为唯一位姿解。这样既遵循官方离线重融合顺序，也不会引入未要求的深度模型。
+最终优化轨迹作为唯一位姿解。`rosbag_to_mapping_data` 生成的公共优化 `frames_meta.json` 在
+cuVGL 二次特征选帧之前冻结；cuVGL 和 nvblox 从这里分叉，互不作为对方的位姿来源。这样既
+遵循官方离线重融合顺序，也不会引入未要求的深度模型。
 
 cuVSLAM、cuVGL、nvblox 和 occupancy 必须来自同一次采集与同一最终优化 SLAM 解。项目不再用
 离线纯视觉 cuVSLAM 覆盖在线 VIO 数据库；这种混用在平面 A/B 中曾产生 `1.92 m`
 闭环误差。`create_vgl_map.sh` 将在线 `GetAllPoses` 导出的 TUM 轨迹转换成带 `map` frame 的
-标准 ROS odometry pose bag，再传给 `rosbag_to_mapping_data` 选帧。这既保留了在线全局优化
+标准 ROS odometry pose bag，再传给 `rosbag_to_mapping_data` 生成公共优化帧。这既保留了在线全局优化
 坐标，又避开 TUM 直传在静止段造成跨数秒关键帧配对失败的问题。默认同步窗为 `40000 µs`，并
 把同一值写入地图内冻结的 cuVGL runtime config。Isaac ROS 4.5 的 `GetAllPoses` 会把全局优化位姿的
 `PoseStamped.frame_id` 留空；保存报告明确记录这一版本策略，几何门槛仍全部执行。官方接口说明见
@@ -109,8 +113,9 @@ cuVSLAM、cuVGL、nvblox 和 occupancy 必须来自同一次采集与同一最�
 与 [Isaac Mapping ROS](https://nvidia-isaac-ros.github.io/repositories_and_packages/isaac_ros_mapping_and_localization/isaac_mapping_ros/index.html)。
 
 在线静态 nvblox 使用 `global_frame=map`，但它只用于 RViz 覆盖检查。回环发生时，
-`map→odom` 的历史修正不会重新融合旧体素；因此最终 mesh 和 occupancy 都从 MCAP 按优化
-关键帧重建。最终 2D 图使用 nvblox 静态概率占据融合，2.5 cm 端点半带形成单个 5 cm
+`map→odom` 的历史修正不会重新融合旧体素；因此最终 mesh 和 occupancy 都从 MCAP 按
+cuVSLAM 公共优化帧重建，不使用 cuVGL 更严格阈值二次筛选后的稀疏帧。最终 2D 图使用
+nvblox 静态概率占据融合，2.5 cm 端点半带形成单个 5 cm
 voxel 宽的表面，不包含车体 footprint 或 inflation。导航时的动态滚动 nvblox 是另一份配置，仍使用
 连续 `odom`；footprint 和 inflation 只由 Nav2/路线验证层施加一次。
 
@@ -155,7 +160,7 @@ data/maps/kujiale_jackal_8cam/
 python3 tools/check_map_manifest.py data/maps/kujiale_jackal_8cam
 ```
 
-检查器会拒绝缺失的 cuVSLAM DB、cuVGL keyframe metadata/vocabulary/BoW index、nvblox
+检查器会拒绝缺失的 cuVSLAM DB、公共优化帧 metadata、cuVGL keyframe metadata/vocabulary/BoW index、nvblox
 binary、mesh、occupancy、被改动的 artifact hash、旧资产 hash，以及 `.mcap`/`.db3` 或
 capture/offline/online_cuvslam 泄漏。
 

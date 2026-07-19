@@ -4,8 +4,9 @@
 The live nvblox map is integrated with the pose estimate that was available at
 each camera callback.  A later cuVSLAM loop-closure correction does not
 retroactively move voxels that have already been fused.  This tool instead
-matches the recorded native depth to the final, globally optimized keyframes
-used by cuVGL and writes the directory layout consumed by ``fuse_cusfm``.
+matches the recorded native depth to the shared, globally optimized cuVSLAM
+map frames and writes the directory layout consumed by ``fuse_cusfm``. cuVGL
+and nvblox independently consume this common pose solution.
 
 Native Isaac Sim depth is 32FC1 metres.  The offline fuser expects 16-bit PNG
 depth in millimetres, so the conversion is explicit and audited in report.json.
@@ -24,6 +25,8 @@ from typing import Any
 
 import cv2
 import numpy as np
+
+from write_optimized_frames_report import POSE_ROLE, sha256_file
 
 
 NANOSECONDS_PER_SECOND = 1_000_000_000
@@ -173,7 +176,7 @@ def load_selected_frames(
     ]
     frames.sort(key=lambda frame: int(frame["timestamp_microseconds"]))
     if not frames:
-        raise ValueError(f"no optimized keyframes found for {sensor_name}")
+        raise ValueError(f"no shared optimized map frames found for {sensor_name}")
     timestamps = [int(frame["timestamp_microseconds"]) for frame in frames]
     if len(set(timestamps)) != len(timestamps) or any(
         current <= previous for previous, current in zip(timestamps, timestamps[1:])
@@ -191,6 +194,20 @@ def prepare(args: argparse.Namespace) -> dict[str, Any]:
         raise FileNotFoundError(f"rosbag metadata is missing: {args.bag}")
     if not args.frames_meta.is_file():
         raise FileNotFoundError(f"optimized frames metadata is missing: {args.frames_meta}")
+    if not args.source_pose_report.is_file():
+        raise FileNotFoundError(
+            f"optimized frames provenance report is missing: {args.source_pose_report}"
+        )
+    source_pose_report = json.loads(
+        args.source_pose_report.read_text(encoding="utf-8")
+    )
+    if source_pose_report.get("status") != "passed":
+        raise RuntimeError("optimized frames provenance report did not pass")
+    if source_pose_report.get("pose_role") != POSE_ROLE:
+        raise RuntimeError("offline nvblox requires shared cuVSLAM optimized frames")
+    frames_meta_sha256 = sha256_file(args.frames_meta)
+    if source_pose_report.get("frames_meta_sha256") != frames_meta_sha256:
+        raise RuntimeError("optimized frames metadata does not match its provenance report")
     args.output_dir.mkdir(parents=True, exist_ok=False)
     color_root = args.output_dir / "color"
     depth_root = args.output_dir / "depth"
@@ -287,16 +304,17 @@ def prepare(args: argparse.Namespace) -> dict[str, Any]:
         if value[1]["maximum_valid_depth_m"] > 0.0
     ]
     report: dict[str, Any] = {
-        "schema_version": 2,
+        "schema_version": 3,
         "status": "passed" if not missing_depth and not missing_color else "failed",
         "input_bag": str(args.bag.resolve()),
         "input_bag_metadata_sha256": hashlib.sha256(
             (args.bag / "metadata.yaml").read_bytes()
         ).hexdigest(),
         "source_frames_meta": str(args.frames_meta.resolve()),
-        "source_frames_meta_sha256": hashlib.sha256(
-            args.frames_meta.read_bytes()
-        ).hexdigest(),
+        "source_frames_meta_sha256": frames_meta_sha256,
+        "source_pose_role": POSE_ROLE,
+        "source_pose_report": str(args.source_pose_report.resolve()),
+        "source_pose_report_sha256": sha256_file(args.source_pose_report),
         "output_dir": str(args.output_dir.resolve()),
         "sensor_name": args.sensor_name,
         "camera_params_id": camera_id,
@@ -361,6 +379,7 @@ def main() -> int:
     parser.add_argument("bag", type=Path)
     parser.add_argument("frames_meta", type=Path)
     parser.add_argument("output_dir", type=Path)
+    parser.add_argument("--source-pose-report", type=Path, required=True)
     parser.add_argument("--sensor-name", default="front_stereo_camera_left")
     parser.add_argument(
         "--depth-topic", default="/front_stereo_camera/depth/image_raw"

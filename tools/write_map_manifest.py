@@ -13,7 +13,15 @@ import yaml
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-REQUIRED_GROUPS = ("cuvslam", "cuvgl", "nvblox", "mesh", "occupancy", "config")
+LEGACY_REQUIRED_GROUPS = (
+    "cuvslam",
+    "cuvgl",
+    "nvblox",
+    "mesh",
+    "occupancy",
+    "config",
+)
+REQUIRED_GROUPS = LEGACY_REQUIRED_GROUPS + ("optimized_frames",)
 MAPPING_IMAGE_TOPICS = tuple(
     f"/{pair}_stereo_camera/{side}/image_raw"
     for pair in ("front", "left", "right", "back")
@@ -112,7 +120,9 @@ def bag_summary(
     }
 
 
-def require_runtime_files(map_dir: Path) -> None:
+def require_runtime_files(
+    map_dir: Path, *, require_shared_optimized_frames: bool = False
+) -> None:
     exact = (
         map_dir / "occupancy/map.yaml",
         map_dir / "occupancy/map.pgm",
@@ -142,6 +152,16 @@ def require_runtime_files(map_dir: Path) -> None:
         )
         if not found:
             raise RuntimeError(f"{label} is missing from {root}")
+    if require_shared_optimized_frames:
+        for path in (
+            map_dir / "optimized_frames/frames_meta.json",
+            map_dir / "optimized_frames/report.json",
+            map_dir / "optimized_frames/selection_report.json",
+        ):
+            if not path.is_file() or path.stat().st_size == 0:
+                raise RuntimeError(
+                    f"shared optimized frame artifact is missing or empty: {path}"
+                )
 
 
 def mapping_validation_summary(path: Path) -> dict[str, object]:
@@ -194,13 +214,13 @@ def main() -> int:
     if not map_dir.is_dir():
         raise FileNotFoundError(f"map directory is missing: {map_dir}")
     assets = yaml.safe_load(args.assets.read_text(encoding="utf-8"))
-    require_runtime_files(map_dir)
+    require_runtime_files(map_dir, require_shared_optimized_frames=True)
     mapping_validation = mapping_validation_summary(args.mapping_validation)
     groups = {
         name: summarize_group(map_dir / name) for name in REQUIRED_GROUPS
     }
     manifest = {
-        "schema_version": 1,
+        "schema_version": 2,
         "map_name": map_dir.name,
         "created_unix_s": time.time(),
         "run_id": args.run_id,
@@ -232,7 +252,10 @@ def main() -> int:
             "native_depth_min_range_m": 0.4,
             "static_reconstruction_frame": "map",
             "final_occupancy_generation": (
-                "optimized_keyframe_offline_static_occupancy"
+                "shared_cuvslam_optimized_frames_offline_static_occupancy"
+            ),
+            "offline_pose_branching": (
+                "shared_cuvslam_metadata_to_cuvgl_and_nvblox"
             ),
         },
         "navigation_profile": {

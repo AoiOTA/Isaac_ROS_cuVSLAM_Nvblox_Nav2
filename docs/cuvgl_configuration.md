@@ -115,8 +115,8 @@ ros2 bag info /data/bags/warehouse_mapping
 ./scripts/run_mapping.sh --map warehouse_v1
 ```
 
-它执行闭环路线与 MCAP 采集、cuVSLAM/cuVGL 优化，然后按优化关键帧离线生成
-nvblox Mesh/occupancy；在线 nvblox 只保留为覆盖质检日志。
+它执行闭环路线与 MCAP 采集、cuVSLAM 全局优化，把优化位姿写入公共帧元数据，再分别生成
+cuVGL 与 nvblox Mesh/occupancy；在线 nvblox 只保留为覆盖质检日志。
 
 ## 5. 导出TensorRT引擎
 
@@ -151,13 +151,15 @@ RTX 4090实测生成约5.0 MB的ALIKED engine和约27.2 MB的LightGlue engine。
 
 > 当前 `kujiale_jackal_8cam` 工作流不采用本节的离线纯视觉 cuVSLAM 重算。四 Hawk
 > 建图由在线 VIO/cuVSLAM 保存数据库和 `GetAllPoses` 优化轨迹；工作流将该 TUM 转换为带
-> `map` frame 的 ROS odometry pose bag，再与同一 MCAP 传给 `rosbag_to_mapping_data`，避免
+> `map` frame 的 ROS odometry pose bag，再与同一 MCAP 传给 `rosbag_to_mapping_data`，生成
+> cuVGL 与 nvblox 共同消费的 `optimized_frames/frames_meta.json`，避免
 > TUM 直传在静止段的关键帧时间跳变。具体以 `scripts/create_vgl_map.sh` 和 `docs/mapping.md`
 > 为准。本节仅保留为通用离线数据集参考。
 
 > 同理，正式 occupancy 不使用 `create_map_offline.py` 的 `depth` 步骤：本机 Isaac ROS 4.5
 > 该入口只提供 ESS/FoundationStereo，而项目要求直接复用 MCAP 中的 Isaac Sim 原生深度。
-> 工作流改为用同一优化关键帧调用官方 `nvblox_ros fuse_cusfm`，不改变坐标解或传感器来源。
+> 工作流改为用同一公共 cuVSLAM 优化帧调用官方 `nvblox_ros fuse_cusfm`。nvblox 不依赖
+> cuVGL 二次选帧后的 metadata，因此不改变坐标解，也不会无意丢失深度融合帧。
 
 ```bash
 export ISAAC_ROS_WS=/absolute/path/to/ros2_ws

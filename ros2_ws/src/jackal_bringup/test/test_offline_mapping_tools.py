@@ -15,7 +15,9 @@ from prepare_native_depth_fusion import (  # noqa: E402
     nearest_target_index,
     safe_relative_image_path,
 )
+from check_visual_map_stage import require_same_pose  # noqa: E402
 from run_offline_nvblox_fusion import gflags  # noqa: E402
+from write_optimized_frames_report import analyze_frames_metadata  # noqa: E402
 
 
 def test_native_depth_conversion_is_metric_and_range_gated() -> None:
@@ -69,3 +71,51 @@ def test_nvblox_gflags_preserve_false_values() -> None:
     assert "--visualization=false" in arguments
     assert "--use_2d_esdf_mode" in arguments
     assert "--voxel_size=0.05" in arguments
+
+
+def test_shared_optimized_frames_require_complete_camera_groups() -> None:
+    parameters = {
+        str(index): {"sensor_meta_data": {"sensor_name": f"camera_{index}"}}
+        for index in range(8)
+    }
+    frames = [
+        {
+            "camera_params_id": str(index),
+            "timestamp_microseconds": "100",
+            "image_name": f"camera_{index}/100.jpg",
+            "camera_to_world": {},
+        }
+        for index in range(8)
+    ]
+    summary = analyze_frames_metadata(
+        {
+            "camera_params_id_to_camera_params": parameters,
+            "keyframes_metadata": frames,
+        }
+    )
+    assert summary["camera_streams"] == 8
+    assert summary["synchronized_groups"] == 1
+    assert summary["frame_rows"] == 8
+
+    with pytest.raises(RuntimeError, match="incomplete"):
+        analyze_frames_metadata(
+            {
+                "camera_params_id_to_camera_params": parameters,
+                "keyframes_metadata": frames[:-1],
+            }
+        )
+
+
+def test_pose_comparison_normalizes_axis_angle_quaternions() -> None:
+    pose = {
+        "camera_to_world": {
+            "translation": {"x": 1.0, "y": 2.0, "z": 3.0},
+            "axis_angle": {
+                "x": 0.391294238491,
+                "y": -0.761829403124,
+                "z": 0.516278399713,
+                "angle_degrees": 137.123456789,
+            },
+        }
+    }
+    require_same_pose(pose, pose)

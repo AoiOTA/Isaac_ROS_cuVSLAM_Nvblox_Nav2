@@ -91,9 +91,9 @@ info "Recovering unfinished offline stages for ${MAP_NAME} from retained MCAP"
 if python3 "${PROJECT_ROOT}/tools/check_visual_map_stage.py" "${MAP_DIR}" \
   --source-bag "${BAG_DIR}" \
   >"${LOG_DIR}/visual-stage-recovery-check.log" 2>&1; then
-  info "Reusing the already-passed cuVSLAM/cuVGL stage"
+  info "Reusing the passed cuVSLAM shared-frame and cuVGL stage"
 else
-  info "Visual stage is incomplete; rebuilding cuVGL from the retained MCAP"
+  info "Visual stage is incomplete; rebuilding shared optimized frames and cuVGL from the retained MCAP"
   "${PROJECT_ROOT}/scripts/export_vgl_models.sh" "${PROJECT_ROOT}/data/models/vgl" \
     >"${LOG_DIR}/model-export-recovery.log" 2>&1
   if ! "${PROJECT_ROOT}/scripts/create_vgl_map.sh" "${BAG_DIR}" "${MAP_DIR}" \
@@ -116,7 +116,7 @@ if python3 "${PROJECT_ROOT}/tools/check_map_manifest.py" "${MAP_DIR}" \
   >"${LOG_DIR}/offline-artifacts-recovery-check.log" 2>&1; then
   info "Reusing the already-passed optimized nvblox/occupancy stage"
 else
-  info "Occupancy stage is incomplete; rebuilding it from optimized keyframes"
+  info "Occupancy stage is incomplete; rebuilding it from shared cuVSLAM optimized frames"
   if ! "${PROJECT_ROOT}/scripts/create_offline_occupancy_map.sh" \
     "${BAG_DIR}" "${MAP_DIR}" \
     >"${LOG_DIR}/offline-occupancy-recovery.log" 2>&1; then

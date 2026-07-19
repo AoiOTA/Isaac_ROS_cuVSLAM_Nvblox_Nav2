@@ -46,7 +46,7 @@ def test_runtime_map_artifacts_are_lfs_tracked_without_raw_bags() -> None:
 def test_map_manifest_requires_all_runtime_groups_and_no_capture_leaks() -> None:
     writer = (ROOT / "tools/write_map_manifest.py").read_text()
     checker = (ROOT / "tools/check_map_manifest.py").read_text()
-    assert 'REQUIRED_GROUPS = ("cuvslam", "cuvgl", "nvblox", "mesh", "occupancy", "config")' in writer
+    assert 'REQUIRED_GROUPS = LEGACY_REQUIRED_GROUPS + ("optimized_frames",)' in writer
     assert "MAPPING_IMAGE_TOPICS" in writer
     assert "MAPPING_REQUIRED_TOPICS" in writer
     assert "MAPPING_DIAGNOSTIC_TOPICS" in writer
@@ -89,6 +89,8 @@ def test_offline_map_generation_uses_temporary_ignored_workspace() -> None:
     assert "cuVGL synchronized frame groups" in script
     assert "create_map_offline.py" not in script
     assert 'require_file "${MAP_DIR}/cuvslam/data.mdb"' in script
+    assert "write_optimized_frames_report.py" in script
+    assert '"${MAP_DIR}/optimized_frames"' in script
     assert "prepare_vgl_runtime_config.py" in script
     assert 'rm -rf -- "${WORK}"' in script
     assert (ROOT / "tools/tum_to_pose_bag.py").is_file()
@@ -103,9 +105,12 @@ def test_final_occupancy_uses_optimized_native_depth_refusion() -> None:
         "run_offline_nvblox_fusion.py",
         "promote_offline_occupancy.py",
         "validate_acceptance_routes.py",
-        "cuvgl/keyframes/frames_meta.json",
+        "optimized_frames/frames_meta.json",
+        "optimized_frames/report.json",
+        "--source-pose-report",
     ):
         assert token in script
+    assert "cuvgl/keyframes/frames_meta.json" not in script
     assert config["occupancy_fuser"]["mapping_type_static_occupancy"] is True
     assert config["occupancy_fuser"]["occupied_region_half_width_m"] == 0.025
     assert config["quality"]["minimum_known_fraction"] > 0.0
@@ -114,6 +119,7 @@ def test_final_occupancy_uses_optimized_native_depth_refusion() -> None:
     assert "nvblox_offline_static_occupancy_optimized_keyframes" in checker
     assert "offline occupancy parameter snapshot hash does not match" in checker
     assert "offline occupancy did not pass every topology route gate" in checker
+    assert "shared_cuvslam_optimized_map_frames" in checker
     assert "--artifacts-only" in checker
     assert "--require-optimized-occupancy" in checker
     mapping_runner = (ROOT / "scripts/run_mapping.sh").read_text()

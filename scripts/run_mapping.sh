@@ -345,12 +345,12 @@ fi
 python3 "${PROJECT_ROOT}/tools/check_visual_map_stage.py" "${MAP_DIR}" \
   --source-bag "${BAG_DIR}" \
   >"${LOG_DIR}/visual-stage-check.log" 2>&1 || \
-  die "cuVSLAM/cuVGL stage validation failed; see ${LOG_DIR}/visual-stage-check.log"
+  die "cuVSLAM shared-frame/cuVGL stage validation failed; see ${LOG_DIR}/visual-stage-check.log"
 if ! "${PROJECT_ROOT}/scripts/create_offline_occupancy_map.sh" \
   "${BAG_DIR}" "${MAP_DIR}" \
   >"${LOG_DIR}/offline-occupancy.log" 2>&1; then
   info "Map was not promoted: optimized native-depth nvblox fusion failed."
-  info "The indexed MCAP, cuVSLAM and cuVGL artifacts were retained."
+  info "The indexed MCAP, cuVSLAM shared frames and cuVGL artifacts were retained."
   info "Detailed fusion log: ${LOG_DIR}/offline-occupancy.log"
   if [[ "${MAPPING_MODE}" == "interactive" ]]; then
     info "After correcting the fusion pipeline, resume without remapping:"

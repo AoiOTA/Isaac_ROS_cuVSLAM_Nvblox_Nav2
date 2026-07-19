@@ -62,8 +62,8 @@ git lfs pull
 1. 停车并安全结束 MCAP；
 2. 保存在线 nvblox 作为覆盖检查预览，同时保存 cuVSLAM 数据库与全局优化轨迹；
 3. 检查轨迹时长、位姿数、闭环和平面几何，随后关闭 Isaac Sim 和 RViz；
-4. 从同一优化轨迹与 8 路数据生成 cuVGL keyframes、vocabulary 和 BoW index；
-5. 按 cuVGL 优化关键帧从 MCAP 抽取 front Hawk 原生深度，离线重新融合 TSDF mesh；
+4. 将 cuVSLAM 全局优化轨迹写入公共 `optimized_frames` 元数据，再由该公共帧集生成 cuVGL keyframes、vocabulary 和 BoW index；
+5. nvblox 独立从同一公共优化帧集匹配 MCAP 中的 front Hawk 原生深度，离线重新融合 TSDF mesh；cuVGL 不是 nvblox 的位姿源；
 6. 以静态概率占据模式生成最终 `map.yaml/map.pgm`，执行覆盖比例和三条固定区域连通性门禁；
 7. 冻结离线融合/路线参数并写入带文件哈希的 `manifest.json`，默认保留原始 MCAP 供复现和重新调参。
 

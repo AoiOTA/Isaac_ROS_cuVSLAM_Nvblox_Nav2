@@ -11,6 +11,7 @@ from pathlib import Path
 import yaml
 
 from write_map_manifest import (
+    LEGACY_REQUIRED_GROUPS,
     PROJECT_ROOT,
     REQUIRED_GROUPS,
     require_runtime_files,
@@ -96,11 +97,39 @@ def validate_occupancy_yaml(map_dir: Path) -> None:
     native_report = json.loads(native_report_path.read_text(encoding="utf-8"))
     if not isinstance(input_report, dict) or native_report != input_report:
         raise RuntimeError("native-depth extraction provenance does not match fusion")
-    if int(input_report.get("schema_version", 1)) >= 2:
+    input_schema = int(input_report.get("schema_version", 1))
+    if input_schema >= 3:
+        if input_report.get("source_pose_role") != (
+            "shared_cuvslam_optimized_map_frames"
+        ):
+            raise RuntimeError("offline occupancy did not use shared cuVSLAM poses")
+        frames_meta = map_dir / "optimized_frames/frames_meta.json"
+        frames_digest = hashlib.sha256(frames_meta.read_bytes()).hexdigest()
+        if input_report.get("source_frames_meta_sha256") != frames_digest:
+            raise RuntimeError("occupancy metadata hash does not match optimized frames")
+        pose_report_path = map_dir / "optimized_frames/report.json"
+        pose_report = json.loads(pose_report_path.read_text(encoding="utf-8"))
+        pose_report_digest = hashlib.sha256(pose_report_path.read_bytes()).hexdigest()
+        if input_report.get("source_pose_report_sha256") != pose_report_digest:
+            raise RuntimeError("occupancy optimized-frame provenance hash does not match")
+        if (
+            pose_report.get("status") != "passed"
+            or pose_report.get("pose_role")
+            != "shared_cuvslam_optimized_map_frames"
+            or pose_report.get("frames_meta_sha256") != frames_digest
+        ):
+            raise RuntimeError("optimized-frame provenance is invalid")
+        optimized_poses = map_dir / "cuvslam/optimized_poses.tum"
+        optimized_pose_digest = hashlib.sha256(optimized_poses.read_bytes()).hexdigest()
+        if pose_report.get("source_optimized_poses_sha256") != optimized_pose_digest:
+            raise RuntimeError("optimized frames do not match the cuVSLAM trajectory")
+    elif input_schema >= 2:
+        # Schema 2 maps predate the explicit shared-frame branch. Retain read
+        # compatibility for already-created maps while all new maps use v3.
         frames_meta = map_dir / "cuvgl/keyframes/frames_meta.json"
         frames_digest = hashlib.sha256(frames_meta.read_bytes()).hexdigest()
         if input_report.get("source_frames_meta_sha256") != frames_digest:
-            raise RuntimeError("occupancy keyframe metadata hash does not match cuVGL")
+            raise RuntimeError("legacy occupancy keyframe metadata hash does not match cuVGL")
     config_snapshot = map_dir / "config/offline_mapping.yaml"
     if not config_snapshot.is_file():
         raise RuntimeError("offline occupancy parameter snapshot is missing")
@@ -206,8 +235,9 @@ def main() -> int:
     if not manifest_path.is_file():
         raise FileNotFoundError(f"map manifest is missing: {manifest_path}")
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    if not isinstance(manifest, dict) or manifest.get("schema_version") != 1:
+    if not isinstance(manifest, dict) or manifest.get("schema_version") not in (1, 2):
         raise RuntimeError("unsupported map manifest schema")
+    manifest_schema = int(manifest["schema_version"])
     if manifest.get("map_name") != map_dir.name:
         raise RuntimeError("manifest map_name does not match its directory")
     require_fields(
@@ -219,13 +249,18 @@ def main() -> int:
         "navigation_profile",
     )
     validate_assets(manifest)
-    require_runtime_files(map_dir)
+    require_runtime_files(
+        map_dir, require_shared_optimized_frames=manifest_schema >= 2
+    )
     validate_occupancy_yaml(map_dir)
 
     recorded_groups = manifest.get("artifact_groups")
     if not isinstance(recorded_groups, dict):
         raise RuntimeError("manifest artifact_groups is missing")
-    for name in REQUIRED_GROUPS:
+    artifact_groups = (
+        REQUIRED_GROUPS if manifest_schema >= 2 else LEGACY_REQUIRED_GROUPS
+    )
+    for name in artifact_groups:
         actual = summarize_group(map_dir / name)
         if recorded_groups.get(name) != actual:
             raise RuntimeError(f"map artifact group changed after generation: {name}")

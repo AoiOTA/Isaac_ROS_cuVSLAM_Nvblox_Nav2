@@ -33,7 +33,7 @@ map -> odom -> base_link -> four Hawk optical frames + front IMU + wheels
 - `robot_state_publisher` 独占 `base_link` 以下固定 TF。
 - cuVSLAM 发布跟踪里程计；导航时关闭其直接 `map -> odom`，由 `navigation_tf_bridge` 组合 VGL map anchor 与 cuVSLAM odom 后独占发布。
 - wheel odometry 与 `/ground_truth/odometry` 不发布主 TF，也不作为正式定位输入。
-- 导航滚动 nvblox 在 `odom` 中重建；最终 occupancy 按优化关键帧离线生成并位于 `map`。
+- 导航滚动 nvblox 在 `odom` 中重建；最终 occupancy 从 cuVSLAM 公共优化帧离线生成并位于 `map`，不依赖 cuVGL 的二次关键帧筛选。
 
 ## 感知与定位
 
