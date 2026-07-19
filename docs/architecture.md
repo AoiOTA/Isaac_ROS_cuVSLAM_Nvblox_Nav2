@@ -47,7 +47,7 @@ map -> odom -> base_link -> four Hawk optical frames + front IMU + wheels
 front 32FC1 depth ──> live nvblox TSDF/ESDF (mapping QC preview)
                    ├─> optimized-keyframe offline TSDF + static occupancy
                    ├─> raw LaserScan ──> Collision Monitor
-                   └─> TF-aligned scan/points ──> Nav2 obstacle layers
+                   └─> static ESDF slice ──> Nav2 local nvblox layer
 ```
 
 所有 Hawk 相机在 session layer 中使用与 `rectified_images=true` 一致的 pinhole 投影。源 Hawk USD 保持不变。图像为 `1280×800 @ 10 Hz`，front depth 为 `640×400 @ 10 Hz`，front IMU 为与当前 PhysX 步频一致的 `60 Hz`。
@@ -61,11 +61,12 @@ front native depth，不使用 LiDAR 或双目深度网络。`/front_depth/scan[
 ## 导航与控制
 
 ```text
-occupancy map ──> global Static/Obstacle/Inflation costmap
-nvblox slice + front scan ──> local Nvblox/Obstacle/Inflation costmap
+occupancy map ──> global Static/Inflation costmap
+nvblox slice ──> local Nvblox/Inflation costmap
+front scan ──> independent Collision Monitor safety envelope
 
-SmacPlanner2D
-  -> MPPI DiffDrive (10 Hz, 20 x 0.1 s, batch 500, vx 0..0.75)
+SmacPlannerLattice (5 cm differential primitives, SE(2) footprint, no reverse)
+  -> MPPI DiffDrive (10 Hz, 24 x 0.1 s, batch 750, vx 0..0.75)
   -> /cmd_vel_nav_raw
   -> Velocity Smoother
   -> /cmd_vel_smoothed

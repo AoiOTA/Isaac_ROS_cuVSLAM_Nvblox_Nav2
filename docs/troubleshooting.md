@@ -83,9 +83,22 @@ Read the five-second `Goal progress` lines in `test-runner.log`. They show map p
 
 The accepted tuning uses a 0.15 temperature, 0.30 linear sampling deviation, stronger Goal/PathFollow critics, an 0.08 m/s/rad/s deadband critic, and bounded acceleration/jerk downstream. Keep footprint collision checking and Collision Monitor enabled when changing these weights.
 
-## SmacPlanner2D prints an inflation error while planning succeeds
+## MPPI repeatedly reports `Optimizer fail to compute path` in a doorway
 
-ROS 2 Jazzy Nav2 1.3.12 `SmacPlanner2D` constructs its 2D collision checker with `radius=true` and `possible_collision_cost=0`. In this release, `GridCollisionChecker::setFootprint()` logs the generic non-circular inflation error before it evaluates the radius fast path. The project global costmap does contain a 1.0 m InflationLayer, and both real three-goal runs completed. Treat the single configure-time message as an upstream 2D false positive; do not hide real repeated planning, collision, or costmap errors.
+First inspect the robot centre and all four footprint corners in
+`/local_costmap/costmap_raw`. A centre cost of 253 or a footprint corner cost of
+254 means the robot has already entered the inscribed/lethal ESDF region; MPPI
+will correctly reject every candidate because all trajectories start in
+collision. Clearing the costmap cannot remove observed nvblox geometry, and a
+Spin recovery can also fail from the same occupied footprint.
+
+The current profile prevents this state with the 5 cm differential State
+Lattice planner (full SE(2) rectangular-footprint checks), a 0.55 m / 5.0
+inflation potential, and MPPI `ObstaclesCritic` with a 0.10 m preferred margin.
+Do not switch back to `SmacPlanner2D` for this rectangular Jackal: it cannot
+validate the chassis orientation while turning through a narrow door. If a
+fresh run still starts inside cost 253/254, inspect nvblox slice thickness and
+map/odom alignment before reducing the physical footprint.
 
 ## RViz reports occasional base_link message-filter queue drops
 

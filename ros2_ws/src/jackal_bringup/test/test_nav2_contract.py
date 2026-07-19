@@ -24,7 +24,7 @@ def collect_values(value: object) -> set[str]:
     return found
 
 
-def test_nav2_uses_diff_drive_mppi_and_smac_2d() -> None:
+def test_nav2_uses_diff_drive_mppi_and_forward_state_lattice() -> None:
     config = params()
     controller_params = config["controller_server"]["ros__parameters"]
     assert controller_params["odom_topic"] == "/wheel/odometry"
@@ -32,9 +32,9 @@ def test_nav2_uses_diff_drive_mppi_and_smac_2d() -> None:
     planner = config["planner_server"]["ros__parameters"]["GridBased"]
     assert controller["plugin"] == "nav2_mppi_controller::MPPIController"
     assert controller["motion_model"] == "DiffDrive"
-    assert controller["time_steps"] == 20
+    assert controller["time_steps"] == 24
     assert controller["model_dt"] == 0.1
-    assert controller["batch_size"] == 500
+    assert controller["batch_size"] == 750
     assert controller["vx_max"] == 0.75
     assert controller["vx_min"] == 0.0
     assert controller["wz_max"] == 1.20
@@ -43,16 +43,30 @@ def test_nav2_uses_diff_drive_mppi_and_smac_2d() -> None:
     assert controller["temperature"] == 0.30
     assert controller["GoalCritic"]["cost_weight"] >= 5.0
     assert controller["PreferForwardCritic"]["enabled"] is True
-    assert controller["PathAlignCritic"]["offset_from_furthest"] == 8
-    assert controller["PathAlignCritic"]["max_path_occupancy_ratio"] == 0.40
-    assert controller["PathFollowCritic"]["offset_from_furthest"] == 10
-    assert controller["PathAngleCritic"]["offset_from_furthest"] == 8
-    assert controller["PathAngleCritic"]["max_angle_to_furthest"] == 0.45
+    assert controller["wz_std"] == 1.0
+    assert "ObstaclesCritic" in controller["critics"]
+    assert "CostCritic" not in controller["critics"]
+    obstacles = controller["ObstaclesCritic"]
+    assert obstacles["consider_footprint"] is True
+    assert obstacles["collision_margin_distance"] == 0.10
+    assert obstacles["critical_weight"] >= 20.0
+    assert controller["PathAlignCritic"]["offset_from_furthest"] == 12
+    assert controller["PathAlignCritic"]["max_path_occupancy_ratio"] == 0.15
+    assert controller["PathAlignCritic"]["use_path_orientations"] is True
+    assert controller["PathFollowCritic"]["offset_from_furthest"] == 12
+    assert controller["PathAngleCritic"]["offset_from_furthest"] == 12
+    assert controller["PathAngleCritic"]["mode"] == 2
     progress = config["controller_server"]["ros__parameters"]["progress_checker"]
     assert progress["plugin"] == "nav2_controller::PoseProgressChecker"
     assert progress["required_movement_angle"] > 0.0
-    assert planner["plugin"] == "nav2_smac_planner::SmacPlanner2D"
+    assert planner["plugin"] == "nav2_smac_planner::SmacPlannerLattice"
     assert planner["allow_unknown"] is False
+    assert planner["lattice_filepath"].endswith(
+        "/5cm_resolution/0.5m_turning_radius/diff/output.json"
+    )
+    assert planner["allow_reverse_expansion"] is False
+    assert planner["cost_penalty"] == 3.0
+    assert planner["rotation_penalty"] >= 5.0
 
 
 def test_nav2_launch_keeps_mppi_velocity_feedback_on_wheel_odometry() -> None:
@@ -79,10 +93,14 @@ def test_costmap_and_visual_safety_sources_are_wired() -> None:
     assert local["nvblox_layer"]["nvblox_map_slice_topic"] == "/nvblox_node/static_map_slice"
     assert "obstacle_layer" not in local
     assert local["footprint_padding"] == 0.005
+    assert local["inflation_layer"]["inflation_radius"] == 0.55
+    assert local["inflation_layer"]["cost_scaling_factor"] == 5.0
     assert global_map["global_frame"] == "map"
     assert global_map["plugins"] == ["static_layer", "inflation_layer"]
     assert "obstacle_layer" not in global_map
     assert global_map["footprint_padding"] == 0.005
+    assert global_map["inflation_layer"]["inflation_radius"] == 0.55
+    assert global_map["inflation_layer"]["cost_scaling_factor"] == 5.0
     assert local["update_frequency"] == 12.0
     assert global_map["update_frequency"] == 5.0
 

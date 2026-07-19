@@ -18,7 +18,7 @@ occupancy 路线和零物理碰撞门禁。手动 GUI/RViz 建图与 cuVGL 自�
 | 导航 | `navigation_6cam`：只发布 front / left / right，后向 render product 和 ROS publisher 均不创建 |
 | nvblox | 只使用 front Hawk 左目产生的原生模拟深度，不使用 lidar、ESS 或 FoundationStereo |
 | 场景运动 | 仅静态环境；动态 profile 会直接报错 |
-| Nav2 | SmacPlanner2D + MPPI DiffDrive，只允许非负前向速度；恢复树没有 BackUp/DriveOnHeading |
+| Nav2 | 差速 State Lattice（矩形 SE(2) footprint）+ MPPI DiffDrive，只允许非负前向速度；恢复树没有 BackUp/DriveOnHeading |
 | 验收 | 无碰撞通行次数 / 有效实验次数 ≥ 95%，且有效实验至少 20 次 |
 | 性能 | 等实际 ROS 工作负载就绪后按墙钟自适应预热/采样；无 600 帧基线，无文档示例 KPI 门槛 |
 
@@ -31,8 +31,8 @@ occupancy 路线和零物理碰撞门禁。手动 GUI/RViz 建图与 cuVGL 自�
   mapping: 8 RGB ──> cuVSLAM + offline cuVGL map
   navigation: 6 RGB ──> cuVSLAM + cuVGL localization
 
-front native depth ──> nvblox static TSDF/ESDF
-                   └─> LaserScan ──> Nav2 costmaps + Collision Monitor
+front native depth ──> nvblox static TSDF/ESDF ──> Nav2 local costmap
+                   └─> LaserScan ──> Collision Monitor
 
 Nav2 ──> Velocity Smoother ──> Collision Monitor ──> Command Guard
      ──> /cmd_vel_sim ──> four-wheel differential graph
