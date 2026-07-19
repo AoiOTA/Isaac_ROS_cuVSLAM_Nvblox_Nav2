@@ -50,7 +50,11 @@ def summarize_group(root: Path) -> dict[str, object]:
     }
 
 
-def bag_summary(path: Path) -> dict[str, object]:
+def bag_summary(
+    path: Path,
+    retention_policy: str = "workflow_temporary",
+    archive_path: str | None = None,
+) -> dict[str, object]:
     metadata_path = path / "metadata.yaml"
     if not metadata_path.is_file():
         raise FileNotFoundError(f"rosbag metadata is missing: {metadata_path}")
@@ -72,6 +76,8 @@ def bag_summary(path: Path) -> dict[str, object]:
             topic: topics[topic] for topic in MAPPING_IMAGE_TOPICS
         },
         "retained_in_repository": False,
+        "retention_policy": retention_policy,
+        "local_archive": archive_path,
     }
 
 
@@ -138,6 +144,12 @@ def main() -> int:
         "--generation-command",
         default="./scripts/run_mapping.sh --map {map_name} --interactive",
     )
+    parser.add_argument(
+        "--capture-retention",
+        choices=("kept_local", "discarded_after_generation"),
+        default="discarded_after_generation",
+    )
+    parser.add_argument("--capture-archive", default=None)
     args = parser.parse_args()
     map_dir = args.map_dir.resolve()
     if not map_dir.is_dir():
@@ -180,6 +192,9 @@ def main() -> int:
             "native_depth_source": "front_hawk_left",
             "native_depth_min_range_m": 0.4,
             "static_reconstruction_frame": "map",
+            "final_occupancy_generation": (
+                "optimized_keyframe_offline_static_occupancy"
+            ),
         },
         "navigation_profile": {
             "name": "navigation_6cam",
@@ -193,7 +208,11 @@ def main() -> int:
             "isaac_ros_release": "4.5",
             "isaac_sim_version": "6.0.1",
         },
-        "capture": bag_summary(args.bag_dir.resolve()),
+        "capture": bag_summary(
+            args.bag_dir.resolve(),
+            retention_policy=args.capture_retention,
+            archive_path=args.capture_archive,
+        ),
         "artifact_groups": groups,
         "generation_command": args.generation_command.format(map_name=map_dir.name),
         "git_lfs_required": True,

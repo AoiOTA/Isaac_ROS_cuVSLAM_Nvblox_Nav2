@@ -78,7 +78,9 @@ git lfs install
 
 人工模式使用 `W/S` 前后、`A/D` 转向、`Space` 急停；松键超过 0.18 秒会自动停车，按 `Q` 停车并保存。自动模式只发非负线速度，并检查闭环完成度、cuVSLAM 跟踪、横向偏差和 PhysX 接触。
 
-流程会临时录制 8 路同步 MCAP，从同一份数据生成 cuVSLAM 与 cuVGL 地图，并保存 nvblox、mesh、occupancy 和冻结配置。只有全部步骤成功后才删除 raw bag 与离线中间产物。默认输出：
+流程会录制 8 路同步 MCAP，先生成 cuVSLAM/cuVGL 优化位姿，再用对应的 front 原生深度
+离线重建 nvblox mesh 与静态 occupancy；在线 nvblox 只作覆盖预览。成功后清理抽帧中间
+产物，raw bag 默认保留用于复现（显式 `--discard-bag` 才删除）。默认输出：
 
 ```text
 data/maps/kujiale_jackal_8cam/

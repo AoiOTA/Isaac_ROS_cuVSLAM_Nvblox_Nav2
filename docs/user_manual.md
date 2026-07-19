@@ -29,7 +29,8 @@ git lfs install
 
 该模式沿 `config/mapping_coverage.yaml` 的约 38 m 闭环低速行驶，不倒车，并在开放区域
 扫描。参考分支的旧 occupancy 只用于规划路线，绝不会作为新地图输出。八路图像、
-cuVSLAM/cuVGL、nvblox、mesh 和 occupancy 都来自本轮实时运行。
+cuVSLAM/cuVGL、nvblox、mesh 和 occupancy 都来自本轮采集；最终 nvblox 与 occupancy
+使用回环优化后的关键帧离线统一重建，不直接保存在线预览。
 
 需要人工控制和 GUI 时运行：
 
@@ -65,11 +66,13 @@ cuVSLAM/cuVGL、nvblox、mesh 和 occupancy 都来自本轮实时运行。
 
 - 8 相机 cuVSLAM 数据库；
 - 8 相机 cuVGL keyframes、vocabulary 和 BoW index；
-- front 原生深度生成的 nvblox `.nvblx` 与 PLY mesh；
+- front 原生深度按优化位姿重新融合的 nvblox `.nvblx` 与 PLY mesh；
 - Nav2 occupancy `map.yaml` / `map.pgm`；
 - cuVGL 同步配置与 `manifest.json`。
 
-成功后 raw bag 和 EDEx/离线中间目录自动删除。地图目录非空时脚本拒绝覆盖，重建请使用新地图名或先由用户自行归档旧地图。
+成功后 EDEx/抽帧中间目录自动删除，raw bag 默认保留在
+`data/bags/<地图名>_<run-id>/capture`；确认地图和导航后可自行归档，或在建图命令显式传
+`--discard-bag`。地图目录非空时脚本拒绝覆盖，重建请使用新地图名或先由用户自行归档旧地图。
 
 ## 3. 地图检查与目标校准
 

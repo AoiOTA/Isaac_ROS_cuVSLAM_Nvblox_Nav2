@@ -115,7 +115,8 @@ ros2 bag info /data/bags/warehouse_mapping
 ./scripts/run_mapping.sh --map warehouse_v1
 ```
 
-它执行闭环路线、MCAP、cuVSLAM/nvblox/Mesh/occupancy保存和离线视觉地图生成。
+它执行闭环路线与 MCAP 采集、cuVSLAM/cuVGL 优化，然后按优化关键帧离线生成
+nvblox Mesh/occupancy；在线 nvblox 只保留为覆盖质检日志。
 
 ## 5. 导出TensorRT引擎
 

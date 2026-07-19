@@ -95,6 +95,10 @@ def test_mapping_workflow_supports_guarded_manual_and_closed_loop_auto_capture()
         "mapping_topics_8cam.yaml",
         "recover_manual_map.sh",
         "offline cuVGL conversion failed",
+        "create_offline_occupancy_map.sh",
+        "optimized native-depth nvblox fusion failed",
+        "online-preview",
+        "--keep-bag",
         "ros2 bag record --storage mcap",
         "--storage-preset-profile zstd_fast",
         'rm -rf -- "${BAG_ROOT}"',
@@ -104,6 +108,7 @@ def test_mapping_workflow_supports_guarded_manual_and_closed_loop_auto_capture()
     recovery = (ROOT / "scripts/recover_manual_map.sh").read_text()
     for token in (
         "create_vgl_map.sh",
+        "create_offline_occupancy_map.sh",
         "write_map_manifest.py",
         "check_map_manifest.py",
         "offline-map-recovery.log",
@@ -168,6 +173,7 @@ def test_nvblox_consumes_only_front_native_simulated_depth() -> None:
     assert config["num_cameras"] == 1
     assert config["use_depth"] is True
     assert config["use_lidar"] is False
+    assert config["static_mapper"]["esdf_integrator_max_site_distance_vox"] == 1.0
     sensors = yaml.safe_load((ROOT / "config/sensors.yaml").read_text())
     assert sensors["lidar_enabled"] is False
     sensor_source = (ROOT / "isaac_sim/jackal_sim/sensors.py").read_text()

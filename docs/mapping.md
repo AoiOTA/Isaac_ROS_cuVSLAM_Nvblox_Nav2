@@ -77,16 +77,20 @@ live 8-camera VIO/cuVSLAM
   -> map-frame odometry pose bag + rectified MCAP frames
   -> ALIKED features + cuVGL vocabulary/BoW index
 
-same live cuVSLAM map-frame pose + front native depth (near clip 0.40 m)
-  -> nvblox static map + mesh + 2D ESDF
-  -> occupancy map (ESDF distance <= 0 only; Nav2 applies footprint/inflation)
+live cuVSLAM pose + front native depth
+  -> online nvblox mesh/ESDF coverage preview only
+
+globally optimized cuVGL keyframes + matching front native depth (near clip 0.40 m)
+  -> offline nvblox TSDF mesh pass (repeated-evidence weight gate)
+  -> offline nvblox static occupancy pass
+  -> occupancy coverage gates (Nav2 applies footprint/inflation later)
 
 all runtime groups
   -> manifest.json
-  -> delete temporary MCAP and offline workspace
+  -> delete temporary extracted images; retain indexed MCAP by default
 ```
 
-cuVSLAM、cuVGL、nvblox 和 occupancy 必须来自同一次在线 SLAM 解。项目不再用
+cuVSLAM、cuVGL、nvblox 和 occupancy 必须来自同一次采集与同一最终优化 SLAM 解。项目不再用
 离线纯视觉 cuVSLAM 覆盖在线 VIO 数据库；这种混用在平面 A/B 中曾产生 `1.92 m`
 闭环误差。`create_vgl_map.sh` 将在线 `GetAllPoses` 导出的 TUM 轨迹转换成带 `map` frame 的
 标准 ROS odometry pose bag，再传给 `rosbag_to_mapping_data` 选帧。这既保留了在线全局优化
@@ -96,13 +100,23 @@ cuVSLAM、cuVGL、nvblox 和 occupancy 必须来自同一次在线 SLAM 解。�
 [Isaac ROS Visual SLAM API](https://nvidia-isaac-ros.github.io/repositories_and_packages/isaac_ros_visual_slam/isaac_ros_visual_slam/index.html)
 与 [Isaac Mapping ROS](https://nvidia-isaac-ros.github.io/repositories_and_packages/isaac_ros_mapping_and_localization/isaac_mapping_ros/index.html)。
 
-静态 nvblox 使用 `global_frame=map`，否则连续 `odom` 轨迹会与回环优化后的 cuVSLAM/
-cuVGL 地图逐渐分离。导航时的动态滚动 nvblox 是另一份配置，仍使用连续 `odom`。
-PGM 保存器遵循官方 nvblox Nav2 layer 的语义，只把 `distance <= 0` 记为实体障碍；
-车体 footprint 和 inflation 只由 Nav2/路线验证层施加一次。
+在线静态 nvblox 使用 `global_frame=map`，但它只用于 RViz 覆盖检查。回环发生时，
+`map→odom` 的历史修正不会重新融合旧体素；因此最终 mesh 和 occupancy 都从 MCAP 按优化
+关键帧重建。最终 2D 图使用 nvblox 静态概率占据融合，2.5 cm 端点半带形成单个 5 cm
+voxel 宽的表面，不包含车体 footprint 或 inflation。导航时的动态滚动 nvblox 是另一份配置，仍使用
+连续 `odom`；footprint 和 inflation 只由 Nav2/路线验证层施加一次。
 
-任一门槛失败时，目标地图不会写 manifest，临时 MCAP 也不会删除，便于从同一原始
-数据复盘。只有所有运行时组、轨迹门槛和 artifact hash 都成功后才清理 raw 数据。
+`config/offline_mapping.yaml` 冻结原生深度范围、同步窗、TSDF 与静态占据参数。质量门禁
+要求地图至少 35% 为已知自由、至少 50% 为已知区域且未知不超过 50%；这些是场景覆盖
+比例，不是固定帧数。门禁会拒绝此前仅 19.8% 自由、69.2% 未知的在线图。每次结果还在
+`occupancy/save_report.json` 记录三类像素、连通分量和全部检查项；随后使用与正式验收
+一致的 footprint 代理检查北房间、南走廊、东房间均与出生点连通，结果写入
+`occupancy/route_validation.json`。本次离线参数与路线契约分别冻结在地图的 `config/`
+目录，manifest 哈希可检测事后改动。
+
+任一门槛失败时，目标地图不会写 manifest，MCAP 也不会删除，便于从同一原始数据复盘。
+成功时默认把原始包保留在 `data/bags/<地图名>_<run-id>/capture`；只有显式传入
+`--discard-bag` 才会删除，临时抽帧目录则始终在成功后清理。
 
 ## 运行时地图
 

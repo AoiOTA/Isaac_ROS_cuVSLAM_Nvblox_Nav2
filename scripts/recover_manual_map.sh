@@ -67,11 +67,7 @@ from pathlib import Path
 
 map_dir = Path(sys.argv[1])
 validation_path = Path(sys.argv[2])
-for relative in (
-    "cuvslam/save_report.json",
-    "nvblox/save_report.json",
-    "occupancy/save_report.json",
-):
+for relative in ("cuvslam/save_report.json",):
     path = map_dir / relative
     report = json.loads(path.read_text(encoding="utf-8"))
     if report.get("status") != "passed":
@@ -97,10 +93,20 @@ if ! "${PROJECT_ROOT}/scripts/create_vgl_map.sh" "${BAG_DIR}" "${MAP_DIR}" \
   tail -30 "${LOG_DIR}/offline-map-recovery.log" >&2 || true
   exit 1
 fi
+if ! "${PROJECT_ROOT}/scripts/create_offline_occupancy_map.sh" \
+  "${BAG_DIR}" "${MAP_DIR}" \
+  >"${LOG_DIR}/offline-occupancy-recovery.log" 2>&1; then
+  info "Optimized occupancy recovery failed; retained MCAP and visual maps were preserved."
+  info "Detailed log: ${LOG_DIR}/offline-occupancy-recovery.log"
+  tail -30 "${LOG_DIR}/offline-occupancy-recovery.log" >&2 || true
+  exit 1
+fi
 
 python3 "${PROJECT_ROOT}/tools/write_map_manifest.py" "${MAP_DIR}" "${BAG_DIR}" \
   --run-id "${RUN_ID}" \
   --mapping-validation "${MAPPING_VALIDATION}" \
+  --capture-retention kept_local \
+  --capture-archive "${BAG_DIR}" \
   --generation-command "./scripts/recover_manual_map.sh --map {map_name}"
 python3 "${PROJECT_ROOT}/tools/check_map_manifest.py" "${MAP_DIR}"
 info "Map recovery complete: ${MAP_DIR}"

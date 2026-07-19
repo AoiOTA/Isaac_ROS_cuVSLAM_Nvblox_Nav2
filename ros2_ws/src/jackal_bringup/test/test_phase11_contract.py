@@ -63,7 +63,7 @@ def test_map_manifest_requires_all_runtime_groups_and_no_capture_leaks() -> None
     assert "--generation-command" in mapping_runner
     expected_command = (
         '"./scripts/run_mapping.sh --map {map_name} '
-        '--${MAPPING_MODE} ${SIM_MODE}"'
+        '--${MAPPING_MODE} ${SIM_MODE} --${BAG_RETENTION}-bag"'
     )
     assert expected_command in mapping_runner
 
@@ -90,6 +90,27 @@ def test_offline_map_generation_uses_temporary_ignored_workspace() -> None:
     assert 'rm -rf -- "${WORK}"' in script
     assert (ROOT / "tools/tum_to_pose_bag.py").is_file()
     assert (ROOT / "tools/prepare_vgl_sensor_bag.py").is_file()
+
+
+def test_final_occupancy_uses_optimized_native_depth_refusion() -> None:
+    script = (ROOT / "scripts/create_offline_occupancy_map.sh").read_text()
+    config = yaml.safe_load((ROOT / "config/offline_mapping.yaml").read_text())
+    for token in (
+        "prepare_native_depth_fusion.py",
+        "run_offline_nvblox_fusion.py",
+        "promote_offline_occupancy.py",
+        "validate_acceptance_routes.py",
+        "cuvgl/keyframes/frames_meta.json",
+    ):
+        assert token in script
+    assert config["occupancy_fuser"]["mapping_type_static_occupancy"] is True
+    assert config["occupancy_fuser"]["occupied_region_half_width_m"] == 0.025
+    assert config["quality"]["minimum_known_fraction"] > 0.0
+    assert "frame_count" not in config["quality"]
+    checker = (ROOT / "tools/check_map_manifest.py").read_text()
+    assert "nvblox_offline_static_occupancy_optimized_keyframes" in checker
+    assert "offline occupancy parameter snapshot hash does not match" in checker
+    assert "offline occupancy did not pass every topology route gate" in checker
 
 
 def test_performance_policy_is_adaptive_observation_not_a_fixed_kpi() -> None:

@@ -60,12 +60,17 @@ git lfs pull
 完成覆盖后，在键盘终端按一次 `Q`。此时不是立即退出，脚本还会自动执行：
 
 1. 停车并安全结束 MCAP；
-2. 保存 nvblox `.nvblx`、mesh 与 occupancy `map.yaml/map.pgm`；
-3. 保存在线 cuVSLAM 数据库与全局优化轨迹；
-4. 检查轨迹时长、位姿数、闭环和平面几何；
-5. 关闭 Isaac Sim 和 RViz；
-6. 从同一轨迹与 8 路数据生成 cuVGL keyframes、vocabulary 和 BoW index；
-7. 写入带文件哈希的 `manifest.json`，成功后删除临时 raw MCAP。
+2. 保存在线 nvblox 作为覆盖检查预览，同时保存 cuVSLAM 数据库与全局优化轨迹；
+3. 检查轨迹时长、位姿数、闭环和平面几何，随后关闭 Isaac Sim 和 RViz；
+4. 从同一优化轨迹与 8 路数据生成 cuVGL keyframes、vocabulary 和 BoW index；
+5. 按 cuVGL 优化关键帧从 MCAP 抽取 front Hawk 原生深度，离线重新融合 TSDF mesh；
+6. 以静态概率占据模式生成最终 `map.yaml/map.pgm`，执行覆盖比例和三条固定区域连通性门禁；
+7. 冻结离线融合/路线参数并写入带文件哈希的 `manifest.json`，默认保留原始 MCAP 供复现和重新调参。
+
+在线 nvblox 预览不会被直接提升为导航静态图。cuVSLAM 回环优化可能在采集结束时修正
+早期位姿，但已经写入在线 TSDF 的体素不会自动随之重投影，直接保存会形成双墙、拖影和
+过厚障碍。离线步骤统一使用最终 `camera_to_world` 位姿，并将 footprint 与 inflation 仍
+留给 Nav2；保存的占据图没有预膨胀。质量门禁依据实际覆盖比例，不使用固定 600 帧门槛。
 
 cuVGL 离线索引可能耗时较长。在终端出现以下内容之前不要关闭终端：
 
@@ -82,11 +87,11 @@ cuVSLAM 保存失败会直接打印累计平面路径、闭环误差和时长；
 `data/logs/mapping/<时间>/save-cuvslam.log` 与地图目录的 `cuvslam/save_report.json`。
 后续仿真/覆盖门禁失败则记录在 `mapping-validation.json`。
 
-临时 MCAP 使用可按时间索引的 `zstd_fast` 配置，以便离线 cuVGL 对齐所有四组 Hawk 图像；
+MCAP 使用可按时间索引的 `zstd_fast` 配置，以便离线 cuVGL 对齐所有四组 Hawk 图像；
 生成阶段还会要求至少 40 组同步关键帧。若这个质量门禁失败，不会写入 manifest，避免把只有
 少量关键帧的视觉定位图当作可用地图。
 
-若在线 cuVSLAM、nvblox 和占据栅格均已保存，但离线 cuVGL 转换失败，原始 MCAP 会保留，
+若在线 cuVSLAM 已保存，但离线 cuVGL 或优化位姿 occupancy 生成失败，原始 MCAP 会保留，
 不需要重新驾驶。修复转换问题后执行：
 
 ```bash
@@ -94,9 +99,9 @@ cuVSLAM 保存失败会直接打印累计平面路径、闭环误差和时长；
 ```
 
 恢复脚本会从八路图像中只保留完整同步组，运动时按位姿选关键帧，停车时用最大 `0.5 s`
-间隔的连续帧避免官方转换器失去同步，随后生成 cuVGL、写入 `manifest.json` 并运行地图
-完整性检查。只有看到 `Map recovery complete:` 或原流程中的 `Map complete:` 才表示地图
-可以进入导航流程。
+间隔的连续帧避免官方转换器失去同步，随后生成 cuVGL、用优化位姿重新融合原生深度、
+写入 `manifest.json` 并运行地图完整性检查。只有看到 `Map recovery complete:` 或原流程
+中的 `Map complete:` 才表示地图可以进入导航流程。
 
 随后检查地图：
 

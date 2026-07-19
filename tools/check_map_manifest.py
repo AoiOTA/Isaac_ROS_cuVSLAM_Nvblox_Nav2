@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 
@@ -69,8 +70,49 @@ def validate_occupancy_yaml(map_dir: Path) -> None:
         raise RuntimeError("occupancy artifact must be a passed map-frame nvblox slice")
     if float(report.get("obstacle_distance_m", float("nan"))) != 0.0:
         raise RuntimeError("occupancy artifact must not pre-inflate the nvblox ESDF")
-    if report.get("conversion_policy") != "nvblox_distance_le_zero_is_occupied":
-        raise RuntimeError("occupancy artifact has an unknown ESDF conversion policy")
+    policy = report.get("conversion_policy")
+    if policy == "nvblox_distance_le_zero_is_occupied":
+        return
+    if policy != "nvblox_offline_static_occupancy_optimized_keyframes":
+        raise RuntimeError("occupancy artifact has an unknown conversion policy")
+    if report.get("schema_version") != 2:
+        raise RuntimeError("offline occupancy artifact has an unsupported schema")
+    checks = report.get("checks")
+    if not isinstance(checks, dict) or not checks or not all(checks.values()):
+        raise RuntimeError("offline occupancy artifact did not pass every quality gate")
+    if report.get("failure_reasons"):
+        raise RuntimeError("offline occupancy artifact retains failure reasons")
+    fusion_report = map_dir / "nvblox/fusion_report.json"
+    if not fusion_report.is_file():
+        raise RuntimeError("offline occupancy provenance report is missing")
+    digest = hashlib.sha256(fusion_report.read_bytes()).hexdigest()
+    if report.get("fusion_report_sha256") != digest:
+        raise RuntimeError("offline occupancy provenance hash does not match")
+    fusion = json.loads(fusion_report.read_text(encoding="utf-8"))
+    config_snapshot = map_dir / "config/offline_mapping.yaml"
+    if not config_snapshot.is_file():
+        raise RuntimeError("offline occupancy parameter snapshot is missing")
+    config_digest = hashlib.sha256(config_snapshot.read_bytes()).hexdigest()
+    if fusion.get("config_sha256") != config_digest:
+        raise RuntimeError("offline occupancy parameter snapshot hash does not match")
+    route_config = map_dir / "config/offline_route_acceptance.yaml"
+    if not route_config.is_file():
+        raise RuntimeError("offline occupancy route contract snapshot is missing")
+    route_report_path = map_dir / "occupancy/route_validation.json"
+    if not route_report_path.is_file():
+        raise RuntimeError("offline occupancy route validation is missing")
+    route_report = json.loads(route_report_path.read_text(encoding="utf-8"))
+    routes = route_report.get("routes")
+    if (
+        route_report.get("status") != "passed"
+        or not isinstance(routes, list)
+        or not routes
+        or any(
+            not isinstance(route, dict) or not route.get("passed")
+            for route in routes
+        )
+    ):
+        raise RuntimeError("offline occupancy did not pass every topology route gate")
 
 
 def validate_assets(manifest: dict[str, object]) -> None:

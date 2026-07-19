@@ -6,7 +6,7 @@
 
 - 自动运行双向闭环S形采集路线并录制MCAP。
 - 在线保存cuVSLAM地图、nvblox地图、PLY Mesh和nvblox统计。
-- 将在线2D ESDF slice保存为Nav2 PGM/YAML occupancy map。
+- 将在线2D ESDF slice保存为阶段性验证图；正式 Nav2 PGM/YAML 由优化位姿离线重融合生成。
 - 使用官方`isaac_mapping_ros`生成EDEx、离线cuVSLAM和对齐地图帧。
 - 使用官方`isaac_ros_visual_mapping`生成ALIKED关键帧、BoW vocabulary和index。
 - 导出并缓存ALIKED与LightGlue TensorRT FP16引擎。

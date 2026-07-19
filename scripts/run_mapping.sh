@@ -15,6 +15,7 @@ MAP_NAME="kujiale_jackal_8cam"
 MAPPING_MODE=""
 SIM_MODE=""
 RVIZ=""
+BAG_RETENTION="keep"
 COVERAGE_CONFIG="${PROJECT_ROOT}/config/mapping_coverage.yaml"
 while (($#)); do
   case "$1" in
@@ -28,9 +29,11 @@ while (($#)); do
     --gui|--headless) SIM_MODE="$1"; shift ;;
     --rviz) RVIZ="true"; shift ;;
     --no-rviz) RVIZ="false"; shift ;;
+    --keep-bag) BAG_RETENTION="keep"; shift ;;
+    --discard-bag) BAG_RETENTION="discard"; shift ;;
     --coverage-config) COVERAGE_CONFIG="${2:?missing coverage config}"; shift 2 ;;
     -h|--help)
-      echo "Usage: ./scripts/run_mapping.sh [--map NAME] (--interactive | --auto) [--gui | --headless] [--rviz | --no-rviz]"
+      echo "Usage: ./scripts/run_mapping.sh [--map NAME] (--interactive | --auto) [--gui | --headless] [--rviz | --no-rviz] [--keep-bag | --discard-bag]"
       echo "Interactive mode defaults to Isaac Sim GUI + RViz and uses WASD/Q."
       echo "Auto mode defaults to headless/no-RViz and follows the checked closed-loop route."
       exit 0 ;;
@@ -207,13 +210,14 @@ BAG_PID=""
 ros2 bag info "${BAG_DIR}" >"${LOG_DIR}/rosbag-info.txt"
 grep -Fq "storage_identifier: mcap" "${BAG_DIR}/metadata.yaml" || die "bag is not MCAP"
 
-info "Saving nvblox binary map, mesh, rates and occupancy grid"
+info "Saving the live nvblox map as an online QC preview (not the final map)"
+mkdir -p "${LOG_DIR}/online-preview/nvblox" \
+  "${LOG_DIR}/online-preview/occupancy"
 ros2 run jackal_experiments nvblox_map_saver --ros-args \
-  -p output_dir:="${MAP_DIR}/nvblox" -p stem:=kujiale \
+  -p output_dir:="${LOG_DIR}/online-preview/nvblox" -p stem:=kujiale \
   >"${LOG_DIR}/save-nvblox.log" 2>&1
-install -m 0644 "${MAP_DIR}/nvblox/kujiale.ply" "${MAP_DIR}/mesh/kujiale.ply"
 ros2 run jackal_experiments occupancy_saver --ros-args \
-  -p use_sim_time:=true -p output_dir:="${MAP_DIR}/occupancy" \
+  -p use_sim_time:=true -p output_dir:="${LOG_DIR}/online-preview/occupancy" \
   -p obstacle_distance_m:=0.0 \
   >"${LOG_DIR}/save-occupancy.log" 2>&1
 
@@ -332,16 +336,47 @@ if ! "${PROJECT_ROOT}/scripts/create_vgl_map.sh" "${BAG_DIR}" "${MAP_DIR}" \
   fi
   die "cuVGL map is incomplete; do not start navigation until 'Map complete:' is printed."
 fi
-python3 "${PROJECT_ROOT}/tools/write_map_manifest.py" "${MAP_DIR}" "${BAG_DIR}" \
+if ! "${PROJECT_ROOT}/scripts/create_offline_occupancy_map.sh" \
+  "${BAG_DIR}" "${MAP_DIR}" \
+  >"${LOG_DIR}/offline-occupancy.log" 2>&1; then
+  info "Map was not promoted: optimized native-depth nvblox fusion failed."
+  info "The indexed MCAP, cuVSLAM and cuVGL artifacts were retained."
+  info "Detailed fusion log: ${LOG_DIR}/offline-occupancy.log"
+  if [[ "${MAPPING_MODE}" == "interactive" ]]; then
+    info "After correcting the fusion pipeline, resume without remapping:"
+    info "./scripts/recover_manual_map.sh --map ${MAP_NAME} --bag ${BAG_DIR} --run-id ${RUN_ID}"
+  fi
+  die "offline occupancy is incomplete; do not start navigation until 'Map complete:' is printed."
+fi
+MANIFEST_BAG_DIR="${BAG_DIR}"
+MANIFEST_CAPTURE_ARGS=(--capture-retention discarded_after_generation)
+if [[ "${BAG_RETENTION}" == "keep" ]]; then
+  BAG_ARCHIVE="${PROJECT_ROOT}/data/bags/${MAP_NAME}_${RUN_ID}"
+  [[ ! -e "${BAG_ARCHIVE}" ]] || die "bag archive already exists: ${BAG_ARCHIVE}"
+  mv -- "${BAG_ROOT}" "${BAG_ARCHIVE}"
+  MANIFEST_BAG_DIR="${BAG_ARCHIVE}/capture"
+  MANIFEST_CAPTURE_ARGS=(
+    --capture-retention kept_local
+    --capture-archive "data/bags/${MAP_NAME}_${RUN_ID}/capture"
+  )
+fi
+python3 "${PROJECT_ROOT}/tools/write_map_manifest.py" "${MAP_DIR}" "${MANIFEST_BAG_DIR}" \
   --run-id "${RUN_ID}" \
   --mapping-validation "${LOG_DIR}/mapping-validation.json" \
+  "${MANIFEST_CAPTURE_ARGS[@]}" \
   --generation-command \
-  "./scripts/run_mapping.sh --map {map_name} --${MAPPING_MODE} ${SIM_MODE}"
+  "./scripts/run_mapping.sh --map {map_name} --${MAPPING_MODE} ${SIM_MODE} --${BAG_RETENTION}-bag"
 
-case "${BAG_ROOT}" in
-  "${PROJECT_ROOT}/data/bags/.${MAP_NAME}."*) rm -rf -- "${BAG_ROOT}" ;;
-  *) die "refusing to remove unexpected bag directory: ${BAG_ROOT}" ;;
-esac
+if [[ "${BAG_RETENTION}" == "discard" ]]; then
+  case "${BAG_ROOT}" in
+    "${PROJECT_ROOT}/data/bags/.${MAP_NAME}."*) rm -rf -- "${BAG_ROOT}" ;;
+    *) die "refusing to remove unexpected bag directory: ${BAG_ROOT}" ;;
+  esac
+fi
 trap - EXIT INT TERM
 info "Map complete: ${MAP_DIR}"
-info "Raw bag and offline intermediates were removed; runtime artifacts remain."
+if [[ "${BAG_RETENTION}" == "keep" ]]; then
+  info "Raw MCAP retained for reproducibility: ${BAG_ARCHIVE}/capture"
+else
+  info "Raw MCAP was explicitly discarded; runtime artifacts remain."
+fi

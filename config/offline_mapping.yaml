@@ -1,0 +1,57 @@
+# Final-map generation.  The live nvblox node is only an online coverage/QC
+# preview; final artifacts are re-fused after cuVSLAM loop-closure optimization.
+
+native_depth:
+  sensor_name: front_stereo_camera_left
+  depth_topic: /front_stereo_camera/depth/image_raw
+  depth_camera_info_topic: /front_stereo_camera/depth/camera_info
+  color_topic: /front_stereo_camera/left/image_raw
+  minimum_depth_m: 0.40
+  maximum_depth_m: 8.00
+  maximum_sync_ms: 40.0
+
+nvblox_common:
+  visualization: false
+  voxel_size: 0.05
+  projective_integrator_max_integration_distance_m: 8.0
+  raycast_subsampling_factor: 2
+  use_2d_esdf_mode: true
+  workspace_bounds_type: 1
+  workspace_bounds_min_height_m: -0.20
+  workspace_bounds_max_height_m: 2.00
+  esdf_slice_height: 0.09
+  esdf_slice_min_height: 0.09
+  esdf_slice_max_height: 0.65
+  esdf_integrator_max_distance_m: 2.0
+  fit_to_z0: false
+
+# A TSDF pass supplies the color mesh.  Requiring repeated evidence suppresses
+# single-view pose/depth streaks without changing the navigation occupancy map.
+tsdf_fuser:
+  projective_integrator_weighting_mode: 0
+  projective_integrator_max_weight: 20.0
+  projective_integrator_truncation_distance_vox: 4.0
+  esdf_integrator_min_weight: 10.0
+  esdf_integrator_max_site_distance_vox: 0.5
+  mesh_integrator_min_weight: 10.0
+
+# The persistent 2D navigation artifact is a probabilistic static occupancy
+# fusion.  A 2.5 cm endpoint half-band produces one 5 cm voxel-wide surface;
+# stronger occupied evidence closes repeat-observation gaps without baking the
+# robot footprint/inflation into the saved map.
+occupancy_fuser:
+  mapping_type_static_occupancy: true
+  occupied_region_half_width_m: 0.025
+  occupied_region_occupancy_probability: 0.85
+  free_region_occupancy_probability: 0.45
+  unobserved_region_occupancy_probability: 0.50
+
+# Intrinsic gates intentionally use covered area, not a fixed frame count.
+# They catch the previous live map (only 19.8% free / 69.2% unknown) while
+# allowing capture duration and keyframe count to follow the actual scene.
+quality:
+  minimum_free_fraction: 0.35
+  minimum_known_fraction: 0.50
+  maximum_unknown_fraction: 0.50
+  minimum_occupied_fraction: 0.03
+  maximum_occupied_fraction: 0.20

@@ -33,7 +33,7 @@ map -> odom -> base_link -> four Hawk optical frames + front IMU + wheels
 - `robot_state_publisher` 独占 `base_link` 以下固定 TF。
 - cuVSLAM 发布跟踪里程计；导航时关闭其直接 `map -> odom`，由 `navigation_tf_bridge` 组合 VGL map anchor 与 cuVSLAM odom 后独占发布。
 - wheel odometry 与 `/ground_truth/odometry` 不发布主 TF，也不作为正式定位输入。
-- nvblox 在 `odom` 中重建，occupancy map 在 `map` 中供全局规划。
+- 导航滚动 nvblox 在 `odom` 中重建；最终 occupancy 按优化关键帧离线生成并位于 `map`。
 
 ## 感知与定位
 
@@ -44,14 +44,19 @@ map -> odom -> base_link -> four Hawk optical frames + front IMU + wheels
 6 RGB navigation ──> cuVSLAM tracking
                   └─> cuVGL relocalization ──> map anchor
 
-front 32FC1 depth ──> nvblox static TSDF/ESDF/static_map_slice
-                   └─> raw LaserScan ──> Collision Monitor
+front 32FC1 depth ──> live nvblox TSDF/ESDF (mapping QC preview)
+                   ├─> optimized-keyframe offline TSDF + static occupancy
+                   ├─> raw LaserScan ──> Collision Monitor
                    └─> TF-aligned scan/points ──> Nav2 obstacle layers
 ```
 
 所有 Hawk 相机在 session layer 中使用与 `rectified_images=true` 一致的 pinhole 投影。源 Hawk USD 保持不变。图像为 `1280×800 @ 10 Hz`，front depth 为 `640×400 @ 10 Hz`，front IMU 为 `120 Hz`。
 
-nvblox 配置为 `static_tsdf`、5 cm voxel、2D ESDF，深度集成 10 Hz、颜色 3 Hz、ESDF 10 Hz；只接 front native depth，不使用 LiDAR 或双目深度网络。`/front_depth/scan[_raw]` 虽采用 ROS `LaserScan` 消息类型，但数据由 Hawk 深度图投影产生；Jackal LiDAR prim、render product 和 publisher 均不创建。
+在线 nvblox 预览配置为 `static_tsdf`、5 cm voxel、2D ESDF，深度集成 10 Hz、颜色 3 Hz、
+ESDF 10 Hz。最终地图按优化位姿分别执行 TSDF mesh 与静态概率占据融合；两者都只接
+front native depth，不使用 LiDAR 或双目深度网络。`/front_depth/scan[_raw]` 虽采用 ROS
+`LaserScan` 消息类型，但数据由 Hawk 深度图投影产生；Jackal LiDAR prim、render product
+和 publisher 均不创建。
 
 ## 导航与控制
 
