@@ -9,8 +9,8 @@ import math
 @dataclass
 class DeadmanCommand:
     timeout_s: float = 0.18
-    linear_speed: float = 0.35
-    angular_speed: float = 0.80
+    linear_speed: float = 0.55
+    angular_speed: float = 1.00
     linear: float = 0.0
     angular: float = 0.0
     last_motion_key_s: float | None = None
@@ -37,6 +37,15 @@ class DeadmanCommand:
             self.stop()
             return True
         return False
+
+    def set_speeds(self, linear_speed: float, angular_speed: float) -> None:
+        if not all(
+            math.isfinite(value) and value > 0.0
+            for value in (linear_speed, angular_speed)
+        ):
+            raise ValueError("teleop speeds must be finite and positive")
+        self.linear_speed = linear_speed
+        self.angular_speed = angular_speed
 
     def update(self, now_s: float) -> bool:
         if self.last_motion_key_s is None:
