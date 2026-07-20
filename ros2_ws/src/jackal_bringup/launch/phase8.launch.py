@@ -49,7 +49,7 @@ def generate_launch_description() -> LaunchDescription:
             # The front depth stream is 10 Hz in simulation, but under the
             # measured GUI + RViz GPU load callback gaps can approach 1.0 s.
             DeclareLaunchArgument("depth_timeout", default_value="1.25"),
-            DeclareLaunchArgument("source_timeout", default_value="1.25"),
+            DeclareLaunchArgument("source_timeout", default_value="1.50"),
             DeclareLaunchArgument(
                 "rviz_config", default_value=str(share / "rviz/navigation.rviz")
             ),

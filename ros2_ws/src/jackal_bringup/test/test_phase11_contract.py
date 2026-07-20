@@ -206,7 +206,15 @@ def test_benchmark_runs_real_mapping_and_navigation_workloads_without_600_frames
         "fixed_frames=none",
     ):
         assert token in runner
-    assert "600" not in runner
+    # The retained map name contains the digit sequence "600"; reject only
+    # the retired fixed-frame baseline, not an unrelated path component.
+    for fixed_baseline in (
+        "--max-steps 600",
+        "MAX_FRAMES=600",
+        "MAX_STEPS=600",
+        "fixed_frames=600",
+    ):
+        assert fixed_baseline not in runner
     driver = (
         ROOT
         / "ros2_ws/src/jackal_experiments/jackal_experiments/performance_workload_driver.py"

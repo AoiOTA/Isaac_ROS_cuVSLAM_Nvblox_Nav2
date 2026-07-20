@@ -9,15 +9,20 @@ from nav2_common.launch import RewrittenYaml
 
 
 NAVIGATION_START_SCHEDULE = (
-    (6.0, "smoother_server"),
-    (8.0, "planner_server"),
-    (10.0, "behavior_server"),
-    (12.0, "velocity_smoother"),
-    (14.0, "collision_monitor"),
-    (16.0, "bt_navigator"),
-    (18.0, "waypoint_follower"),
+    # map_server is configured and activated in an otherwise quiet startup
+    # window.  In the measured GUI + RViz workload, constructing MPPI at the
+    # same time made the map lifecycle response miss its client's deadline.
+    (8.0, "controller_server"),
+    (10.0, "smoother_server"),
+    (12.0, "planner_server"),
+    (14.0, "behavior_server"),
+    (16.0, "velocity_smoother"),
+    (18.0, "collision_monitor"),
+    (20.0, "bt_navigator"),
+    (22.0, "waypoint_follower"),
 )
-NAVIGATION_ACTIVATION_DELAY_S = 25.0
+MAP_ACTIVATION_DELAY_S = 2.0
+NAVIGATION_ACTIVATION_DELAY_S = 30.0
 
 
 def _launch_setup(context):
@@ -55,6 +60,13 @@ def _launch_setup(context):
         "waypoint_follower",
     ]
     delayed_nodes = {
+        "controller_server": Node(
+            package="nav2_controller",
+            executable="controller_server",
+            name="controller_server",
+            remappings=[("cmd_vel", "/cmd_vel_nav_raw")],
+            **common,
+        ),
         "smoother_server": Node(
             package="nav2_smoother",
             executable="smoother_server",
@@ -123,26 +135,25 @@ def _launch_setup(context):
             output="screen",
             parameters=[params, {"yaml_filename": resolved["map"]}],
         ),
-        # MPPI and the nvblox local-costmap layer are the most expensive Nav2
-        # constructors. Give the controller an uncontended startup window.
-        Node(
-            package="nav2_controller",
-            executable="controller_server",
-            name="controller_server",
-            remappings=[("cmd_vel", "/cmd_vel_nav_raw")],
-            **common,
-        ),
-        Node(
-            package="nav2_lifecycle_manager",
-            executable="lifecycle_manager",
-            name="lifecycle_manager_map",
-            output="screen",
-            parameters=[
-                {
-                    "autostart": True,
-                    "node_names": ["map_server"],
-                    "bond_timeout": 15.0,
-                }
+        # Let map_server finish constructing its lifecycle services before its
+        # manager requests configure/activate.  Keep this transition separate
+        # from the expensive MPPI + nvblox local-costmap construction below.
+        TimerAction(
+            period=MAP_ACTIVATION_DELAY_S,
+            actions=[
+                Node(
+                    package="nav2_lifecycle_manager",
+                    executable="lifecycle_manager",
+                    name="lifecycle_manager_map",
+                    output="screen",
+                    parameters=[
+                        {
+                            "autostart": True,
+                            "node_names": ["map_server"],
+                            "bond_timeout": 15.0,
+                        }
+                    ],
+                )
             ],
         ),
         *delayed_actions,
@@ -188,7 +199,7 @@ def generate_launch_description() -> LaunchDescription:
                 "odom_topic", default_value="/wheel/odometry"
             ),
             DeclareLaunchArgument("movement_time_allowance", default_value="25.0"),
-            DeclareLaunchArgument("source_timeout", default_value="1.25"),
+            DeclareLaunchArgument("source_timeout", default_value="1.50"),
             # Resolve substitutions now.  This launch is itself included by
             # phase8, so delayed actions must not depend on a later scoped
             # LaunchConfiguration lookup.
