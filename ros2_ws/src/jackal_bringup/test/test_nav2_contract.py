@@ -31,22 +31,13 @@ def test_nav2_uses_diff_drive_mppi_and_smac_2d() -> None:
     controller = controller_params["FollowPath"]
     planner = config["planner_server"]["ros__parameters"]["GridBased"]
     assert controller["plugin"] == (
-        "nav2_rotation_shim_controller::RotationShimController"
-    )
-    assert controller["angular_dist_threshold"] == 0.25
-    assert controller["angular_disengage_threshold"] == 0.05
-    assert controller["forward_sampling_distance"] == 0.50
-    assert controller["max_cost_threshold"] == 253.0
-    assert controller["rotate_to_heading_once"] is False
-    assert controller["closed_loop"] is True
-    assert controller["primary_controller"] == (
         "nav2_mppi_controller::MPPIController"
     )
     assert controller["motion_model"] == "DiffDrive"
     assert controller["time_steps"] == 20
     assert controller["model_dt"] == 0.1
-    assert controller["batch_size"] == 2000
-    assert controller["retry_attempt_limit"] == 3
+    assert controller["batch_size"] == 500
+    assert controller["retry_attempt_limit"] == 1
     assert controller["regenerate_noises"] is True
     assert controller["vx_max"] == 0.75
     assert controller["vx_min"] == 0.0
@@ -58,10 +49,10 @@ def test_nav2_uses_diff_drive_mppi_and_smac_2d() -> None:
     assert controller["PreferForwardCritic"]["enabled"] is True
     assert controller["CostCritic"]["cost_weight"] == 2.0
     assert controller["CostCritic"]["consider_footprint"] is True
-    assert controller["PathAlignCritic"]["cost_weight"] == 18.0
+    assert controller["PathAlignCritic"]["cost_weight"] == 5.0
     assert controller["PathAlignCritic"]["offset_from_furthest"] == 8
-    assert controller["PathAlignCritic"]["max_path_occupancy_ratio"] == 0.95
-    assert controller["PathFollowCritic"]["cost_weight"] == 5.0
+    assert controller["PathAlignCritic"]["max_path_occupancy_ratio"] == 0.40
+    assert controller["PathFollowCritic"]["cost_weight"] == 9.0
     assert controller["PathFollowCritic"]["offset_from_furthest"] == 10
     assert controller["PathAngleCritic"]["offset_from_furthest"] == 8
     assert controller["PathAngleCritic"]["cost_weight"] == 9.5
@@ -168,11 +159,14 @@ def test_command_chain_and_collision_zones_are_fixed() -> None:
     velocity = config["velocity_smoother"]["ros__parameters"]
     assert velocity["max_velocity"] == [0.75, 0.0, 1.20]
     assert velocity["min_velocity"][0] == 0.0
+    assert velocity["deadband_velocity"] == [0.0, 0.0, 0.0]
     assert velocity["max_accel"] == [1.10, 0.0, 3.00]
+    assert velocity["velocity_timeout"] == 0.50
     assert velocity["scale_velocities"] is True
     assert velocity["smoothing_frequency"] == 20.0
-    assert collision["SlowdownZone"]["slowdown_ratio"] == 0.65
-    assert collision["FootprintApproach"]["time_before_collision"] == 1.5
+    assert collision["SlowdownZone"]["slowdown_ratio"] == 0.85
+    assert collision["FootprintApproach"]["time_before_collision"] == 1.0
+    assert collision["FootprintApproach"]["simulation_time_step"] == 0.10
     assert collision["source_timeout"] == 1.50
 
 

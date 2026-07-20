@@ -30,10 +30,11 @@ while (($#)); do
 done
 
 if [[ "${RUN_MODE}" == "manual" ]]; then
-  [[ "${SIM_MODE}" == "--gui" ]] || \
-    die "manual navigation requires --gui so robot behavior remains visible"
   [[ "${RVIZ}" == "true" ]] || \
     die "manual navigation requires --rviz for 2D Goal Pose"
+  if [[ "${SIM_MODE}" == "--headless" ]]; then
+    info "Manual navigation is running with Isaac Sim headless (no simulator GUI)."
+  fi
 fi
 
 require_file "${ACCEPTANCE_CONFIG}"
