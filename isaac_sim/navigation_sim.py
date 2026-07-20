@@ -209,6 +209,42 @@ def parse_args() -> argparse.Namespace:
         help="keep the default GUI viewport camera instead of the smooth robot follower",
     )
     parser.add_argument(
+        "--follow-camera-distance",
+        type=float,
+        default=3.2,
+        help="follow camera distance behind the robot in meters (default: 3.2)",
+    )
+    parser.add_argument(
+        "--follow-camera-height",
+        type=float,
+        default=2.2,
+        help="follow camera absolute height above world origin in meters (default: 2.2)",
+    )
+    parser.add_argument(
+        "--follow-camera-look-ahead",
+        type=float,
+        default=1.0,
+        help="distance along robot forward axis the camera tracks ahead of the base link (m, default: 1.0)",
+    )
+    parser.add_argument(
+        "--follow-camera-look-at-height",
+        type=float,
+        default=0.25,
+        help="target look-at height in meters above world origin (default: 0.25)",
+    )
+    parser.add_argument(
+        "--follow-camera-focal-length",
+        type=float,
+        default=16.0,
+        help="camera focal length in millimeters (default: 16.0)",
+    )
+    parser.add_argument(
+        "--follow-camera-smoothing-time",
+        type=float,
+        default=0.25,
+        help="follow camera smoothing time constant in seconds (default: 0.25)",
+    )
+    parser.add_argument(
         "--lock-file", type=Path, default=lock_path
     )
     parser.add_argument(
@@ -226,6 +262,16 @@ def parse_args() -> argparse.Namespace:
         parser.error("--lock-wait-seconds must be non-negative")
     if args.physics_hz <= 0 or args.update_hz <= 0.0:
         parser.error("physics and update frequencies must be positive")
+    if args.follow_camera_distance <= 0.0:
+        parser.error("--follow-camera-distance must be positive")
+    if args.follow_camera_height < 0.0:
+        parser.error("--follow-camera-height must be non-negative")
+    if args.follow_camera_look_ahead < 0.0:
+        parser.error("--follow-camera-look-ahead must be non-negative")
+    if args.follow_camera_smoothing_time <= 0.0:
+        parser.error("--follow-camera-smoothing-time must be positive")
+    if args.follow_camera_focal_length <= 0.0:
+        parser.error("--follow-camera-focal-length must be positive")
     try:
         args.renderer = str(runtime["renderer"])
         args.rt2_cached_retrace = float(runtime["rt2_cached_retrace"])
@@ -368,7 +414,7 @@ def run(args: argparse.Namespace) -> int:
 
     from jackal_sim.graphs import create_control_graphs
     from jackal_sim.contact_monitor import RobotContactMonitor
-    from jackal_sim.follow_camera import FollowCamera, activate_viewport_camera
+    from jackal_sim.follow_camera import FollowCamera
     from jackal_sim.dynamic_obstacles import DynamicObstacleManager
     from jackal_sim.static_obstacles import StaticObstacleManager
     from jackal_sim.articulation_runtime import (
@@ -392,6 +438,7 @@ def run(args: argparse.Namespace) -> int:
 
     timeline = None
     follow_camera = None
+    follow_camera_parameter_callback = None
     dynamic_obstacles = None
     static_obstacles = None
     follow_camera_bindings = 0
@@ -570,13 +617,23 @@ def run(args: argparse.Namespace) -> int:
         app.update()
 
         if args.gui and not args.disable_follow_camera:
-            follow_camera = FollowCamera(stage, f"{ROBOT_PRIM_PATH}/base_link")
+            follow_camera = FollowCamera(
+                stage,
+                f"{ROBOT_PRIM_PATH}/base_link",
+                distance_m=args.follow_camera_distance,
+                height_m=args.follow_camera_height,
+                look_ahead_m=args.follow_camera_look_ahead,
+                target_height_m=args.follow_camera_look_at_height,
+                focal_length_mm=args.follow_camera_focal_length,
+                smoothing_time_s=args.follow_camera_smoothing_time,
+            )
             app.update()
-            activate_viewport_camera()
+            if follow_camera.bind_viewport():
+                follow_camera_bindings += 1
             report["follow_camera"] = {
                 "enabled": True,
-                "prim": "/World/FollowCameraRig",
-                "viewport_active": True,
+                "prim": follow_camera.camera_path,
+                "viewport_active": bool(follow_camera_bindings),
                 **follow_camera.profile(),
             }
         else:
@@ -627,6 +684,8 @@ def run(args: argparse.Namespace) -> int:
             articulation_settings = articulation_physics_config_from_mapping(
                 args.control
             )
+            from rcl_interfaces.msg import SetParametersResult
+
             robot_runtime = ArticulationRuntime(
                 ROBOT_PRIM_PATH,
                 f"{ROBOT_PRIM_PATH}/base_link",
@@ -634,6 +693,63 @@ def run(args: argparse.Namespace) -> int:
             )
             robot_runtime.initialize()
             robot_runtime.configure_stability(articulation_settings)
+            if follow_camera is not None:
+                ros_runtime_node.declare_parameter(
+                    "follow_camera_distance_m", args.follow_camera_distance
+                )
+                ros_runtime_node.declare_parameter(
+                    "follow_camera_height_m", args.follow_camera_height
+                )
+                ros_runtime_node.declare_parameter(
+                    "follow_camera_look_ahead_m", args.follow_camera_look_ahead
+                )
+                ros_runtime_node.declare_parameter(
+                    "follow_camera_look_at_height_m",
+                    args.follow_camera_look_at_height,
+                )
+                ros_runtime_node.declare_parameter(
+                    "follow_camera_focal_length_mm",
+                    args.follow_camera_focal_length,
+                )
+                ros_runtime_node.declare_parameter(
+                    "follow_camera_smoothing_time_s",
+                    args.follow_camera_smoothing_time,
+                )
+
+                camera_parameter_map = {
+                    "follow_camera_distance_m": "distance_m",
+                    "follow_camera_height_m": "height_m",
+                    "follow_camera_look_ahead_m": "look_ahead_m",
+                    "follow_camera_look_at_height_m": "target_height_m",
+                    "follow_camera_focal_length_mm": "focal_length_mm",
+                    "follow_camera_smoothing_time_s": "smoothing_time_s",
+                }
+
+                def _on_follow_camera_param_update(
+                    params: list[object],
+                ) -> "SetParametersResult":
+                    updates: dict[str, float] = {}
+                    for parameter in params:
+                        name = getattr(parameter, "name", None)
+                        camera_field = camera_parameter_map.get(name)
+                        if camera_field is None:
+                            continue
+                        updates[camera_field] = float(getattr(parameter, "value", 0.0))
+                    if updates:
+                        try:
+                            follow_camera.reconfigure(**updates)
+                        except ValueError as exc:
+                            return SetParametersResult(
+                                successful=False,
+                                reason=str(exc),
+                            )
+                    return SetParametersResult(successful=True)
+
+                follow_camera_parameter_callback = (
+                    ros_runtime_node.add_on_set_parameters_callback(
+                        _on_follow_camera_param_update
+                    )
+                )
             command_topic = str(args.control["topics"]["command_to_sim"])
             simulation_clock = lambda: float(  # noqa: E731 - injected callback
                 SimulationManager.get_simulation_time()
@@ -694,8 +810,8 @@ def run(args: argparse.Namespace) -> int:
             app.update()
 
         if follow_camera is not None:
-            activate_viewport_camera()
-            follow_camera_bindings += 1
+            if follow_camera.bind_viewport():
+                follow_camera_bindings += 1
 
         start_simulation_time = float(timeline.get_current_time())
         last_simulation_time = start_simulation_time
@@ -761,11 +877,6 @@ def run(args: argparse.Namespace) -> int:
                     motion_assist_updates += 1
             if dynamic_obstacles is not None:
                 dynamic_obstacles.update(float(timeline.get_current_time()))
-            if follow_camera is not None:
-                follow_camera.update(1.0 / args.update_hz)
-                if frames % 30 == 0:
-                    activate_viewport_camera()
-                    follow_camera_bindings += 1
             frames += 1
             current_simulation_time = float(timeline.get_current_time())
             if current_simulation_time + 1.0e-9 < last_simulation_time:

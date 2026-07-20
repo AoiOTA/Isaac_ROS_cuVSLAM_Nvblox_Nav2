@@ -12,6 +12,13 @@ RVIZ="false"
 REPORT=""
 RUN_MODE="auto"
 ACCEPTANCE_CONFIG="${PROJECT_ROOT}/config/acceptance.yaml"
+FOLLOW_CAMERA_DISTANCE="3.2"
+FOLLOW_CAMERA_HEIGHT="2.2"
+FOLLOW_CAMERA_LOOK_AHEAD="1.0"
+FOLLOW_CAMERA_LOOK_AT_HEIGHT="0.25"
+FOLLOW_CAMERA_FOCAL_LENGTH="16.0"
+FOLLOW_CAMERA_SMOOTHING_TIME="0.25"
+FOLLOW_CAMERA_DISABLED=""
 while (($#)); do
   case "$1" in
     --map) MAP_NAME="${2:?missing map name}"; shift 2 ;;
@@ -22,8 +29,35 @@ while (($#)); do
     --manual) RUN_MODE="manual"; shift ;;
     --acceptance-config) ACCEPTANCE_CONFIG="${2:?missing config path}"; shift 2 ;;
     --report) REPORT="${2:?missing report path}"; shift 2 ;;
+    --disable-follow-camera) FOLLOW_CAMERA_DISABLED="true"; shift ;;
+    --follow-camera-distance)
+      FOLLOW_CAMERA_DISTANCE="${2:?missing value}"; shift 2 ;;
+      ;;
+    --follow-camera-height)
+      FOLLOW_CAMERA_HEIGHT="${2:?missing value}"; shift 2 ;;
+      ;;
+    --follow-camera-look-ahead)
+      FOLLOW_CAMERA_LOOK_AHEAD="${2:?missing value}"; shift 2 ;;
+      ;;
+    --follow-camera-look-at-height)
+      FOLLOW_CAMERA_LOOK_AT_HEIGHT="${2:?missing value}"; shift 2 ;;
+      ;;
+    --follow-camera-focal-length)
+      FOLLOW_CAMERA_FOCAL_LENGTH="${2:?missing value}"; shift 2 ;;
+      ;;
+    --follow-camera-smoothing-time)
+      FOLLOW_CAMERA_SMOOTHING_TIME="${2:?missing value}"; shift 2 ;;
+      ;;
     -h|--help)
       echo "Usage: ./scripts/run_all.sh [--map NAME] [--headless|--gui] [--rviz|--no-rviz] [--auto|--manual] [--report FILE]"
+      echo "Follow-camera options:"
+      echo "  --disable-follow-camera"
+      echo "  --follow-camera-distance M"
+      echo "  --follow-camera-height M"
+      echo "  --follow-camera-look-ahead M"
+      echo "  --follow-camera-look-at-height M"
+      echo "  --follow-camera-focal-length M"
+      echo "  --follow-camera-smoothing-time S"
       exit 0 ;;
     *) die "unknown argument: $1" ;;
   esac
@@ -122,7 +156,15 @@ setsid "${ISAAC_SIM_PYTHON}" "${PROJECT_ROOT}/isaac_sim/navigation_sim.py" \
   --camera-profile navigation_6cam \
   --reliable-sensor-qos \
   --stop-file "${SIM_STOP}" \
-  --report "${LOG_DIR}/simulator.json" >"${LOG_DIR}/simulator.log" 2>&1 & SIM_PID=$!
+  --report "${LOG_DIR}/simulator.json" \
+  ${FOLLOW_CAMERA_DISABLED:+--disable-follow-camera} \
+  --follow-camera-distance "${FOLLOW_CAMERA_DISTANCE}" \
+  --follow-camera-height "${FOLLOW_CAMERA_HEIGHT}" \
+  --follow-camera-look-ahead "${FOLLOW_CAMERA_LOOK_AHEAD}" \
+  --follow-camera-look-at-height "${FOLLOW_CAMERA_LOOK_AT_HEIGHT}" \
+  --follow-camera-focal-length "${FOLLOW_CAMERA_FOCAL_LENGTH}" \
+  --follow-camera-smoothing-time "${FOLLOW_CAMERA_SMOOTHING_TIME}" \
+  >"${LOG_DIR}/simulator.log" 2>&1 & SIM_PID=$!
 for _ in {1..240}; do
   grep -Fq JACKAL_SENSORS_READY "${LOG_DIR}/simulator.log" 2>/dev/null && break
   alive "${SIM_PID}" || die "simulator exited; see ${LOG_DIR}/simulator.log"

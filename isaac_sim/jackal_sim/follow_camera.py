@@ -1,13 +1,12 @@
-"""Smooth GUI-only third-person camera for the runtime-composed Jackal."""
+"""Robot-root-attached third-person camera for the runtime-composed Jackal."""
 
 from __future__ import annotations
-
-import math
 
 from pxr import Gf, Sdf, Usd, UsdGeom
 
 
-CAMERA_PATH = "/World/FollowCameraRig"
+CAMERA_NAME = "FollowCameraRig"
+CAMERA_PATH = f"/World/{CAMERA_NAME}"
 REFERENCE_DISTANCE_M = 3.2
 REFERENCE_HEIGHT_M = 2.2
 REFERENCE_LOOK_AHEAD_M = 1.0
@@ -30,6 +29,10 @@ class FollowCamera:
     ) -> None:
         self.stage = stage
         self.target = stage.GetPrimAtPath(target_path)
+        if not target_path.startswith("/"):
+            raise RuntimeError(
+                f"follow-camera target must be absolute USD path: {target_path}"
+            )
         if not self.target.IsValid():
             raise RuntimeError(f"follow-camera target is invalid: {target_path}")
         self.distance = distance_m
@@ -38,15 +41,15 @@ class FollowCamera:
         self.target_height = target_height_m
         self.focal_length = focal_length_mm
         self.smoothing_time = smoothing_time_s
+        self.camera_path = f"{target_path.rstrip('/')}" f"/{CAMERA_NAME}"
         with Usd.EditContext(stage, stage.GetSessionLayer()):
-            camera = UsdGeom.Camera.Define(stage, CAMERA_PATH)
+            camera = UsdGeom.Camera.Define(stage, self.camera_path)
             camera.CreateFocalLengthAttr(self.focal_length)
             camera.CreateHorizontalApertureAttr(20.955)
             camera.CreateClippingRangeAttr(Gf.Vec2f(0.05, 10000.0))
             self.transform = camera.AddTransformOp()
-        self.eye: Gf.Vec3d | None = None
-        self.look_at: Gf.Vec3d | None = None
-        self.update(1.0)
+        self.camera = camera
+        self._apply_local_pose()
 
     def desired_pose(self) -> tuple[Gf.Vec3d, Gf.Vec3d]:
         matrix = UsdGeom.Xformable(self.target).ComputeLocalToWorldTransform(
@@ -66,28 +69,69 @@ class FollowCamera:
     def blend(current: Gf.Vec3d, desired: Gf.Vec3d, alpha: float) -> Gf.Vec3d:
         return current * (1.0 - alpha) + desired * alpha
 
+    def _local_pose_matrix(self) -> Gf.Matrix4d:
+        # `eye`/`aim` are robot-local; parenting to ``target_path`` keeps
+        # the camera tracking translation/rotation automatically, without any
+        # per-frame matrix copy.
+        return Gf.Matrix4d(1.0).SetLookAt(
+            Gf.Vec3d(-self.distance, 0.0, self.height),
+            Gf.Vec3d(self.look_ahead, 0.0, self.target_height),
+            Gf.Vec3d(0.0, 0.0, 1.0),
+        ).GetInverse().GetOrthonormalized()
+
+    def _apply_local_pose(self) -> None:
+        self.transform.Set(self._local_pose_matrix())
+
+    def _apply_camera_profile(self) -> None:
+        self.camera.CreateFocalLengthAttr().Set(self.focal_length)
+
     def update(self, dt: float) -> None:
-        desired_eye, desired_target = self.desired_pose()
-        alpha = 1.0 if self.eye is None else 1.0 - math.exp(-max(dt, 0.0) / self.smoothing_time)
-        self.eye = desired_eye if self.eye is None else self.blend(self.eye, desired_eye, alpha)
-        self.look_at = (
-            desired_target
-            if self.look_at is None
-            else self.blend(self.look_at, desired_target, alpha)
-        )
-        camera_to_world = Gf.Matrix4d().SetLookAt(
-            self.eye, self.look_at, Gf.Vec3d(0.0, 0.0, 1.0)
-        ).GetInverse()
-        self.transform.Set(camera_to_world)
+        del dt
+
+    def reconfigure(
+        self,
+        *,
+        distance_m: float | None = None,
+        height_m: float | None = None,
+        look_ahead_m: float | None = None,
+        target_height_m: float | None = None,
+        focal_length_mm: float | None = None,
+        smoothing_time_s: float | None = None,
+    ) -> None:
+        if distance_m is not None:
+            if distance_m <= 0.0:
+                raise ValueError("distance must be positive")
+            self.distance = distance_m
+        if height_m is not None:
+            if height_m < 0.0:
+                raise ValueError("height must be non-negative")
+            self.height = height_m
+        if look_ahead_m is not None:
+            if look_ahead_m < 0.0:
+                raise ValueError("look-ahead must be non-negative")
+            self.look_ahead = look_ahead_m
+        if target_height_m is not None:
+            if target_height_m < 0.0:
+                raise ValueError("look-at height must be non-negative")
+            self.target_height = target_height_m
+        if focal_length_mm is not None:
+            if focal_length_mm <= 0.0:
+                raise ValueError("focal length must be positive")
+            self.focal_length = focal_length_mm
+            self._apply_camera_profile()
+        if smoothing_time_s is not None:
+            if smoothing_time_s <= 0.0:
+                raise ValueError("smoothing time must be positive")
+            self.smoothing_time = smoothing_time_s
+        self._apply_local_pose()
 
     def state(self) -> dict[str, list[float]]:
         """Return the currently authored camera and focus positions for reporting."""
 
-        if self.eye is None or self.look_at is None:
-            raise RuntimeError("follow camera was queried before its first update")
+        eye, target = self.desired_pose()
         return {
-            "eye_m": [float(value) for value in self.eye],
-            "look_at_m": [float(value) for value in self.look_at],
+            "eye_m": [float(value) for value in eye],
+            "look_at_m": [float(value) for value in target],
         }
 
     def profile(self) -> dict[str, float]:
@@ -101,18 +145,30 @@ class FollowCamera:
             "focal_length_mm": self.focal_length,
         }
 
+    def bind_viewport(self) -> bool:
+        """Bind the active viewport to this camera if it exists."""
 
-def activate_viewport_camera() -> None:
+        from omni.kit.viewport.utility import get_active_viewport
+
+        viewport = get_active_viewport()
+        if viewport is None:
+            return False
+        # Isaac Sim 6 uses the ViewportAPI camera_path property.  set_active_camera
+        # belongs to an older viewport wrapper and can leave the visible viewport
+        # on its perspective camera after the timeline starts.
+        viewport.camera_path = Sdf.Path(self.camera_path)
+        return str(viewport.camera_path) == self.camera_path
+
+
+
+def activate_viewport_camera(camera_path: str = CAMERA_PATH) -> bool:
     from omni.kit.viewport.utility import get_active_viewport
 
     viewport = get_active_viewport()
     if viewport is None:
-        raise RuntimeError("Isaac Sim GUI has no active viewport")
+        return False
     # Isaac Sim 6 uses the ViewportAPI camera_path property.  set_active_camera
     # belongs to an older viewport wrapper and can leave the visible viewport
     # on its perspective camera after the timeline starts.
-    viewport.camera_path = Sdf.Path(CAMERA_PATH)
-    if str(viewport.camera_path) != CAMERA_PATH:
-        raise RuntimeError(
-            f"failed to bind GUI viewport to follow camera: {viewport.camera_path}"
-        )
+    viewport.camera_path = Sdf.Path(camera_path)
+    return str(viewport.camera_path) == camera_path
