@@ -153,6 +153,9 @@ class FollowCamera:
         viewport = get_active_viewport()
         if viewport is None:
             return False
+        # Keep viewport interactions (zoom/drag/orbit) enabled so operators can
+        # tune this camera at runtime without being continuously overridden.
+        viewport.updates_enabled = True
         # Isaac Sim 6 uses the ViewportAPI camera_path property.  set_active_camera
         # belongs to an older viewport wrapper and can leave the visible viewport
         # on its perspective camera after the timeline starts.
@@ -167,6 +170,7 @@ def activate_viewport_camera(camera_path: str = CAMERA_PATH) -> bool:
     viewport = get_active_viewport()
     if viewport is None:
         return False
+    viewport.updates_enabled = True
     # Isaac Sim 6 uses the ViewportAPI camera_path property.  set_active_camera
     # belongs to an older viewport wrapper and can leave the visible viewport
     # on its perspective camera after the timeline starts.
