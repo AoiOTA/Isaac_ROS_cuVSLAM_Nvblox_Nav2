@@ -150,7 +150,7 @@ def test_command_chain_and_collision_zones_are_fixed() -> None:
     assert collision["base_shift_correction"] is True
     assert collision["StopZone"]["action_type"] == "stop"
     assert collision["StopZone"]["points"] == (
-        "[[0.340, 0.235], [0.340, -0.235], [-0.250, -0.235], [-0.250, 0.235]]"
+        "[[0.300, 0.235], [0.300, -0.235], [-0.250, -0.235], [-0.250, 0.235]]"
     )
     assert collision["StopZone"]["min_points"] == 2
     assert collision["SlowdownZone"]["action_type"] == "slowdown"
@@ -167,7 +167,7 @@ def test_command_chain_and_collision_zones_are_fixed() -> None:
     assert collision["SlowdownZone"]["slowdown_ratio"] == 0.85
     assert collision["FootprintApproach"]["time_before_collision"] == 1.0
     assert collision["FootprintApproach"]["simulation_time_step"] == 0.10
-    assert collision["source_timeout"] == 1.50
+    assert collision["source_timeout"] == 0.75
 
 
 def test_rviz_contains_every_stage8_display_source() -> None:
@@ -264,7 +264,7 @@ def test_phase8_launch_enables_health_gate_and_runtime_components() -> None:
         "TimerAction",
         'DeclareLaunchArgument("nav2_start_delay", default_value="20.0")',
         'DeclareLaunchArgument("depth_timeout", default_value="1.25")',
-        'DeclareLaunchArgument("source_timeout", default_value="1.50")',
+        'DeclareLaunchArgument("source_timeout", default_value="0.75")',
     ):
         assert token in launch
 

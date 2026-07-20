@@ -47,9 +47,10 @@ def generate_launch_description() -> LaunchDescription:
             DeclareLaunchArgument("nvblox_start_delay", default_value="3.0"),
             DeclareLaunchArgument("nav2_start_delay", default_value="20.0"),
             # The front depth stream is 10 Hz in simulation, but under the
-            # measured GUI + RViz GPU load callback gaps can approach 1.0 s.
+            # GUI + RViz load, burst gaps are common; keep collision input
+            # fresh to avoid steering on stale scans.
             DeclareLaunchArgument("depth_timeout", default_value="1.25"),
-            DeclareLaunchArgument("source_timeout", default_value="1.50"),
+            DeclareLaunchArgument("source_timeout", default_value="0.75"),
             DeclareLaunchArgument(
                 "rviz_config", default_value=str(share / "rviz/navigation.rviz")
             ),

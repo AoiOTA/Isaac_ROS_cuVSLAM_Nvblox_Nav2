@@ -337,12 +337,10 @@ collision_monitor:
     cmd_vel_out_topic: /cmd_vel_safe
     state_topic: /collision_monitor/state
     transform_tolerance: 0.20
-    # GUI + RViz measurements show that the 10 Hz simulated depth stream can
-    # occasionally reach Collision Monitor about 1.0 simulated second after
-    # acquisition while the GPU is shared by cuVSLAM and nvblox.  The source
-    # remains motion-compensated below, so allow the measured burst latency
-    # plus margin instead of alternating between valid data and forced stops.
-    source_timeout: 1.50
+    # Under manual navigation, GUI + RViz bursts can still create bursty scan
+    # timing, but long-lagged scans are more dangerous than conservative
+    # emergency braking.  Clamp to 0.75 s to avoid steering on stale points.
+    source_timeout: 0.75
     # Compensate the raw depth scan for chassis motion between acquisition and
     # collision evaluation, as in the validated reference configuration.
     base_shift_correction: true
@@ -354,7 +352,7 @@ collision_monitor:
       # forward edge (plus 5 mm laterally) so an oblique chair edge stops the
       # robot before the front wheel reaches it without treating parallel
       # narrow-passage walls as a permanent stop.
-      points: "[[0.340, 0.235], [0.340, -0.235], [-0.250, -0.235], [-0.250, 0.235]]"
+      points: "[[0.300, 0.235], [0.300, -0.235], [-0.250, -0.235], [-0.250, 0.235]]"
       action_type: stop
       min_points: 2
       visualize: true
