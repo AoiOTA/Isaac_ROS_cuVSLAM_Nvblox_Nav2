@@ -16,7 +16,6 @@ while (($#)); do
     --disable-follow-camera) FOLLOW_CAMERA_ARGS+=(--disable-follow-camera); shift ;;
     --follow-camera-distance)
       FOLLOW_CAMERA_ARGS+=(--follow-camera-distance "$2"); shift 2 ;;
-      ;;
     --follow-camera-height)
       FOLLOW_CAMERA_ARGS+=(--follow-camera-height "$2"); shift 2 ;;
       ;;
