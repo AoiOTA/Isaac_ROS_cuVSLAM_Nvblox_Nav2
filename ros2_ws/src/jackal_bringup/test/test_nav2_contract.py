@@ -30,11 +30,24 @@ def test_nav2_uses_diff_drive_mppi_and_smac_2d() -> None:
     assert controller_params["odom_topic"] == "/wheel/odometry"
     controller = controller_params["FollowPath"]
     planner = config["planner_server"]["ros__parameters"]["GridBased"]
-    assert controller["plugin"] == "nav2_mppi_controller::MPPIController"
+    assert controller["plugin"] == (
+        "nav2_rotation_shim_controller::RotationShimController"
+    )
+    assert controller["angular_dist_threshold"] == 0.25
+    assert controller["angular_disengage_threshold"] == 0.05
+    assert controller["forward_sampling_distance"] == 0.50
+    assert controller["max_cost_threshold"] == 253.0
+    assert controller["rotate_to_heading_once"] is False
+    assert controller["closed_loop"] is True
+    assert controller["primary_controller"] == (
+        "nav2_mppi_controller::MPPIController"
+    )
     assert controller["motion_model"] == "DiffDrive"
     assert controller["time_steps"] == 20
     assert controller["model_dt"] == 0.1
-    assert controller["batch_size"] == 500
+    assert controller["batch_size"] == 2000
+    assert controller["retry_attempt_limit"] == 3
+    assert controller["regenerate_noises"] is True
     assert controller["vx_max"] == 0.75
     assert controller["vx_min"] == 0.0
     assert controller["wz_max"] == 1.20
@@ -43,16 +56,24 @@ def test_nav2_uses_diff_drive_mppi_and_smac_2d() -> None:
     assert controller["temperature"] == 0.30
     assert controller["GoalCritic"]["cost_weight"] >= 5.0
     assert controller["PreferForwardCritic"]["enabled"] is True
+    assert controller["CostCritic"]["cost_weight"] == 2.0
+    assert controller["CostCritic"]["consider_footprint"] is True
+    assert controller["PathAlignCritic"]["cost_weight"] == 18.0
     assert controller["PathAlignCritic"]["offset_from_furthest"] == 8
-    assert controller["PathAlignCritic"]["max_path_occupancy_ratio"] == 0.40
+    assert controller["PathAlignCritic"]["max_path_occupancy_ratio"] == 0.95
+    assert controller["PathFollowCritic"]["cost_weight"] == 5.0
     assert controller["PathFollowCritic"]["offset_from_furthest"] == 10
     assert controller["PathAngleCritic"]["offset_from_furthest"] == 8
+    assert controller["PathAngleCritic"]["cost_weight"] == 9.5
     assert controller["PathAngleCritic"]["max_angle_to_furthest"] == 0.45
     progress = config["controller_server"]["ros__parameters"]["progress_checker"]
     assert progress["plugin"] == "nav2_controller::PoseProgressChecker"
     assert progress["required_movement_angle"] > 0.0
     assert planner["plugin"] == "nav2_smac_planner::SmacPlanner2D"
     assert planner["allow_unknown"] is True
+    assert planner["cost_travel_multiplier"] == 1.2
+    assert planner["smoother"]["w_smooth"] == 0.30
+    assert planner["smoother"]["w_data"] == 0.20
 
 
 def test_nav2_launch_keeps_mppi_velocity_feedback_on_wheel_odometry() -> None:
@@ -82,7 +103,7 @@ def test_costmap_and_visual_safety_sources_are_wired() -> None:
     assert global_map["global_frame"] == "map"
     assert global_map["plugins"] == ["static_layer", "inflation_layer"]
     assert "obstacle_layer" not in global_map
-    assert global_map["footprint_padding"] == 0.005
+    assert global_map["footprint_padding"] == 0.025
     # Match the validated reference branch's costmap cadence and rolling size;
     # only the no-lidar observation plugin differs.
     assert local["update_frequency"] == 10.0
@@ -94,6 +115,8 @@ def test_costmap_and_visual_safety_sources_are_wired() -> None:
     assert global_map["update_frequency"] == 2.0
     assert global_map["publish_frequency"] == 1.0
     assert global_map["track_unknown_space"] is True
+    assert global_map["inflation_layer"]["inflation_radius"] == 0.40
+    assert global_map["inflation_layer"]["cost_scaling_factor"] == 8.0
 
 
 def test_scan_is_shifted_behind_visual_slam_tf_before_safety_consumers() -> None:
@@ -135,7 +158,10 @@ def test_command_chain_and_collision_zones_are_fixed() -> None:
     assert collision["scan"]["topic"] == "/front_depth/scan_raw"
     assert collision["base_shift_correction"] is True
     assert collision["StopZone"]["action_type"] == "stop"
-    assert collision["StopZone"]["min_points"] == 3
+    assert collision["StopZone"]["points"] == (
+        "[[0.340, 0.235], [0.340, -0.235], [-0.250, -0.235], [-0.250, 0.235]]"
+    )
+    assert collision["StopZone"]["min_points"] == 2
     assert collision["SlowdownZone"]["action_type"] == "slowdown"
     assert collision["SlowdownZone"]["min_points"] == 4
     assert collision["FootprintApproach"]["min_points"] == 3
@@ -145,8 +171,9 @@ def test_command_chain_and_collision_zones_are_fixed() -> None:
     assert velocity["max_accel"] == [1.10, 0.0, 3.00]
     assert velocity["scale_velocities"] is True
     assert velocity["smoothing_frequency"] == 20.0
-    assert collision["SlowdownZone"]["slowdown_ratio"] == 0.85
-    assert collision["source_timeout"] == 1.25
+    assert collision["SlowdownZone"]["slowdown_ratio"] == 0.65
+    assert collision["FootprintApproach"]["time_before_collision"] == 1.5
+    assert collision["source_timeout"] == 1.50
 
 
 def test_rviz_contains_every_stage8_display_source() -> None:
@@ -243,7 +270,7 @@ def test_phase8_launch_enables_health_gate_and_runtime_components() -> None:
         "TimerAction",
         'DeclareLaunchArgument("nav2_start_delay", default_value="20.0")',
         'DeclareLaunchArgument("depth_timeout", default_value="1.25")',
-        'DeclareLaunchArgument("source_timeout", default_value="1.25")',
+        'DeclareLaunchArgument("source_timeout", default_value="1.50")',
     ):
         assert token in launch
 
@@ -286,10 +313,13 @@ def test_nav2_activation_is_staggered_after_map_server() -> None:
     launch = (BRINGUP / "launch/nav2.launch.py").read_text()
     assert "TimerAction" in launch
     assert "NAVIGATION_START_SCHEDULE" in launch
-    assert "NAVIGATION_ACTIVATION_DELAY_S = 25.0" in launch
+    assert "MAP_ACTIVATION_DELAY_S = 2.0" in launch
+    assert "NAVIGATION_ACTIVATION_DELAY_S = 30.0" in launch
     assert "OpaqueFunction" in launch
-    for delay in (6.0, 8.0, 10.0, 12.0, 14.0, 16.0, 18.0):
+    assert '(8.0, "controller_server")' in launch
+    for delay in (8.0, 10.0, 12.0, 14.0, 16.0, 18.0, 20.0, 22.0):
         assert f"({delay}," in launch
+    assert "period=MAP_ACTIVATION_DELAY_S" in launch
     assert '"bond_timeout": 15.0' in launch
 
 

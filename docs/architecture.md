@@ -65,7 +65,8 @@ occupancy map ──> global Static/Obstacle/Inflation costmap
 nvblox slice + front scan ──> local Nvblox/Obstacle/Inflation costmap
 
 SmacPlanner2D
-  -> MPPI DiffDrive (10 Hz, 20 x 0.1 s, batch 500, vx 0..0.75)
+  -> Rotation Shim (急转处先原地对齐)
+  -> MPPI DiffDrive (10 Hz, 20 x 0.1 s, batch 2000, vx 0..0.75)
   -> /cmd_vel_nav_raw
   -> Velocity Smoother
   -> /cmd_vel_smoothed
