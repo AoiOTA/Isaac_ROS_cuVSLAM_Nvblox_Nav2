@@ -32,22 +32,16 @@ while (($#)); do
     --disable-follow-camera) FOLLOW_CAMERA_DISABLED="true"; shift ;;
     --follow-camera-distance)
       FOLLOW_CAMERA_DISTANCE="${2:?missing value}"; shift 2 ;;
-      ;;
     --follow-camera-height)
       FOLLOW_CAMERA_HEIGHT="${2:?missing value}"; shift 2 ;;
-      ;;
     --follow-camera-look-ahead)
       FOLLOW_CAMERA_LOOK_AHEAD="${2:?missing value}"; shift 2 ;;
-      ;;
     --follow-camera-look-at-height)
       FOLLOW_CAMERA_LOOK_AT_HEIGHT="${2:?missing value}"; shift 2 ;;
-      ;;
     --follow-camera-focal-length)
       FOLLOW_CAMERA_FOCAL_LENGTH="${2:?missing value}"; shift 2 ;;
-      ;;
     --follow-camera-smoothing-time)
       FOLLOW_CAMERA_SMOOTHING_TIME="${2:?missing value}"; shift 2 ;;
-      ;;
     -h|--help)
       echo "Usage: ./scripts/run_all.sh [--map NAME] [--headless|--gui] [--rviz|--no-rviz] [--auto|--manual] [--report FILE]"
       echo "Follow-camera options:"
